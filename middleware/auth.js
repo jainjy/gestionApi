@@ -7,7 +7,6 @@ async function authenticateToken(req, res, next) {
   if (!token) {
     return res.status(401).json({ error: 'Token d\'authentification requis' })
   }
-
   try {
     // Extraire l'ID utilisateur du token
     const userId = token.replace('real-jwt-token-', '')
