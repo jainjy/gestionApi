@@ -12,25 +12,33 @@ app.use(express.urlencoded({ extended: true }))
 
 // Routes
 app.use('/api/auth', require('./routes/auth'))
+app.use('/api/users', require('./routes/users'))
+app.use('/api/users/:id', require('./routes/userById'))
+app.use('/api/upload', require('./routes/upload'))
 app.use('/api/articles', require('./routes/articles'))
 app.use('/api/properties', require('./routes/properties'))
 
 // Route de santé
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() })
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    services: ['auth', 'users', 'upload', 'articles', 'properties']
+  })
 })
 
-// Gestion des erreurs 404
+// Route 404
 app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Route not found' })
+  res.status(404).json({ error: 'Route non trouvée' })
 })
 
 // Middleware de gestion d'erreurs global
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error)
-  res.status(500).json({ error: 'Internal server error' })
+  res.status(500).json({ error: 'Erreur interne du serveur' })
 })
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
+  console.log(`🚀 Server running on port ${PORT}`)
+  console.log(`📊 Health check: http://localhost:${PORT}/health`)
 })
