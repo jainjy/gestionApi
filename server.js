@@ -13,7 +13,6 @@ app.use(express.urlencoded({ extended: true }))
 // Routes
 app.use('/api/auth', require('./routes/auth'))
 app.use('/api/users', require('./routes/users'))
-app.use('/api/users/:id', require('./routes/userById'))
 app.use('/api/upload', require('./routes/upload'))
 app.use('/api/articles', require('./routes/articles'))
 app.use('/api/properties', require('./routes/properties'))
