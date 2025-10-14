@@ -2,13 +2,14 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  const ownerId = '43227338-ee84-4210-b754-1887ee8ea754'
+  
 
   // 🔹 Vérifie que le owner existe
-  const owner = await prisma.user.findUnique({ where: { id: ownerId } })
+  const owner = await prisma.user.findFirst()
   if (!owner) {
-    throw new Error(`Aucun utilisateur trouvé avec l'ID ${ownerId}`)
+    throw new Error(`Aucun utilisateur trouvé avec l'ID ${owner}`)
   }
+  const ownerId = owner.id
 
   console.log(`✅ Utilisateur propriétaire trouvé : ${owner.email || '(email inconnu)'}`)
 
