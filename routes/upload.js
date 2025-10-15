@@ -83,11 +83,11 @@ router.post('/property-image', authenticateToken, upload.single('file'), async (
     // Générer un nom de fichier unique
     const fileExt = req.file.originalname.split('.').pop()
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-    const filePath = `property-images/${fileName}`
+    const filePath = `blog-images/${fileName}`
 
     // Upload vers Supabase
     const { data, error } = await supabase.storage
-      .from('property-images')
+      .from('blog-images')
       .upload(filePath, req.file.buffer, {
         contentType: req.file.mimetype
       })
@@ -101,7 +101,7 @@ router.post('/property-image', authenticateToken, upload.single('file'), async (
 
     // Récupérer l'URL publique
     const { data: { publicUrl } } = supabase.storage
-      .from('property-images')
+      .from('blog-images')
       .getPublicUrl(filePath)
 
     res.json({ 
