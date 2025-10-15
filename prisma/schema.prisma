@@ -67,46 +67,65 @@ model Vendor {
 }
 
 model Property {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   title       String
   description String?
-  type        String // "house", "apartment", "villa", "land", "studio"
-  status      String // "for_sale", "for_rent", "sold", "rented"
+  type        String   // "house", "apartment", "villa", "land", "studio"
+  status      String   // "draft", "pending", "published", "archived", "sold", "rented"
   price       Float?
-
+  
   // Caractéristiques principales
-  surface   Int? // Surface en m²
-  rooms     Int? // Nombre de pièces
-  bedrooms  Int? // Nombre de chambres
-  bathrooms Int? // Nombre de salles de bain
-
+  surface   Int?    // Surface en m²
+  rooms     Int?    // Nombre de pièces
+  bedrooms  Int?    // Nombre de chambres
+  bathrooms Int?    // Nombre de salles de bain
+  
   // Localisation
   address   String?
   city      String
   zipCode   String?
   latitude  Float?
   longitude Float?
-
+  
   // Équipements
   features String[] // ["pool", "garden", "parking", "terrace", "balcony"]
-
+  
   // Images
   images String[] // URLs des images
-
+  
   // Métadonnées
   isFeatured Boolean @default(false)
   isActive   Boolean @default(true)
   views      Int     @default(0)
-
+  
+  // Nouvelles colonnes ajoutées
+  listingType String @default("sale") // "sale", "rent", "both"
+  energyClass String? // "A", "B", "C", "D", "E", "F", "G"
+  yearBuilt   Int?
+  floor       Int?    // Étage
+  totalFloors Int?    // Nombre total d'étages
+  hasElevator Boolean @default(false)
+  hasParking  Boolean @default(false)
+  hasBalcony  Boolean @default(false)
+  hasTerrace  Boolean @default(false)
+  hasGarden   Boolean @default(false)
+  hasPool     Boolean @default(false)
+  
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+  slug            String? @unique
+  
   // Relations
   ownerId   String
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  favorites Favorite[] // Relation inverse ajoutée
-
+  favorites Favorite[]
+  
   // Dates
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   publishedAt DateTime?
+  expiresAt   DateTime? // Date d'expiration de l'annonce
 
   @@index([city])
   @@index([type])
@@ -114,6 +133,8 @@ model Property {
   @@index([ownerId])
   @@index([isActive])
   @@index([isFeatured])
+  @@index([listingType])
+  @@index([createdAt])
 }
 
 model Favorite {
