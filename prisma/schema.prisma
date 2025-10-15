@@ -55,14 +55,15 @@ model User {
 }
 
 model Vendor {
-  id           String   @id @default(uuid())
-  userId       String   @unique
+  id           String    @id @default(uuid())
+  userId       String    @unique
   companyName  String?
   categories   String[]
   coverageArea String[]
-  rating       Decimal? @db.Decimal(2, 1)
+  rating       Decimal?  @db.Decimal(2, 1)
   kycStatus    String?
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products     Product[] // Relation inverse ajoutée
 }
 
 model Property {
@@ -127,4 +128,50 @@ model Favorite {
   @@unique([userId, propertyId])
   @@index([userId])
   @@index([propertyId])
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  vendorId    String
+  name        String
+  slug        String   @unique
+  description String?
+  category    String
+  subcategory String?
+  price       Float
+  comparePrice Float?  // Prix de comparaison (ancien prix)
+  cost        Float?   // Coût d'achat
+  sku         String?  // Référence produit
+  barcode     String?  // Code-barres
+  trackQuantity Boolean @default(true)
+  quantity    Int      @default(0)
+  lowStock    Int?     @default(5) // Seuil d'alerte stock faible
+  weight      Float?   // Poids en kg
+  dimensions  Json?    // {length, width, height}
+  
+  // Images
+  images      String[]
+  
+  // Métadonnées
+  status      String   @default("draft") // draft, active, inactive, archived
+  featured    Boolean  @default(false)
+  visibility  String   @default("public") // public, hidden, private
+  
+  // SEO
+  seoTitle       String?
+  seoDescription String?
+  
+  // Relations
+  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  
+  // Dates
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+
+  @@index([vendorId])
+  @@index([category])
+  @@index([status])
+  @@index([featured])
+  @@index([createdAt])
 }
