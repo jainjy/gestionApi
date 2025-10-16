@@ -115,7 +115,11 @@ router.get('/stats', async (req, res) => {
   try {
     const { userId } = req.query
     
-    const where = userId ? { ownerId: userId } : {}
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' })
+    }
+    
+    const where = { ownerId: userId }
     
     const total = await prisma.property.count({ where })
     const published = await prisma.property.count({ 
@@ -167,13 +171,18 @@ router.get('/stats', async (req, res) => {
 router.get('/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params
-    const { status, type } = req.query
-
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' })
+    }
+    
     const where = { 
       ownerId: userId,
       isActive: true 
     }
     
+    const { status, type } = req.query
+
     if (status) where.status = status
     if (type) where.type = type
 
