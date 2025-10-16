@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db')
 const { authenticateToken, requireRole } = require('../middleware/auth')
+const bcrypt = require('bcrypt')
 
 // GET /api/users - Récupérer tous les utilisateurs
 router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
@@ -28,16 +29,40 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
 // POST /api/users - Créer un nouvel utilisateur
 router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const data = req.body
+    const { 
+      email, 
+      password,
+      firstName, 
+      lastName, 
+      phone, 
+      role, 
+      status,
+      metiers,
+      demandType,
+      companyName 
+    } = req.body
+
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(password, 12)
     
     const newUser = await prisma.user.create({
       data: {
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phone: data.phone,
-        role: data.role,
-        status: data.status,
+        email,
+        passwordHash: hashedPassword,
+        firstName,
+        lastName,
+        phone,
+        role,
+        status,
+        demandType: role === 'user' ? demandType : null,
+        companyName: role === 'professional' ? companyName : null,
+        metiers: role === 'professional' ? {
+          create: metiers.map((metierId) => ({
+            metier: {
+              connect: { id: metierId }
+            }
+          }))
+        } : undefined
       },
     })
     
@@ -82,11 +107,15 @@ router.get('/profile', authenticateToken, async (req, res) => {
         role: true,
         status: true,
         createdAt: true,
-        vendor: {
-          select: {
-            companyName: true,
-            kycStatus: true,
-            categories: true
+        companyName: true,
+        metiers: {
+          include: {
+            metier: true
+          }
+        },
+        services: {
+          include: {
+            service: true
           }
         }
       }
@@ -151,11 +180,15 @@ router.get('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
         status: true,
         createdAt: true,
         updatedAt: true,
-        vendor: {
-          select: {
-            companyName: true,
-            kycStatus: true,
-            categories: true
+        companyName: true,
+        metiers: {
+          include: {
+            metier: true
+          }
+        },
+        services: {
+          include: {
+            service: true
           }
         }
       }
@@ -269,6 +302,27 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
     }
     
     res.status(500).json({ error: "Failed to delete user" })
+  }
+})
+
+// GET /api/users/metiers - Récupérer tous les métiers
+router.get('/metiers/all', async (req, res) => {
+  try {
+    const metiers = await prisma.metier.findMany({
+      select: {
+        id: true,
+        libelle: true,
+        services: {
+          include: {
+            service: true
+          }
+        }
+      }
+    })
+    res.json(metiers)
+  } catch (error) {
+    console.error('Failed to fetch metiers:', error)
+    res.status(500).json({ error: "Failed to fetch metiers" })
   }
 })
 

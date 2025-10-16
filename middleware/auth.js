@@ -14,9 +14,6 @@ async function authenticateToken(req, res, next) {
     // Vérifier si l'utilisateur existe
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        vendor: true
-      }
     })
 
     if (!user) {
@@ -30,8 +27,8 @@ async function authenticateToken(req, res, next) {
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role,
-      companyName: user.vendor?.companyName,
-      kycStatus: user.vendor?.kycStatus
+      companyName: user.companyName,
+      kycStatus: user.status
     }
 
     next()

@@ -10,6 +10,9 @@ datasource db {
   relationMode = "prisma"
 }
 
+// ======================
+// ARTICLES
+// ======================
 model BlogArticle {
   id          String    @id @default(uuid())
   authorId    String
@@ -32,98 +35,105 @@ model BlogArticle {
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
+// ======================
+// UTILISATEUR
+// ======================
 model User {
-  id               String        @id @default(uuid())
-  email            String        @unique
-  passwordHash     String?
-  provider         Json?
-  firstName        String?
-  lastName         String?
-  phone            String?
-  role             String        @default("user")
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  resetToken       String?
-  resetTokenExpiry DateTime?
-  vendor           Vendor?
-  blogArticles     BlogArticle[]
-  status           String        @default("inactive")
-
+  id                String               @id @default(uuid())
+  email             String               @unique
+  passwordHash      String?
+  provider          Json?
+  firstName         String?
+  lastName          String?
+  phone             String?
+  role              String               @default("user")
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  blogArticles      BlogArticle[]
+  status            String               @default("inactive")
+  companyName       String?
+  demandType        String? //agence immobilier,particulier ou syndicat 
+  address           String? // Adresse postale
+  zipCode           String? // Code postal
+  city              String? // Ville
+  addressComplement String? // Complément d'adresse
+  commercialName    String? // Nom commercial
+  siret             String? // Numéro SIRET
   // Nouvelles relations
-  properties Property[]
-  favorites  Favorite[]
+  properties        Property[]
+  favorites         Favorite[]
+  metiers           UtilisateurMetier[]
+  services          UtilisateurService[]
+  demandesCrees     Demande[]            @relation("DemandeCreePar")
+  demandesArtisan   DemandeArtisan[]     @relation("DemandeArtisanUser")
+  Product           Product[]
+  latitude          Float?
+  longitude         Float?
 }
 
-model Vendor {
-  id           String    @id @default(uuid())
-  userId       String    @unique
-  companyName  String?
-  categories   String[]
-  coverageArea String[]
-  rating       Decimal?  @db.Decimal(2, 1)
-  kycStatus    String?
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  products     Product[] // Relation inverse ajoutée
-}
-
+// ======================
+// PROPRIÉTÉS ET FAVORIS
+// ======================
 model Property {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   title       String
   description String?
-  type        String   // "house", "apartment", "villa", "land", "studio"
-  status      String   // "draft", "pending", "published", "archived", "sold", "rented"
+  type        String // "house", "apartment", "villa", "land", "studio"
+  status      String // "draft", "pending", "published", "archived", "sold", "rented"
   price       Float?
-  
+
   // Caractéristiques principales
-  surface   Int?    // Surface en m²
-  rooms     Int?    // Nombre de pièces
-  bedrooms  Int?    // Nombre de chambres
-  bathrooms Int?    // Nombre de salles de bain
-  
+  surface   Int? // Surface en m²
+  rooms     Int? // Nombre de pièces
+  bedrooms  Int? // Nombre de chambres
+  bathrooms Int? // Nombre de salles de bain
+
   // Localisation
   address   String?
   city      String
   zipCode   String?
   latitude  Float?
   longitude Float?
-  
+
   // Équipements
   features String[] // ["pool", "garden", "parking", "terrace", "balcony"]
-  
+
   // Images
   images String[] // URLs des images
-  
+
   // Métadonnées
   isFeatured Boolean @default(false)
   isActive   Boolean @default(true)
   views      Int     @default(0)
-  
+
   // Nouvelles colonnes ajoutées
-  listingType String @default("sale") // "sale", "rent", "both"
+  listingType String  @default("sale") // "sale", "rent", "both"
   energyClass String? // "A", "B", "C", "D", "E", "F", "G"
   yearBuilt   Int?
-  floor       Int?    // Étage
-  totalFloors Int?    // Nombre total d'étages
+  floor       Int? // Étage
+  totalFloors Int? // Nombre total d'étages
   hasElevator Boolean @default(false)
   hasParking  Boolean @default(false)
   hasBalcony  Boolean @default(false)
   hasTerrace  Boolean @default(false)
   hasGarden   Boolean @default(false)
   hasPool     Boolean @default(false)
-  
+
   // SEO
   metaTitle       String?
   metaDescription String?
   slug            String? @unique
-  
+
   // Relations
   ownerId   String
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   favorites Favorite[]
-  
+
   // Dates
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   publishedAt DateTime?
   expiresAt   DateTime? // Date d'expiration de l'annonce
 
@@ -151,48 +161,156 @@ model Favorite {
   @@index([propertyId])
 }
 
+// ======================
+// PRODUIT
+// ======================
 model Product {
-  id          String   @id @default(uuid())
-  vendorId    String
-  name        String
-  slug        String   @unique
-  description String?
-  category    String
-  subcategory String?
-  price       Float
-  comparePrice Float?  // Prix de comparaison (ancien prix)
-  cost        Float?   // Coût d'achat
-  sku         String?  // Référence produit
-  barcode     String?  // Code-barres
+  id            String  @id @default(uuid())
+  userId        String
+  name          String
+  slug          String  @unique
+  description   String?
+  category      String
+  subcategory   String?
+  price         Float
+  comparePrice  Float? // Prix de comparaison (ancien prix)
+  cost          Float? // Coût d'achat
+  sku           String? // Référence produit
+  barcode       String? // Code-barres
   trackQuantity Boolean @default(true)
-  quantity    Int      @default(0)
-  lowStock    Int?     @default(5) // Seuil d'alerte stock faible
-  weight      Float?   // Poids en kg
-  dimensions  Json?    // {length, width, height}
-  
+  quantity      Int     @default(0)
+  lowStock      Int?    @default(5) // Seuil d'alerte stock faible
+  weight        Float? // Poids en kg
+  dimensions    Json? // {length, width, height}
+
   // Images
-  images      String[]
-  
+  images String[]
+
   // Métadonnées
-  status      String   @default("draft") // draft, active, inactive, archived
-  featured    Boolean  @default(false)
-  visibility  String   @default("public") // public, hidden, private
-  
+  status     String  @default("draft") // draft, active, inactive, archived
+  featured   Boolean @default(false)
+  visibility String  @default("public") // public, hidden, private
+
   // SEO
   seoTitle       String?
   seoDescription String?
-  
+
   // Relations
-  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  
+  User User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Dates
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   publishedAt DateTime?
 
-  @@index([vendorId])
+  @@index([userId])
   @@index([category])
   @@index([status])
   @@index([featured])
   @@index([createdAt])
+}
+
+// ======================
+// MÉTIERS
+// ======================
+model Metier {
+  id       Int                 @id @default(autoincrement())
+  libelle  String
+  services MetierService[]
+  users    UtilisateurMetier[]
+}
+
+// ======================
+// SERVICES
+// ======================
+model Service {
+  id       Int                  @id @default(autoincrement())
+  libelle  String
+  metiers  MetierService[]
+  users    UtilisateurService[]
+  demandes Demande[]
+}
+
+// ======================
+// LIAISON MÉTIER-SERVICE
+// ======================
+model MetierService {
+  metierId  Int
+  serviceId Int
+
+  metier  Metier  @relation(fields: [metierId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@id([metierId, serviceId])
+}
+
+// ======================
+// LIAISON UTILISATEUR-MÉTIER
+// ======================
+model UtilisateurMetier {
+  userId   String
+  metierId Int
+
+  user   User   @relation(fields: [userId], references: [id])
+  metier Metier @relation(fields: [metierId], references: [id])
+
+  @@id([userId, metierId])
+}
+
+// ======================
+// LIAISON UTILISATEUR-SERVICE
+// ======================
+model UtilisateurService {
+  userId    String
+  serviceId Int
+
+  user    User    @relation(fields: [userId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@id([userId, serviceId])
+}
+
+// ======================
+// DEMANDES DE SERVICES
+// ======================
+model Demande {
+  id                  Int      @id @default(autoincrement())
+  disponibiliteBien   String? // "LIBRE" | "LOUE"
+  description         String?
+  contactNom          String?
+  contactPrenom       String?
+  contactEmail        String?
+  contactTel          String?
+  contactAdresse      String?
+  contactAdresseCp    String?
+  contactAdresseVille String?
+  lieuAdresse         String?
+  lieuAdresseCp       String?
+  lieuAdresseVille    String?
+  optionAssurance     Boolean? @default(false)
+  demandeAcceptee     Boolean? @default(false)
+  nombreArtisans      String? // "UNIQUE" | "MULTIPLE"
+  createdById         String
+  serviceId           Int
+  createdAt           DateTime @default(now())
+
+  createdBy User             @relation("DemandeCreePar", fields: [createdById], references: [id])
+  service   Service          @relation(fields: [serviceId], references: [id])
+  artisans  DemandeArtisan[] @relation("DemandeArtisanDemande")
+}
+
+// ======================
+// LIAISON DEMANDE-ARTISAN
+// ======================
+model DemandeArtisan {
+  userId    String
+  demandeId Int
+  accepte   Boolean?  @default(false)
+  devis     String?
+  rdv       DateTime?
+
+  user    User    @relation("DemandeArtisanUser", fields: [userId], references: [id])
+  demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
+
+  @@id([userId, demandeId])
 }

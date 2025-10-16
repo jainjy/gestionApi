@@ -18,10 +18,7 @@ router.post('/login', async (req, res) => {
 
     // Trouver l'utilisateur
     const user = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        vendor: true
-      }
+      where: { email }
     })
 
     if (!user || !user.passwordHash) {
@@ -50,9 +47,8 @@ router.post('/login', async (req, res) => {
       lastName: user.lastName,
       phone: user.phone,
       role: user.role,
-      companyName: user.vendor?.companyName,
-      kycStatus: user.vendor?.kycStatus,
-      isActive: true
+      companyName: user.companyName,
+      status: user.status
     }
 
     res.json({
@@ -71,7 +67,17 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/signup - Inscription
 router.post('/signup', async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password, userType, companyName } = req.body
+    const { 
+      firstName, 
+      lastName, 
+      email, 
+      phone, 
+      password, 
+      userType,
+      companyName,
+      metiers,
+      demandType 
+    } = req.body;
 
     // Validation des données
     if (!firstName || !lastName || !email || !phone || !password) {
@@ -80,7 +86,7 @@ router.post('/signup', async (req, res) => {
       })
     }
 
-    // Vérifier si l'utilisateur existe déjà
+    // Vérifier l'email
     const existingUser = await prisma.user.findUnique({
       where: { email }
     })
@@ -94,7 +100,7 @@ router.post('/signup', async (req, res) => {
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // Créer l'utilisateur
+    // Créer l'utilisateur avec les relations appropriées
     const user = await prisma.user.create({
       data: {
         email,
@@ -102,23 +108,30 @@ router.post('/signup', async (req, res) => {
         firstName,
         lastName,
         phone,
-        role: userType === 'professional' ? 'professional' : 'user'
+        role: userType === 'professional' ? 'professional' : 'user',
+        status: 'inactive',
+        companyName: userType === 'professional' ? companyName : null,
+        demandType: userType === 'user' ? demandType : null,
+        ...(userType === 'professional' && metiers && {
+          metiers: {
+            create: metiers.map((metierId) => ({
+              metier: {
+                connect: { id: metierId }
+              }
+            }))
+          }
+        })
+      },
+      include: {
+        metiers: {
+          include: {
+            metier: true
+          }
+        }
       }
     })
 
-    // Si c'est un professionnel, créer le vendor
-    if (userType === 'professional' && companyName) {
-      await prisma.vendor.create({
-        data: {
-          userId: user.id,
-          companyName,
-          categories: [],
-          kycStatus: 'pending'
-        }
-      })
-    }
-
-    // Générer un token
+    // Générer le token
     const token = `real-jwt-token-${user.id}`
 
     res.status(201).json({
@@ -129,7 +142,11 @@ router.post('/signup', async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         phone: user.phone,
-        role: user.role
+        role: user.role,
+        status: user.status,
+        companyName: user.companyName,
+        demandType: user.demandType,
+        metiers: user.metiers
       },
       token
     })
