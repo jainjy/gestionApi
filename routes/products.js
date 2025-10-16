@@ -9,9 +9,9 @@ router.get('/', async (req, res) => {
     const { 
       search, 
       category, 
-      status, // Ne pas mettre de valeur par défaut ici
+      status,
       featured,
-      vendorId,
+      userId,
       minPrice,
       maxPrice,
       page = 1,
@@ -24,7 +24,6 @@ router.get('/', async (req, res) => {
     if (status && status !== 'Tous') {
       where.status = status
     }
-    // Si aucun statut n'est spécifié, on montre tous les produits
 
     if (search) {
       where.OR = [
@@ -42,8 +41,8 @@ router.get('/', async (req, res) => {
       where.featured = featured === 'true'
     }
 
-    if (vendorId) {
-      where.vendorId = vendorId
+    if (userId) {
+      where.userId = userId
     }
 
     if (minPrice || maxPrice) {
@@ -58,15 +57,14 @@ router.get('/', async (req, res) => {
       prisma.product.findMany({
         where,
         include: {
-          vendor: {
-            include: {
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                  phone: true
-                }
-              }
+          User: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              companyName: true,
+              phone: true,
+              email: true
             }
           }
         },
@@ -88,15 +86,27 @@ router.get('/', async (req, res) => {
       subcategory: product.subcategory,
       price: product.price,
       comparePrice: product.comparePrice,
+      cost: product.cost,
+      sku: product.sku,
+      barcode: product.barcode,
+      trackQuantity: product.trackQuantity,
       quantity: product.quantity,
       lowStock: product.lowStock,
+      weight: product.weight,
+      dimensions: product.dimensions,
       images: product.images || [],
       status: product.status,
       featured: !!product.featured,
+      visibility: product.visibility,
+      seoTitle: product.seoTitle,
+      seoDescription: product.seoDescription,
       vendor: {
-        id: product.vendor?.id || product.vendorId || null,
-        companyName: product.vendor?.companyName || null,
-        rating: product.vendor?.rating ?? null
+        id: product.User?.id || null,
+        firstName: product.User?.firstName || null,
+        lastName: product.User?.lastName || null,
+        companyName: product.User?.companyName || null,
+        phone: product.User?.phone || null,
+        email: product.User?.email || null
       },
       createdAt: product.createdAt ? product.createdAt.toISOString() : null,
       updatedAt: product.updatedAt ? product.updatedAt.toISOString() : null,
@@ -117,6 +127,7 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
+
 // GET /api/products/categories - Récupérer toutes les catégories
 router.get('/categories', async (req, res) => {
   try {
@@ -140,19 +151,20 @@ router.get('/categories', async (req, res) => {
   }
 })
 
-// GET /api/products/vendor/my-products - Récupérer les produits du vendeur connecté
-router.get('/vendor/my-products', authenticateToken, requireRole(['professional']), async (req, res) => {
+// GET /api/products/user/my-products - Récupérer les produits de l'utilisateur connecté
+router.get('/user/my-products', authenticateToken, requireRole(['professional', 'admin']), async (req, res) => {
   try {
-    const vendor = await prisma.vendor.findUnique({
-      where: { userId: req.user.id }
-    })
-
-    if (!vendor) {
-      return res.status(404).json({ error: 'Vendeur non trouvé' })
-    }
-
     const products = await prisma.product.findMany({
-      where: { vendorId: vendor.id },
+      where: { userId: req.user.id },
+      include: {
+        User: {
+          select: {
+            firstName: true,
+            lastName: true,
+            companyName: true
+          }
+        }
+      },
       orderBy: {
         createdAt: 'desc'
       }
@@ -160,7 +172,7 @@ router.get('/vendor/my-products', authenticateToken, requireRole(['professional'
 
     res.json(products)
   } catch (error) {
-    console.error('Erreur lors de la récupération des produits du vendeur:', error)
+    console.error('Erreur lors de la récupération des produits de l\'utilisateur:', error)
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
@@ -173,16 +185,14 @@ router.get('/:id', async (req, res) => {
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
-        vendor: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                companyName: true,
-                phone: true
-              }
-            }
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            phone: true,
+            email: true
           }
         }
       }
@@ -192,7 +202,6 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Produit non trouvé' })
     }
 
-    // Ne pas faire d'update vide — renvoyer simplement le produit
     res.json(product)
   } catch (error) {
     console.error('Erreur lors de la récupération du produit:', error)
@@ -200,7 +209,7 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-// POST /api/products - Créer un nouveau produit (Vendeurs uniquement)
+// POST /api/products - Créer un nouveau produit
 router.post('/', authenticateToken, requireRole(['professional', 'admin']), async (req, res) => {
   try {
     const {
@@ -225,15 +234,6 @@ router.post('/', authenticateToken, requireRole(['professional', 'admin']), asyn
       seoDescription
     } = req.body
 
-    // Trouver le vendorId de l'utilisateur connecté
-    const vendor = await prisma.vendor.findUnique({
-      where: { userId: req.user.id }
-    })
-
-    if (!vendor && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Accès réservé aux vendeurs' })
-    }
-
     // Générer un slug à partir du nom
     const slug = name
       .toLowerCase()
@@ -244,7 +244,7 @@ router.post('/', authenticateToken, requireRole(['professional', 'admin']), asyn
 
     const product = await prisma.product.create({
       data: {
-        vendorId: vendor?.id || (req.user.role === 'admin' ? req.body.vendorId : undefined), // Admin peut spécifier vendorId
+        userId: req.user.id,
         name,
         slug,
         description,
@@ -255,10 +255,11 @@ router.post('/', authenticateToken, requireRole(['professional', 'admin']), asyn
         cost: cost !== undefined && cost !== null ? parseFloat(cost) : null,
         sku: sku || null,
         barcode: barcode || null,
+        trackQuantity: quantity !== undefined,
         quantity: quantity !== undefined && quantity !== null ? parseInt(quantity) : 0,
         lowStock: lowStock !== undefined && lowStock !== null ? parseInt(lowStock) : 5,
         weight: weight !== undefined && weight !== null ? parseFloat(weight) : null,
-        dimensions: (typeof dimensions === 'string' && dimensions.length) ? (JSON.parse(dimensions) || null) : (typeof dimensions === 'object' ? dimensions : null),
+        dimensions: dimensions || null,
         images: Array.isArray(images) ? images : [],
         status: status || 'draft',
         featured: !!featured,
@@ -268,15 +269,11 @@ router.post('/', authenticateToken, requireRole(['professional', 'admin']), asyn
         publishedAt: status === 'active' ? new Date() : null
       },
       include: {
-        vendor: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                phone: true
-              }
-            }
+        User: {
+          select: {
+            firstName: true,
+            lastName: true,
+            companyName: true
           }
         }
       }
@@ -287,7 +284,7 @@ router.post('/', authenticateToken, requireRole(['professional', 'admin']), asyn
     console.error('Erreur lors de la création du produit:', error)
     
     if (error.code === 'P2002') {
-      return res.status(400).json({ error: 'Un produit avec ce nom existe déjà' })
+      return res.status(400).json({ error: 'Un produit avec ce nom ou slug existe déjà' })
     }
     
     res.status(500).json({ error: 'Erreur serveur' })
@@ -322,62 +319,61 @@ router.put('/:id', authenticateToken, requireRole(['professional', 'admin']), as
 
     // Vérifier que le produit existe et que l'utilisateur a les droits
     const existingProduct = await prisma.product.findUnique({
-      where: { id },
-      include: {
-        vendor: true
-      }
+      where: { id }
     })
 
     if (!existingProduct) {
       return res.status(404).json({ error: 'Produit non trouvé' })
     }
 
-    // Vérifier les permissions (vendeur ne peut modifier que ses produits)
-    if (req.user.role === 'professional') {
-      const vendor = await prisma.vendor.findUnique({
-        where: { userId: req.user.id }
-      })
+    // Vérifier les permissions (utilisateur ne peut modifier que ses produits)
+    if (req.user.role === 'professional' && existingProduct.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Accès non autorisé à ce produit' })
+    }
 
-      if (existingProduct.vendorId !== vendor.id) {
-        return res.status(403).json({ error: 'Accès non autorisé à ce produit' })
-      }
+    // Générer un nouveau slug si le nom change
+    let slug = existingProduct.slug
+    if (name && name !== existingProduct.name) {
+      slug = name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '')
     }
 
     const product = await prisma.product.update({
       where: { id },
       data: {
         name: name || existingProduct.name,
-        description: description || existingProduct.description,
+        slug,
+        description: description !== undefined ? description : existingProduct.description,
         category: category || existingProduct.category,
-        subcategory: subcategory || existingProduct.subcategory,
-        price: price !== undefined && price !== null ? parseFloat(price) : existingProduct.price,
-        comparePrice: comparePrice !== undefined && comparePrice !== null ? parseFloat(comparePrice) : existingProduct.comparePrice,
-        cost: cost !== undefined && cost !== null ? parseFloat(cost) : existingProduct.cost,
-        sku: sku || existingProduct.sku,
-        barcode: barcode || existingProduct.barcode,
-        quantity: quantity !== undefined && quantity !== null ? parseInt(quantity) : existingProduct.quantity,
-        lowStock: lowStock !== undefined && lowStock !== null ? parseInt(lowStock) : existingProduct.lowStock,
-        weight: weight !== undefined && weight !== null ? parseFloat(weight) : existingProduct.weight,
-        dimensions: (typeof dimensions === 'string' && dimensions.length) ? (JSON.parse(dimensions) || existingProduct.dimensions) : (typeof dimensions === 'object' ? dimensions : existingProduct.dimensions),
+        subcategory: subcategory !== undefined ? subcategory : existingProduct.subcategory,
+        price: price !== undefined ? parseFloat(price) : existingProduct.price,
+        comparePrice: comparePrice !== undefined ? parseFloat(comparePrice) : existingProduct.comparePrice,
+        cost: cost !== undefined ? parseFloat(cost) : existingProduct.cost,
+        sku: sku !== undefined ? sku : existingProduct.sku,
+        barcode: barcode !== undefined ? barcode : existingProduct.barcode,
+        quantity: quantity !== undefined ? parseInt(quantity) : existingProduct.quantity,
+        lowStock: lowStock !== undefined ? parseInt(lowStock) : existingProduct.lowStock,
+        weight: weight !== undefined ? parseFloat(weight) : existingProduct.weight,
+        dimensions: dimensions !== undefined ? dimensions : existingProduct.dimensions,
         images: Array.isArray(images) ? images : existingProduct.images,
         status: status || existingProduct.status,
         featured: featured !== undefined ? !!featured : existingProduct.featured,
         visibility: visibility || existingProduct.visibility,
-        seoTitle: seoTitle || existingProduct.seoTitle,
-        seoDescription: seoDescription || existingProduct.seoDescription,
+        seoTitle: seoTitle !== undefined ? seoTitle : existingProduct.seoTitle,
+        seoDescription: seoDescription !== undefined ? seoDescription : existingProduct.seoDescription,
         publishedAt: status === 'active' && existingProduct.status !== 'active' ? new Date() : existingProduct.publishedAt,
         updatedAt: new Date()
       },
       include: {
-        vendor: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                phone: true
-              }
-            }
+        User: {
+          select: {
+            firstName: true,
+            lastName: true,
+            companyName: true
           }
         }
       }
@@ -397,10 +393,7 @@ router.delete('/:id', authenticateToken, requireRole(['professional', 'admin']),
 
     // Vérifier que le produit existe et que l'utilisateur a les droits
     const existingProduct = await prisma.product.findUnique({
-      where: { id },
-      include: {
-        vendor: true
-      }
+      where: { id }
     })
 
     if (!existingProduct) {
@@ -408,14 +401,8 @@ router.delete('/:id', authenticateToken, requireRole(['professional', 'admin']),
     }
 
     // Vérifier les permissions
-    if (req.user.role === 'professional') {
-      const vendor = await prisma.vendor.findUnique({
-        where: { userId: req.user.id }
-      })
-
-      if (existingProduct.vendorId !== vendor.id) {
-        return res.status(403).json({ error: 'Accès non autorisé à ce produit' })
-      }
+    if (req.user.role === 'professional' && existingProduct.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Accès non autorisé à ce produit' })
     }
 
     await prisma.product.delete({
@@ -425,31 +412,6 @@ router.delete('/:id', authenticateToken, requireRole(['professional', 'admin']),
     res.json({ success: true, message: 'Produit supprimé avec succès' })
   } catch (error) {
     console.error('Erreur lors de la suppression du produit:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
-  }
-})
-
-// GET /api/products/vendor/my-products - Récupérer les produits du vendeur connecté
-router.get('/vendor/my-products', authenticateToken, requireRole(['professional']), async (req, res) => {
-  try {
-    const vendor = await prisma.vendor.findUnique({
-      where: { userId: req.user.id }
-    })
-
-    if (!vendor) {
-      return res.status(404).json({ error: 'Vendeur non trouvé' })
-    }
-
-    const products = await prisma.product.findMany({
-      where: { vendorId: vendor.id },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
-
-    res.json(products)
-  } catch (error) {
-    console.error('Erreur lors de la récupération des produits du vendeur:', error)
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })

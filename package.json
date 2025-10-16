@@ -9,6 +9,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@faker-js/faker": "^10.1.0",
     "@prisma/client": "^6.16.1",
     "@supabase/supabase-js": "^2.75.0",
     "bcrypt": "^6.0.0",
