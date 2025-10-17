@@ -86,6 +86,7 @@ router.post('/', async (req, res) => {
         bathrooms: data.bathrooms ? parseInt(data.bathrooms) : null,
         status: data.status || 'draft',
         listingType: data.listingType || 'sale',
+        rentType: data.rentType || "longue_duree",
         images: data.images || [],
         features: data.features || [],
         ownerId: data.ownerId,
