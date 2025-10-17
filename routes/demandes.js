@@ -1,9 +1,9 @@
 const express = require('express')
 const router = express.Router()
-const { PrismaClient } = require('@prisma/client')
-const { authenticateToken } = require('../middleware/auth')
 
-const prisma = new PrismaClient()
+const { authenticateToken } = require('../middleware/auth')
+const { prisma } = require('../lib/db')
+
 
 // GET /api/demandes - Récupérer les demandes de l'utilisateur
 router.get('/user/:userId', authenticateToken, async (req, res) => {

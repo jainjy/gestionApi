@@ -1,6 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
-
+const { prisma } = require('../lib/db')
 class MetiersController {
   // Récupérer tous les métiers avec leurs relations
   async getAllMetiers(req, res) {

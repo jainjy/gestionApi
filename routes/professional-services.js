@@ -1,9 +1,8 @@
 const express = require('express')
 const router = express.Router()
-const { PrismaClient } = require('@prisma/client')
 const { authenticateToken } = require('../middleware/auth')
 
-const prisma = new PrismaClient()
+const { prisma } = require('../lib/db')
 
 // GET /api/professional/services - Récupérer les services liés au professionnel connecté
 router.get('/', authenticateToken, async (req, res) => {
