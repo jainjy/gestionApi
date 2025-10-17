@@ -20,6 +20,7 @@ app.use('/api/products', require('./routes/products'))
 app.use('/api/services', require('./routes/services'))
 app.use('/api/metiers', require('./routes/metiersRoutes'))
 app.use('/api/professional/services', require('./routes/professional-services'))
+app.use('/api/demandes', require('./routes/demandes'))
 // Route de santé
 app.get('/health', (req, res) => {
   res.json({ 
