@@ -221,15 +221,30 @@ model Metier {
 }
 
 // ======================
+// CaTEGORIE DE SERVICES
+// ======================
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String
+  services Service[]
+}
+
+// ======================
 // SERVICES
 // ======================
 model Service {
   id       Int                  @id @default(autoincrement())
   libelle  String
+  description String?
+  images     String[]
+  categoryId Int?
+  category   Category? @relation(fields: [categoryId], references: [id])
   metiers  MetierService[]
   users    UtilisateurService[]
   demandes Demande[]
 }
+
+
 
 // ======================
 // LIAISON MÉTIER-SERVICE
