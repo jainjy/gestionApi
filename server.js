@@ -17,7 +17,8 @@ app.use('/api/upload', require('./routes/upload'))
 app.use('/api/articles', require('./routes/articles'))
 app.use('/api/properties', require('./routes/properties'))
 app.use('/api/products', require('./routes/products'))
-
+app.use('/api/services', require('./routes/services'))
+app.use('/api/professional/services', require('./routes/professional-services'))
 // Route de santé
 app.get('/health', (req, res) => {
   res.json({ 
