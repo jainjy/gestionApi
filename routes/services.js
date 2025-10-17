@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const { authenticateToken } = require('../middleware/auth')
-
+const { prisma } = require('../lib/db')
 // GET /api/services - Récupérer tous les services avec leurs catégories
 router.get('/', authenticateToken, async (req, res) => {
   try {
