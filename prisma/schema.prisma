@@ -83,6 +83,7 @@ model Property {
   type        String // "house", "apartment", "villa", "land", "studio"
   status      String // "draft", "pending", "published", "archived", "sold", "rented"
   price       Float?
+  rentType String?    @default("longue_duree")// "saisonniere" | "longue_duree"
 
   // Caractéristiques principales
   surface   Int? // Surface en m²
