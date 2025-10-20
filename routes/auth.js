@@ -48,7 +48,8 @@ router.post('/login', async (req, res) => {
       phone: user.phone,
       role: user.role,
       companyName: user.companyName,
-      status: user.status
+      status: user.status,
+      userType: user.userType
     }
 
     res.json({
@@ -76,7 +77,8 @@ router.post('/signup', async (req, res) => {
       userType,
       companyName,
       metiers,
-      demandType 
+      demandType,
+      role 
     } = req.body;
 
     // Validation des données
@@ -108,11 +110,11 @@ router.post('/signup', async (req, res) => {
         firstName,
         lastName,
         phone,
-        role: userType === 'professional' ? 'professional' : 'user',
+        role: role === 'professional' ? 'professional' : 'user',
         status: 'inactive',
-        companyName: userType === 'professional' ? companyName : null,
-        demandType: userType === 'user' ? demandType : null,
-        ...(userType === 'professional' && metiers && {
+        companyName: role === 'professional' ? companyName : null,
+        demandType: role === 'user' ? demandType : null,
+        ...(role === 'professional' && metiers && {
           metiers: {
             create: metiers.map((metierId) => ({
               metier: {
