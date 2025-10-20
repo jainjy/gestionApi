@@ -431,7 +431,6 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
   }
 })
 
-// routes/users.js - Ajoutez ces routes
 
 // GET /api/users/profile - Récupérer le profil de l'utilisateur connecté
 router.get('/profile', authenticateToken, async (req, res) => {
