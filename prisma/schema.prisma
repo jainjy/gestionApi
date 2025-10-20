@@ -47,6 +47,7 @@ model User {
   lastName          String?
   phone             String?
   role              String               @default("user")
+  avatar            String? // Logo ou avatar de l'utilisateur
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   resetToken        String?
@@ -71,6 +72,7 @@ model User {
   Product           Product[]
   latitude          Float?
   longitude         Float?
+  Transaction       Transaction[]
 }
 
 // ======================
@@ -83,7 +85,7 @@ model Property {
   type        String // "house", "apartment", "villa", "land", "studio"
   status      String // "draft", "pending", "published", "archived", "sold", "rented"
   price       Float?
-  rentType String?    @default("longue_duree")// "saisonniere" | "longue_duree"
+  rentType    String? @default("longue_duree") // "saisonniere" | "longue_duree"
 
   // Caractéristiques principales
   surface   Int? // Surface en m²
@@ -234,18 +236,16 @@ model Category {
 // SERVICES
 // ======================
 model Service {
-  id       Int                  @id @default(autoincrement())
-  libelle  String
+  id          Int                  @id @default(autoincrement())
+  libelle     String
   description String?
-  images     String[]
-  categoryId Int?
-  category   Category? @relation(fields: [categoryId], references: [id])
-  metiers  MetierService[]
-  users    UtilisateurService[]
-  demandes Demande[]
+  images      String[]
+  categoryId  Int?
+  category    Category?            @relation(fields: [categoryId], references: [id])
+  metiers     MetierService[]
+  users       UtilisateurService[]
+  demandes    Demande[]
 }
-
-
 
 // ======================
 // LIAISON MÉTIER-SERVICE
@@ -329,4 +329,26 @@ model DemandeArtisan {
   demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
   @@id([userId, demandeId])
+}
+
+// ======================
+// TRANSACTIONS (PAIEMENTS)
+// ======================
+model Transaction {
+  id            String   @id @default(uuid())
+  userId        String? // l’utilisateur qui paie
+  provider      String // "stripe" | "paypal"
+  providerId    String? // ID du paiement Stripe ou PayPal
+  amount        Float // Montant payé
+  currency      String // "usd", "eur", ...
+  status        String // "created", "succeeded", "failed", "refunded", ...
+  description   String? // description du paiement
+  referenceType String? // "product" | "demande"
+  referenceId   String? // id du produit ou de la demande
+  metadata      Json? // données additionnelles (cart, items, etc.)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -431,4 +431,127 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
   }
 })
 
+// routes/users.js - Ajoutez ces routes
+
+// GET /api/users/profile - Récupérer le profil de l'utilisateur connecté
+router.get('/profile', authenticateToken, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        metiers: {
+          include: {
+            metier: true
+          }
+        },
+        services: {
+          include: {
+            service: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Erreur lors de la récupération du profil:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/users/profile - Mettre à jour le profil de l'utilisateur connecté
+router.put('/profile', authenticateToken, async (req, res) => {
+  try {
+    const {
+      firstName,
+      lastName,
+      phone,
+      companyName,
+      address,
+      zipCode,
+      city,
+      addressComplement,
+      commercialName,
+      siret,
+      avatar
+    } = req.body;
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        firstName,
+        lastName,
+        phone,
+        companyName,
+        address,
+        zipCode,
+        city,
+        addressComplement,
+        commercialName,
+        siret,
+        avatar,
+        updatedAt: new Date()
+      },
+      include: {
+        metiers: {
+          include: {
+            metier: true
+          }
+        },
+        services: {
+          include: {
+            service: true
+          }
+        }
+      }
+    });
+
+    res.json(user);
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du profil:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/users/change-password - Changer le mot de passe
+router.put('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    // Vérifier le mot de passe actuel
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ error: 'Mot de passe actuel incorrect' });
+    }
+
+    // Hasher le nouveau mot de passe
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        passwordHash: newPasswordHash,
+        updatedAt: new Date()
+      }
+    });
+
+    res.json({ success: true, message: 'Mot de passe modifié avec succès' });
+  } catch (error) {
+    console.error('Erreur lors du changement de mot de passe:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 module.exports = router
