@@ -1,10 +1,9 @@
 node_modules
 .qodo
 /generated/prisma
-.env.example
-.env
-.env.test
-.env.production
 .DS_Store
 .vscode
 .qodo
+.env
+.env.local
+.env.*.local
