@@ -62,6 +62,8 @@ model User {
   addressComplement String? // Complément d'adresse
   commercialName    String? // Nom commercial
   siret             String? // Numéro SIRET
+  providerName String?   // ex: "google"
+  providerId   String?   // ex: "117349..."
   userType          String? // PRESTATAIRE | VENDEUR | LOUEUR | CLIENT | ADMIN
   // Nouvelles relations
   properties        Property[]
