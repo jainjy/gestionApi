@@ -22,6 +22,7 @@ app.use('/api/metiers', require('./routes/metiersRoutes'))
 app.use('/api/professional/services', require('./routes/professional-services'))
 app.use('/api/demandes', require('./routes/demandes'))
 app.use('/api/admin', require('./routes/admin-demandes'))
+
 // Route de santé
 app.get('/health', (req, res) => {
   res.json({ 
@@ -38,11 +39,11 @@ app.use('*', (req, res) => {
 
 // Middleware de gestion d'erreurs global
 app.use((error, req, res, next) => {
-  console.error('Global error handler:', error)
+  console.error('Erreur Globales :', error)
   res.status(500).json({ error: 'Erreur interne du serveur' })
 })
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-  console.log(`Health check: http://localhost:${PORT}/health`)
+  console.log(`Le serveur tourne sur le port: ${PORT}`)
+  console.log(`voir la sante sur : http://localhost:${PORT}/health`)
 })
