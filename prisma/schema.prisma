@@ -43,6 +43,7 @@ model User {
   email             String               @unique
   passwordHash      String?
   provider          Json?
+  stripeCustomerId String?
   firstName         String?
   lastName          String?
   phone             String?
