@@ -22,13 +22,15 @@ app.use('/api/metiers', require('./routes/metiersRoutes'))
 app.use('/api/professional/services', require('./routes/professional-services'))
 app.use('/api/demandes', require('./routes/demandes'))
 app.use('/api/admin', require('./routes/admin-demandes'))
+app.use("/api/payments", require("./routes/payments"));
+
 
 // Route de santé
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    services: ['auth', 'users', 'upload', 'articles', 'properties']
+    services: ['auth', 'users', 'upload', 'articles', 'properties','products','services','metiers','professional-services','demandes','admin-demandes','payments']
   })
 })
 

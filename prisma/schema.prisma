@@ -62,8 +62,8 @@ model User {
   addressComplement String? // Complément d'adresse
   commercialName    String? // Nom commercial
   siret             String? // Numéro SIRET
-  providerName String?   // ex: "google"
-  providerId   String?   // ex: "117349..."
+  providerName      String? // ex: "google"
+  providerId        String? // ex: "117349..."
   userType          String? // PRESTATAIRE | VENDEUR | LOUEUR | CLIENT | ADMIN
   // Nouvelles relations
   properties        Property[]
@@ -76,6 +76,8 @@ model User {
   latitude          Float?
   longitude         Float?
   Transaction       Transaction[]
+  Review            Review[]
+  Appointment       Appointment[]
 }
 
 // ======================
@@ -243,11 +245,15 @@ model Service {
   libelle     String
   description String?
   images      String[]
+  price       Float? // <-- nouveau champ
+  duration    Int? // durée en minutes (facultatif)
   categoryId  Int?
   category    Category?            @relation(fields: [categoryId], references: [id])
   metiers     MetierService[]
   users       UtilisateurService[]
   demandes    Demande[]
+  Review      Review[]
+  Appointment Appointment[]
 }
 
 // ======================
@@ -354,4 +360,36 @@ model Transaction {
 
   // Relations
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ======================
+// REVIEW (NOTES)
+// ======================
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  serviceId Int
+  rating    Int // 1 à 5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+// ======================
+// Appointment (RendezVous)
+// ======================
+model Appointment {
+  id        String   @id @default(uuid())
+  userId    String // client
+  serviceId Int
+  date      DateTime
+  time      String
+  message   String?
+  status    String   @default("pending") // pending, confirmed, cancelled
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
