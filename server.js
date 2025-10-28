@@ -22,6 +22,7 @@ app.use('/api/metiers', require('./routes/metiersRoutes'))
 app.use('/api/professional/services', require('./routes/professional-services'))
 app.use('/api/demandes', require('./routes/demandes'))
 app.use('/api/admin', require('./routes/admin-demandes'))
+app.use('/api/categories', require('./routes/categories'))
 
 
 // Route de santé
