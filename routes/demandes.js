@@ -1,5 +1,3 @@
-// PATCH /api/immobilier/demandes/:id/statut - Mettre à jour le statut d'une demande
-
 const express = require('express')
 const router = express.Router()
 
@@ -122,6 +120,7 @@ router.get('/user/:userId', authenticateToken, async (req, res) => {
   }
 })
 
+// PATCH /api/demandes/immobilier/:id/statut - Mettre à jour le statut d'une demande
 router.patch('/:id/statut', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -168,7 +167,7 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/immobilier/demandes/:id - Retourne une demande brute (utilitaire pour debug)
+// GET /api/demandes/immobilier/:id - Retourne une demande brute (utilitaire pour debug)
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -189,11 +188,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/demandes - Créer une nouvelle demande
+// POST /api/demandes/immobilier - Créer une nouvelle demande
 router.post('/', authenticateToken, async (req, res) => {
   try {
     // DEBUG: log incoming payload to help diagnose 400 responses (temporary)
-    console.log('Incoming POST /api/immobilier/demandes payload:', JSON.stringify(req.body));
+    console.log('Incoming POST /api/demandes/immobilier payload:', JSON.stringify(req.body));
     let {
       contactNom,
       contactPrenom,
@@ -207,7 +206,8 @@ router.post('/', authenticateToken, async (req, res) => {
       serviceId,
       nombreArtisans,
       createdById,
-      devis // <-- NOUVEAU CHAMP
+      devis, // <-- NOUVEAU CHAMP
+      propertyId,
     } = req.body
 
     // serviceId is an Int (autoincrement), createdById is a String (UUID) in Prisma schema.
@@ -269,7 +269,8 @@ router.post('/', authenticateToken, async (req, res) => {
         // Assurer que la nouvelle demande est marquée en attente par défaut
         statut: 'en attente',
         nombreArtisans: nombreArtisans || 'UNIQUE',
-        createdById: createdByIdStr
+        createdById: createdByIdStr,
+        propertyId:propertyId
       },
       include: {
         service: {
@@ -306,7 +307,7 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 })
 
-// POST /api/immobilier/demandes/:id/history - Ajouter une entrée d'historique pour une demande
+// POST /api/demandes/immobilier/:id/history - Ajouter une entrée d'historique pour une demande
 router.post('/:id/history', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -323,53 +324,5 @@ router.post('/:id/history', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/demandes/stats - Statistiques des demandes
-router.get('/stats/:userId', authenticateToken, async (req, res) => {
-  try {
-    const { userId } = req.params
-
-    const totalDemandes = await prisma.demande.count({
-      where: { createdById: userId }
-    })
-
-    const demandesEnCours = await prisma.demande.count({
-      where: { 
-        createdById: userId,
-        demandeAcceptee: false,
-        artisans: {
-          some: {}
-        }
-      }
-    })
-
-    const demandesAvecDevis = await prisma.demande.count({
-      where: { 
-        createdById: userId,
-        artisans: {
-          some: {
-            accepte: true
-          }
-        }
-      }
-    })
-
-    const demandesTerminees = await prisma.demande.count({
-      where: { 
-        createdById: userId,
-        demandeAcceptee: true
-      }
-    })
-
-    res.json({
-      total: totalDemandes,
-      enCours: demandesEnCours,
-      avecDevis: demandesAvecDevis,
-      terminees: demandesTerminees
-    })
-  } catch (error) {
-    console.error('Erreur lors de la récupération des stats:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
-  }
-})
 
 module.exports = router
