@@ -114,9 +114,6 @@ router.post('/', authenticateToken, async (req, res) => {
       contactPrenom,
       contactEmail,
       contactTel,
-      contactAdresse,
-      contactAdresseCp,
-      contactAdresseVille,
       lieuAdresse,
       lieuAdresseCp,
       lieuAdresseVille,
@@ -127,22 +124,50 @@ router.post('/', authenticateToken, async (req, res) => {
       createdById
     } = req.body
 
-    // Validation des données requises
+    // Validation étendue
     if (!serviceId || !createdById) {
       return res.status(400).json({ 
         error: 'Le service et l\'utilisateur sont obligatoires' 
       })
     }
 
+    if (!contactNom || !contactPrenom || !contactEmail || !contactTel) {
+      return res.status(400).json({
+        error: 'Les informations de contact sont obligatoires'
+      })
+    }
+
+    if (!lieuAdresse || !lieuAdresseCp || !lieuAdresseVille) {
+      return res.status(400).json({
+        error: 'L\'adresse du lieu est obligatoire'
+      })
+    }
+
+    // Vérifier que le service existe
+    const serviceExists = await prisma.service.findUnique({
+      where: { id: parseInt(serviceId) }
+    })
+
+    if (!serviceExists) {
+      return res.status(404).json({ error: 'Service non trouvé' })
+    }
+
+    // Vérifier que l'utilisateur existe
+    const userExists = await prisma.user.findUnique({
+      where: { id: createdById }
+    })
+
+    if (!userExists) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' })
+    }
+
+    // Créer la demande
     const nouvelleDemande = await prisma.demande.create({
       data: {
         contactNom,
         contactPrenom,
         contactEmail,
         contactTel,
-        contactAdresse,
-        contactAdresseCp,
-        contactAdresseVille,
         lieuAdresse,
         lieuAdresseCp,
         lieuAdresseVille,
@@ -171,6 +196,11 @@ router.post('/', authenticateToken, async (req, res) => {
     })
   } catch (error) {
     console.error('Erreur lors de la création de la demande:', error)
+    
+    if (error.code === 'P2003') {
+      return res.status(400).json({ error: 'Référence invalide' })
+    }
+    
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })

@@ -165,7 +165,7 @@ router.get("/name/:name/services", async (req, res) => {
       }
     });
 
-    if (!category) {
+    if (!category) {  
       return res.status(404).json({ error: "Catégorie non trouvée" });
     }
 
