@@ -43,7 +43,7 @@ model User {
   email             String               @unique
   passwordHash      String?
   provider          Json?
-  stripeCustomerId String?
+  stripeCustomerId  String?
   firstName         String?
   lastName          String?
   phone             String?
@@ -79,6 +79,7 @@ model User {
   Transaction       Transaction[]
   Review            Review[]
   Appointment       Appointment[]
+  orders            Order[]
 }
 
 // ======================
@@ -393,4 +394,29 @@ model Appointment {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+// ======================
+// COMMANDES
+// ======================
+model Order {
+  id              String   @id @default(uuid())
+  orderNumber     String   @unique
+  userId          String
+  items           Json // Tableau d'items de la commande
+  totalAmount     Float
+  status          String   @default("pending") // pending, confirmed, processing, shipped, delivered, cancelled
+  shippingAddress Json? // Adresse de livraison
+  paymentMethod   String // card, paypal, bank_transfer
+  paymentStatus   String   @default("pending") // pending, paid, failed, refunded
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([createdAt])
 }
