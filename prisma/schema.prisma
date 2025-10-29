@@ -325,7 +325,7 @@ model Demande {
   createdById         String
   serviceId           Int
   createdAt           DateTime  @default(now())
-  devis       String?  // au cas ou il y a des demandes de devis
+  devis               String?  // au cas ou il y a des demandes de devis
   statut              String?
 
   createdBy User             @relation("DemandeCreePar", fields: [createdById], references: [id])
