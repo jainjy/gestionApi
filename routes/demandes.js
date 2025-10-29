@@ -11,8 +11,8 @@ router.get('/user/:userId', authenticateToken, async (req, res) => {
     const { userId } = req.params
     const { status, metier, service } = req.query
 
-    let whereClause = { createdById: userId }
-
+    let whereClause = { createdById: userId,NOT :{propertyId:null}}
+    
     // Filtres optionnels
     if (status && status !== 'Toutes') {
       whereClause.demandeAcceptee = status === 'Terminé' ? true : 

@@ -348,12 +348,13 @@ router.get("/stats/:userId", authenticateToken, async (req, res) => {
     const { userId } = req.params;
 
     const totalDemandes = await prisma.demande.count({
-      where: { createdById: userId },
+      where: { createdById: userId,propertyId:null },
     });
 
     const demandesEnCours = await prisma.demande.count({
       where: {
         createdById: userId,
+        propertyId:null,
         demandeAcceptee: false,
         artisans: {
           some: {},
@@ -364,6 +365,7 @@ router.get("/stats/:userId", authenticateToken, async (req, res) => {
     const demandesAvecDevis = await prisma.demande.count({
       where: {
         createdById: userId,
+        propertyId: null,
         artisans: {
           some: {
             accepte: true,
@@ -375,6 +377,7 @@ router.get("/stats/:userId", authenticateToken, async (req, res) => {
     const demandesTerminees = await prisma.demande.count({
       where: {
         createdById: userId,
+        propertyId: null,
         demandeAcceptee: true,
       },
     });
