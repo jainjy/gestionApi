@@ -254,6 +254,7 @@ model Service {
   metiers     MetierService[]
   users       UtilisateurService[]
   demandes    Demande[]
+  devis       String?  // au cas ou il y a des demandes de devis
   Review      Review[]
   Appointment Appointment[]
 }

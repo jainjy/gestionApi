@@ -121,7 +121,8 @@ router.post('/', authenticateToken, async (req, res) => {
       description,
       serviceId,
       nombreArtisans,
-      createdById
+      createdById,
+      devis // <-- NOUVEAU CHAMP
     } = req.body
 
     // Validation étendue
@@ -134,12 +135,6 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!contactNom || !contactPrenom || !contactEmail || !contactTel) {
       return res.status(400).json({
         error: 'Les informations de contact sont obligatoires'
-      })
-    }
-
-    if (!lieuAdresse || !lieuAdresseCp || !lieuAdresseVille) {
-      return res.status(400).json({
-        error: 'L\'adresse du lieu est obligatoire'
       })
     }
 
@@ -168,11 +163,12 @@ router.post('/', authenticateToken, async (req, res) => {
         contactPrenom,
         contactEmail,
         contactTel,
-        lieuAdresse,
-        lieuAdresseCp,
-        lieuAdresseVille,
+        lieuAdresse: lieuAdresse || '',
+        lieuAdresseCp: lieuAdresseCp || '',
+        lieuAdresseVille: lieuAdresseVille || '',
         optionAssurance: optionAssurance || false,
         description,
+        devis: devis || '', // <-- INCLURE LE CHAMP DEVIS
         serviceId: parseInt(serviceId),
         nombreArtisans: nombreArtisans || 'UNIQUE',
         createdById
