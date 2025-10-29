@@ -6,7 +6,15 @@ const { prisma } = require('../lib/db')
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const services = await prisma.service.findMany({
-      include: {
+      // Select explicit scalar fields and nested relations to avoid selecting non-existent DB columns
+      select: {
+        id: true,
+        libelle: true,
+        description: true,
+        categoryId: true,
+        images: true,
+        price: true,
+        duration: true,
         category: true,
         metiers: {
           include: {
@@ -113,14 +121,20 @@ router.post('/', authenticateToken, async (req, res) => {
         description: description,
         categoryId: categoryId ? parseInt(categoryId) : null,
         images: images || [],
+        price: null,
+        duration: null,
         metiers: {
           create: metierIds?.map(metierId => ({
             metierId: parseInt(metierId)
           })) || []
         }
       },
-      include: {
+      select: {
+        id: true,
+        libelle: true,
+        description: true,
         category: true,
+        images: true,
         metiers: {
           include: {
             metier: true
@@ -174,8 +188,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
           })) || []
         }
       },
-      include: {
+      select: {
+        id: true,
+        libelle: true,
+        description: true,
         category: true,
+        images: true,
         metiers: {
           include: {
             metier: true

@@ -18,18 +18,22 @@ router.get('/', authenticateToken, async (req, res) => {
             services: {
               include: {
                 service: {
-                  include: {
+                  // select explicit fields and nested relations to avoid missing DB columns
+                  select: {
+                    id: true,
+                    libelle: true,
+                    description: true,
+                    categoryId: true,
+                    images: true,
+                    price: true,
+                    duration: true,
                     category: true,
+                    metiers: {
+                      include: { metier: true }
+                    },
                     users: {
                       include: {
-                        user: {
-                          select: {
-                            id: true,
-                            firstName: true,
-                            lastName: true,
-                            companyName: true
-                          }
-                        }
+                        user: { select: { id: true, firstName: true, lastName: true, companyName: true } }
                       }
                     }
                   }
@@ -46,25 +50,16 @@ router.get('/', authenticateToken, async (req, res) => {
       where: { userId },
       include: {
         service: {
-          include: {
-            category: true,
-            metiers: {
-              include: {
-                metier: true
-              }
-            },
-            users: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    companyName: true
-                  }
-                }
-              }
-            }
+          select: {
+            id: true,
+            libelle: true,
+            description: true,
+            categoryId: true,
+            images: true,
+            price: true,
+            duration: true,
+            metiers: { include: { metier: true } },
+            users: { include: { user: { select: { id: true, firstName: true, lastName: true, companyName: true } } } }
           }
         }
       }
@@ -245,25 +240,17 @@ router.get('/available', authenticateToken, async (req, res) => {
           }
         }
       },
-      include: {
+      select: {
+        id: true,
+        libelle: true,
+        description: true,
+        categoryId: true,
+        images: true,
+        price: true,
+        duration: true,
         category: true,
-        metiers: {
-          include: {
-            metier: true
-          }
-        },
-        users: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                companyName: true
-              }
-            }
-          }
-        }
+        metiers: { include: { metier: true } },
+        users: { include: { user: { select: { id: true, firstName: true, lastName: true, companyName: true } } } }
       },
       orderBy: {
         libelle: 'asc'

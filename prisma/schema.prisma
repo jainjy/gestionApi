@@ -146,6 +146,7 @@ model Property {
   updatedAt   DateTime  @updatedAt
   publishedAt DateTime?
   expiresAt   DateTime? // Date d'expiration de l'annonce
+  Demande     Demande[]
 
   @@index([city])
   @@index([type])
@@ -301,7 +302,7 @@ model UtilisateurService {
 // DEMANDES DE SERVICES
 // ======================
 model Demande {
-  id                  Int      @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   disponibiliteBien   String? // "LIBRE" | "LOUE"
   description         String?
   contactNom          String?
@@ -314,16 +315,23 @@ model Demande {
   lieuAdresse         String?
   lieuAdresseCp       String?
   lieuAdresseVille    String?
-  optionAssurance     Boolean? @default(false)
-  demandeAcceptee     Boolean? @default(false)
+  // Champs ajoutés pour les demandes immobilières
+  propertyId          String? // Référence optionnelle vers Property.id
+  dateSouhaitee       DateTime?
+  heureSouhaitee      String?
+  optionAssurance     Boolean?  @default(false)
+  demandeAcceptee     Boolean?  @default(false)
   nombreArtisans      String? // "UNIQUE" | "MULTIPLE"
   createdById         String
   serviceId           Int
-  createdAt           DateTime @default(now())
+  createdAt           DateTime  @default(now())
   devis       String?  // au cas ou il y a des demandes de devis
+  statut              String?
 
   createdBy User             @relation("DemandeCreePar", fields: [createdById], references: [id])
   service   Service          @relation(fields: [serviceId], references: [id])
+  // Relation optionnelle vers Property
+  property  Property?        @relation(fields: [propertyId], references: [id])
   artisans  DemandeArtisan[] @relation("DemandeArtisanDemande")
 }
 
@@ -341,6 +349,18 @@ model DemandeArtisan {
   demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
   @@id([userId, demandeId])
+}
+
+// Historique des demandes (snapshot lors d'actions comme annulation/suppression)
+model DemandeHistory {
+  id        Int      @id @default(autoincrement())
+  demandeId Int
+  title     String?
+  message   String?
+  snapshot  Json?
+  createdAt DateTime @default(now())
+
+  @@index([demandeId])
 }
 
 // ======================
