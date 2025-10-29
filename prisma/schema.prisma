@@ -254,7 +254,6 @@ model Service {
   metiers     MetierService[]
   users       UtilisateurService[]
   demandes    Demande[]
-  devis       String?  // au cas ou il y a des demandes de devis
   Review      Review[]
   Appointment Appointment[]
 }
@@ -321,6 +320,7 @@ model Demande {
   createdById         String
   serviceId           Int
   createdAt           DateTime @default(now())
+  devis       String?  // au cas ou il y a des demandes de devis
 
   createdBy User             @relation("DemandeCreePar", fields: [createdById], references: [id])
   service   Service          @relation(fields: [serviceId], references: [id])
