@@ -83,7 +83,7 @@ model User {
 }
 
 // ======================
-// PROPRIÉTÉS ET FAVORIS
+// PROPRIÉTÉS
 // ======================
 model Property {
   id          String  @id @default(uuid())
@@ -158,6 +158,9 @@ model Property {
   @@index([createdAt])
 }
 
+// ======================
+// FAVORIS
+// ======================
 model Favorite {
   id         String   @id @default(uuid())
   userId     String
@@ -229,6 +232,7 @@ model Metier {
   libelle  String
   services MetierService[]
   users    UtilisateurMetier[]
+  demandes    Demande[]
 }
 
 // ======================
@@ -323,13 +327,15 @@ model Demande {
   demandeAcceptee     Boolean?  @default(false)
   nombreArtisans      String? // "UNIQUE" | "MULTIPLE"
   createdById         String
-  serviceId           Int
+  serviceId           Int?
+  metierId            Int?
   createdAt           DateTime  @default(now())
   devis               String?  // au cas ou il y a des demandes de devis
   statut              String?
 
   createdBy User             @relation("DemandeCreePar", fields: [createdById], references: [id])
-  service   Service          @relation(fields: [serviceId], references: [id])
+  service   Service?          @relation(fields: [serviceId], references: [id])
+  metier    Metier?           @relation(fields: [metierId], references: [id])
   // Relation optionnelle vers Property
   property  Property?        @relation(fields: [propertyId], references: [id])
   artisans  DemandeArtisan[] @relation("DemandeArtisanDemande")
@@ -350,8 +356,9 @@ model DemandeArtisan {
 
   @@id([userId, demandeId])
 }
-
+// ======================
 // Historique des demandes (snapshot lors d'actions comme annulation/suppression)
+// ======================
 model DemandeHistory {
   id        Int      @id @default(autoincrement())
   demandeId Int
