@@ -23,6 +23,8 @@ app.use('/api/professional/services', require('./routes/professional-services'))
 app.use('/api/demandes', require('./routes/demandes'))
 app.use('/api/admin', require('./routes/admin-demandes'))
 
+app.use('/api/recherche', require('./routes/rechercheIntelligent'));
+
 
 // Route de santé
 app.get('/health', (req, res) => {

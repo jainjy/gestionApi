@@ -10,6 +10,23 @@ datasource db {
   relationMode = "prisma"
 }
 
+
+//=======================
+//VENDOR
+//=======================
+model Vendor {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  companyName  String
+  categories   String[]
+  kycStatus    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+
 // ======================
 // ARTICLES
 // ======================
@@ -32,8 +49,12 @@ model BlogArticle {
   comments    Int       @default(0)
   readTime    String?
 
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  // 🌟 Nouvelle colonne pour les embeddings Gemini
+  embedding   Unsupported("vector(768)")?
 }
+
 
 // ======================
 // UTILISATEUR
@@ -79,6 +100,8 @@ model User {
   Transaction       Transaction[]
   Review            Review[]
   Appointment       Appointment[]
+  
+  vendor      Vendor?
 }
 
 // ======================
@@ -146,6 +169,9 @@ model Property {
   publishedAt DateTime?
   expiresAt   DateTime? // Date d'expiration de l'annonce
 
+  // 🌟 Nouveau champ embedding pour pgvector
+embedding  Unsupported("vector(768)")? 
+
   @@index([city])
   @@index([type])
   @@index([status])
@@ -211,7 +237,9 @@ model Product {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   publishedAt DateTime?
-
+  // 🌟 Nouveau champ embedding pour pgvector
+ embedding  Unsupported("vector(768)")? 
+ 
   @@index([userId])
   @@index([category])
   @@index([status])
@@ -227,6 +255,8 @@ model Metier {
   libelle  String
   services MetierService[]
   users    UtilisateurMetier[]
+  // 🌟 Nouveau champ embedding pour pgvector
+embedding  Unsupported("vector(768)")? 
 }
 
 // ======================
@@ -255,6 +285,8 @@ model Service {
   demandes    Demande[]
   Review      Review[]
   Appointment Appointment[]
+  // 🌟 Nouveau champ embedding pour pgvector
+ embedding  Unsupported("vector(768)")? 
 }
 
 // ======================
