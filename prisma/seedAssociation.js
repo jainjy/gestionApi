@@ -2,9 +2,9 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  try{
+  try {
     console.log("🌱 Seeding database with provided data...");
-  
+
     // =======================
     // ASSOCIATIONS MÉTIER-SERVICE
     // =======================
@@ -2191,42 +2191,78 @@ async function main() {
     // Clean up existing associations
     await prisma.metierService.deleteMany({});
 
+    // Récupérer tous les métiers et services existants
+    const metiers = await prisma.metier.findMany();
+    const services = await prisma.service.findMany();
+
+    // Créer des maps pour faciliter la recherche
+    const metiersMap = {};
+    const servicesMap = {};
+
+    metiers.forEach((metier) => {
+      metiersMap[metier.libelle] = metier.id;
+    });
+
+    services.forEach((service) => {
+      servicesMap[service.libelle] = service.id;
+    });
+
+    let createdCount = 0;
+    let skippedCount = 0;
+
     for (const assoc of associationsData) {
       const metierId = metiersMap[assoc.metierLibelle];
       const serviceId = servicesMap[assoc.serviceLibelle];
 
       if (metierId && serviceId) {
-        await prisma.metierService.create({
-          data: {
-            metierId,
-            serviceId,
+        // Vérifier si l'association existe déjà pour éviter les doublons
+        const existingAssociation = await prisma.metierService.findUnique({
+          where: {
+            metierId_serviceId: {
+              metierId,
+              serviceId,
+            },
           },
         });
-        console.log(
-          `🔗 Association créée : ${assoc.metierLibelle} -> ${assoc.serviceLibelle}`
-        );
+
+        if (!existingAssociation) {
+          await prisma.metierService.create({
+            data: {
+              metierId,
+              serviceId,
+            },
+          });
+          console.log(
+            `🔗 Association créée : ${assoc.metierLibelle} -> ${assoc.serviceLibelle}`
+          );
+          createdCount++;
+        } else {
+          console.log(
+            `ℹ️ Association déjà existante : ${assoc.metierLibelle} -> ${assoc.serviceLibelle}`
+          );
+        }
       } else {
         console.warn(
           `⚠️ Association sautée (non trouvé) : ${assoc.metierLibelle} -> ${assoc.serviceLibelle}`
         );
+        skippedCount++;
       }
     }
 
-
-    console.log("🌿 Seeding terminé avec succès !");
+    console.log(`🌿 Seeding terminé avec succès !`);
+    console.log(`📊 Statistiques :`);
+    console.log(`   - Associations créées : ${createdCount}`);
+    console.log(`   - Associations ignorées : ${skippedCount}`);
+    console.log(`   - Total traité : ${associationsData.length}`);
   } catch (error) {
-    console.error("❌ Erreur lors de la création des donnes:", error);
+    console.error("❌ Erreur lors de la création des données:", error);
+    throw error;
   } finally {
     await prisma.$disconnect();
   }
-
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

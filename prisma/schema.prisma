@@ -261,7 +261,7 @@ model Service {
   demandes    Demande[]
   Review      Review[]
   Appointment Appointment[]
-}
+} 
 
 // ======================
 // LIAISON MÉTIER-SERVICE
