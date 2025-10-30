@@ -27,6 +27,7 @@
   app.use('/api/articles', require('./routes/articles'))
   app.use('/api/properties', require('./routes/properties'))
   app.use('/api/products', require('./routes/products'))
+  app.use('/api/aliments', require('./routes/alimentsProduct'))
   app.use('/api/services', require('./routes/services'))
   app.use('/api/metiers', require('./routes/metiersRoutes'))
   app.use('/api/professional/services', require('./routes/professional-services'))

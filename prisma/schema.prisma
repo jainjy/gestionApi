@@ -261,7 +261,6 @@ model Favorite {
   @@index([userId])
   @@index([propertyId])
 }
-
 // ======================
 // PRODUIT
 // ======================
@@ -325,6 +324,7 @@ model Product {
   @@index([productType])
   @@index([foodCategory])
 }
+
 
 // ======================
 // MÉTIERS
