@@ -4,6 +4,75 @@ const router = express.Router()
 const { authenticateToken } = require('../middleware/auth')
 const { prisma } = require('../lib/db')
 
+// GET /api/demandes/immobilier/owner/:userId - Récupérer les demandes de visite pour les propriétés d'un utilisateur
+router.get('/immobilier/owner/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { status } = req.query;
+
+    // Récupérer d'abord toutes les propriétés de l'utilisateur
+    const userProperties = await prisma.property.findMany({
+      where: { ownerId: userId }
+    });
+
+    const propertyIds = userProperties.map(p => p.id);
+
+    let whereClause = {
+      propertyId: {
+        in: propertyIds
+      }
+    };
+
+    // Filtre par statut si fourni
+    if (status) {
+      whereClause.statut = status;
+    }
+
+    const demandes = await prisma.demande.findMany({
+      where: whereClause,
+      include: {
+        property: true,
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const transformedDemandes = demandes.map(demande => ({
+      id: demande.id,
+      statut: demande.statut || 'en attente',
+      description: demande.description,
+      date: demande.createdAt.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      }),
+      propertyId: demande.propertyId,
+      property: demande.property,
+      createdBy: demande.createdBy,
+      contactNom: demande.contactNom,
+      contactPrenom: demande.contactPrenom,
+      contactEmail: demande.contactEmail,
+      contactTel: demande.contactTel,
+      dateSouhaitee: demande.dateSouhaitee,
+      heureSouhaitee: demande.heureSouhaitee
+    }));
+
+    res.json(transformedDemandes);
+  } catch (error) {
+    console.error('Erreur lors de la récupération des demandes:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 // GET /api/demandes - Récupérer les demandes de l'utilisateur
 router.get('/user/:userId', authenticateToken, async (req, res) => {

@@ -1,4 +1,3 @@
-// schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,9 +9,6 @@ datasource db {
   relationMode = "prisma"
 }
 
-// ======================
-// ARTICLES
-// ======================
 model BlogArticle {
   id          String    @id @default(uuid())
   authorId    String
@@ -22,51 +18,48 @@ model BlogArticle {
   excerpt     String?
   coverUrl    String?
   tags        String[]
-  category    String
   status      String    @default("draft")
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now())
-  views       Int       @default(0)
-  likes       Int       @default(0)
+  category    String
   comments    Int       @default(0)
+  likes       Int       @default(0)
   readTime    String?
-
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  views       Int       @default(0)
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
-// ======================
-// UTILISATEUR
-// ======================
 model User {
   id                String               @id @default(uuid())
   email             String               @unique
   passwordHash      String?
   provider          Json?
-  stripeCustomerId  String?
   firstName         String?
   lastName          String?
   phone             String?
   role              String               @default("user")
-  avatar            String? // Logo ou avatar de l'utilisateur
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   resetToken        String?
   resetTokenExpiry  DateTime?
-  blogArticles      BlogArticle[]
   status            String               @default("inactive")
   companyName       String?
-  demandType        String? //agence immobilier,particulier ou syndicat 
-  address           String? // Adresse postale
-  zipCode           String? // Code postal
-  city              String? // Ville
-  addressComplement String? // Complément d'adresse
-  commercialName    String? // Nom commercial
-  siret             String? // Numéro SIRET
-  providerName      String? // ex: "google"
-  providerId        String? // ex: "117349..."
-  userType          String? // PRESTATAIRE | VENDEUR | LOUEUR | CLIENT | ADMIN
-  // Nouvelles relations
+  address           String?
+  addressComplement String?
+  city              String?
+  commercialName    String?
+  demandType        String?
+  latitude          Float?
+  longitude         Float?
+  siret             String?
+  zipCode           String?
+  avatar            String?
+  userType          String?
+  providerId        String?
+  providerName      String?
+  stripeCustomerId  String?
+  blogArticles      BlogArticle[]
   properties        Property[]
   favorites         Favorite[]
   metiers           UtilisateurMetier[]
@@ -74,79 +67,56 @@ model User {
   demandesCrees     Demande[]            @relation("DemandeCreePar")
   demandesArtisan   DemandeArtisan[]     @relation("DemandeArtisanUser")
   Product           Product[]
-  latitude          Float?
-  longitude         Float?
   Transaction       Transaction[]
   Review            Review[]
   Appointment       Appointment[]
   orders            Order[]
 }
 
-// ======================
-// PROPRIÉTÉS
-// ======================
 model Property {
-  id          String  @id @default(uuid())
-  title       String
-  description String?
-  type        String // "house", "apartment", "villa", "land", "studio"
-  status      String // "draft", "pending", "published", "archived", "sold", "rented"
-  price       Float?
-  rentType    String? @default("longue_duree") // "saisonniere" | "longue_duree"
-
-  // Caractéristiques principales
-  surface   Int? // Surface en m²
-  rooms     Int? // Nombre de pièces
-  bedrooms  Int? // Nombre de chambres
-  bathrooms Int? // Nombre de salles de bain
-
-  // Localisation
-  address   String?
-  city      String
-  zipCode   String?
-  latitude  Float?
-  longitude Float?
-
-  // Équipements
-  features String[] // ["pool", "garden", "parking", "terrace", "balcony"]
-
-  // Images
-  images String[] // URLs des images
-
-  // Métadonnées
-  isFeatured Boolean @default(false)
-  isActive   Boolean @default(true)
-  views      Int     @default(0)
-
-  // Nouvelles colonnes ajoutées
-  listingType String  @default("sale") // "sale", "rent", "both"
-  energyClass String? // "A", "B", "C", "D", "E", "F", "G"
-  yearBuilt   Int?
-  floor       Int? // Étage
-  totalFloors Int? // Nombre total d'étages
-  hasElevator Boolean @default(false)
-  hasParking  Boolean @default(false)
-  hasBalcony  Boolean @default(false)
-  hasTerrace  Boolean @default(false)
-  hasGarden   Boolean @default(false)
-  hasPool     Boolean @default(false)
-
-  // SEO
-  metaTitle       String?
+  id              String     @id @default(uuid())
+  title           String
+  description     String?
+  type            String
+  status          String
+  price           Float?
+  surface         Int?
+  rooms           Int?
+  bedrooms        Int?
+  bathrooms       Int?
+  address         String?
+  city            String
+  zipCode         String?
+  latitude        Float?
+  longitude       Float?
+  features        String[]
+  images          String[]
+  isFeatured      Boolean    @default(false)
+  isActive        Boolean    @default(true)
+  views           Int        @default(0)
+  ownerId         String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  publishedAt     DateTime?
+  energyClass     String?
+  expiresAt       DateTime?
+  floor           Int?
+  hasBalcony      Boolean    @default(false)
+  hasElevator     Boolean    @default(false)
+  hasGarden       Boolean    @default(false)
+  hasParking      Boolean    @default(false)
+  hasPool         Boolean    @default(false)
+  hasTerrace      Boolean    @default(false)
+  listingType     String     @default("sale")
   metaDescription String?
-  slug            String? @unique
-
-  // Relations
-  ownerId   String
-  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  favorites Favorite[]
-
-  // Dates
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  publishedAt DateTime?
-  expiresAt   DateTime? // Date d'expiration de l'annonce
-  Demande     Demande[]
+  metaTitle       String?
+  slug            String?    @unique
+  totalFloors     Int?
+  yearBuilt       Int?
+  rentType        String?    @default("longue_duree")
+  owner           User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  favorites       Favorite[]
+  Demande         Demande[]
 
   @@index([city])
   @@index([type])
@@ -158,64 +128,47 @@ model Property {
   @@index([createdAt])
 }
 
-// ======================
-// FAVORIS
-// ======================
 model Favorite {
   id         String   @id @default(uuid())
   userId     String
   propertyId String
   createdAt  DateTime @default(now())
-
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([userId, propertyId])
   @@index([userId])
   @@index([propertyId])
 }
 
-// ======================
-// PRODUIT
-// ======================
 model Product {
-  id            String  @id @default(uuid())
-  userId        String
-  name          String
-  slug          String  @unique
-  description   String?
-  category      String
-  subcategory   String?
-  price         Float
-  comparePrice  Float? // Prix de comparaison (ancien prix)
-  cost          Float? // Coût d'achat
-  sku           String? // Référence produit
-  barcode       String? // Code-barres
-  trackQuantity Boolean @default(true)
-  quantity      Int     @default(0)
-  lowStock      Int?    @default(5) // Seuil d'alerte stock faible
-  weight        Float? // Poids en kg
-  dimensions    Json? // {length, width, height}
-
-  // Images
-  images String[]
-
-  // Métadonnées
-  status     String  @default("draft") // draft, active, inactive, archived
-  featured   Boolean @default(false)
-  visibility String  @default("public") // public, hidden, private
-
-  // SEO
+  id             String    @id @default(uuid())
+  name           String
+  slug           String    @unique
+  description    String?
+  category       String
+  subcategory    String?
+  price          Float
+  comparePrice   Float?
+  cost           Float?
+  sku            String?
+  barcode        String?
+  trackQuantity  Boolean   @default(true)
+  quantity       Int       @default(0)
+  lowStock       Int?      @default(5)
+  weight         Float?
+  dimensions     Json?
+  images         String[]
+  status         String    @default("draft")
+  featured       Boolean   @default(false)
+  visibility     String    @default("public")
   seoTitle       String?
   seoDescription String?
-
-  // Relations
-  User User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Dates
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  publishedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  publishedAt    DateTime?
+  userId         String
+  User           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([category])
@@ -224,37 +177,28 @@ model Product {
   @@index([createdAt])
 }
 
-// ======================
-// MÉTIERS
-// ======================
 model Metier {
   id       Int                 @id @default(autoincrement())
   libelle  String
   services MetierService[]
   users    UtilisateurMetier[]
-  demandes    Demande[]
+  demandes Demande[]
 }
 
-// ======================
-// CaTEGORIE DE SERVICES
-// ======================
 model Category {
   id       Int       @id @default(autoincrement())
   name     String
   services Service[]
 }
 
-// ======================
-// SERVICES
-// ======================
 model Service {
   id          Int                  @id @default(autoincrement())
   libelle     String
+  categoryId  Int?
   description String?
   images      String[]
-  price       Float? // <-- nouveau champ
-  duration    Int? // durée en minutes (facultatif)
-  categoryId  Int?
+  duration    Int?
+  price       Float?
   category    Category?            @relation(fields: [categoryId], references: [id])
   metiers     MetierService[]
   users       UtilisateurService[]
@@ -263,51 +207,36 @@ model Service {
   Appointment Appointment[]
 }
 
-// ======================
-// LIAISON MÉTIER-SERVICE
-// ======================
 model MetierService {
   metierId  Int
   serviceId Int
-
-  metier  Metier  @relation(fields: [metierId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
+  metier    Metier  @relation(fields: [metierId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
 
   @@id([metierId, serviceId])
 }
 
-// ======================
-// LIAISON UTILISATEUR-MÉTIER
-// ======================
 model UtilisateurMetier {
   userId   String
   metierId Int
-
-  user   User   @relation(fields: [userId], references: [id])
-  metier Metier @relation(fields: [metierId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+  metier   Metier @relation(fields: [metierId], references: [id])
 
   @@id([userId, metierId])
 }
 
-// ======================
-// LIAISON UTILISATEUR-SERVICE
-// ======================
 model UtilisateurService {
   userId    String
   serviceId Int
-
-  user    User    @relation(fields: [userId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
 
   @@id([userId, serviceId])
 }
 
-// ======================
-// DEMANDES DE SERVICES
-// ======================
 model Demande {
-  id                  Int       @id @default(autoincrement())
-  disponibiliteBien   String? // "LIBRE" | "LOUE"
+  id                  Int              @id @default(autoincrement())
+  disponibiliteBien   String?
   description         String?
   contactNom          String?
   contactPrenom       String?
@@ -319,46 +248,38 @@ model Demande {
   lieuAdresse         String?
   lieuAdresseCp       String?
   lieuAdresseVille    String?
-  // Champs ajoutés pour les demandes immobilières
-  propertyId          String? // Référence optionnelle vers Property.id
-  dateSouhaitee       DateTime?
-  heureSouhaitee      String?
-  optionAssurance     Boolean?  @default(false)
-  demandeAcceptee     Boolean?  @default(false)
-  nombreArtisans      String? // "UNIQUE" | "MULTIPLE"
+  optionAssurance     Boolean?         @default(false)
+  demandeAcceptee     Boolean?         @default(false)
+  nombreArtisans      String?
   createdById         String
   serviceId           Int?
+  createdAt           DateTime         @default(now())
+  devis               String?
+  dateSouhaitee       DateTime?
+  heureSouhaitee      String?
   metierId            Int?
-  createdAt           DateTime  @default(now())
-  devis               String?  // au cas ou il y a des demandes de devis
+  propertyId          String?
   statut              String?
-
-  createdBy User             @relation("DemandeCreePar", fields: [createdById], references: [id])
-  service   Service?          @relation(fields: [serviceId], references: [id])
-  metier    Metier?           @relation(fields: [metierId], references: [id])
-  // Relation optionnelle vers Property
-  property  Property?        @relation(fields: [propertyId], references: [id])
-  artisans  DemandeArtisan[] @relation("DemandeArtisanDemande")
+  isRead              Boolean          @default(false)
+  createdBy           User             @relation("DemandeCreePar", fields: [createdById], references: [id])
+  service             Service?         @relation(fields: [serviceId], references: [id])
+  metier              Metier?          @relation(fields: [metierId], references: [id])
+  property            Property?        @relation(fields: [propertyId], references: [id])
+  artisans            DemandeArtisan[] @relation("DemandeArtisanDemande")
 }
 
-// ======================
-// LIAISON DEMANDE-ARTISAN
-// ======================
 model DemandeArtisan {
   userId    String
   demandeId Int
   accepte   Boolean?  @default(false)
   devis     String?
   rdv       DateTime?
-
-  user    User    @relation("DemandeArtisanUser", fields: [userId], references: [id])
-  demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
+  user      User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
+  demande   Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
   @@id([userId, demandeId])
 }
-// ======================
-// Historique des demandes (snapshot lors d'actions comme annulation/suppression)
-// ======================
+
 model DemandeHistory {
   id        Int      @id @default(autoincrement())
   demandeId Int
@@ -370,78 +291,60 @@ model DemandeHistory {
   @@index([demandeId])
 }
 
-// ======================
-// TRANSACTIONS (PAIEMENTS)
-// ======================
 model Transaction {
   id            String   @id @default(uuid())
-  userId        String? // l’utilisateur qui paie
-  provider      String // "stripe" | "paypal"
-  providerId    String? // ID du paiement Stripe ou PayPal
-  amount        Float // Montant payé
-  currency      String // "usd", "eur", ...
-  status        String // "created", "succeeded", "failed", "refunded", ...
-  description   String? // description du paiement
-  referenceType String? // "product" | "demande"
-  referenceId   String? // id du produit ou de la demande
-  metadata      Json? // données additionnelles (cart, items, etc.)
+  userId        String?
+  provider      String
+  providerId    String?
+  amount        Float
+  currency      String
+  status        String
+  description   String?
+  referenceType String?
+  referenceId   String?
+  metadata      Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
-  // Relations
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ======================
-// REVIEW (NOTES)
-// ======================
 model Review {
   id        String   @id @default(uuid())
   userId    String
   serviceId Int
-  rating    Int // 1 à 5
+  rating    Int
   comment   String?
   createdAt DateTime @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
 
-// ======================
-// Appointment (RendezVous)
-// ======================
 model Appointment {
   id        String   @id @default(uuid())
-  userId    String // client
+  userId    String
   serviceId Int
   date      DateTime
   time      String
   message   String?
-  status    String   @default("pending") // pending, confirmed, cancelled
+  status    String   @default("pending")
   createdAt DateTime @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
 
-// ======================
-// COMMANDES
-// ======================
 model Order {
   id              String   @id @default(uuid())
   orderNumber     String   @unique
   userId          String
-  items           Json // Tableau d'items de la commande
+  items           Json
   totalAmount     Float
-  status          String   @default("pending") // pending, confirmed, processing, shipped, delivered, cancelled
-  shippingAddress Json? // Adresse de livraison
-  paymentMethod   String // card, paypal, bank_transfer
-  paymentStatus   String   @default("pending") // pending, paid, failed, refunded
+  status          String   @default("pending")
+  shippingAddress Json?
+  paymentMethod   String
+  paymentStatus   String   @default("pending")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([orderNumber])

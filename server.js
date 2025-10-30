@@ -30,7 +30,7 @@ app.use('/api/products', require('./routes/products'))
 app.use('/api/services', require('./routes/services'))
 app.use('/api/metiers', require('./routes/metiersRoutes'))
 app.use('/api/professional/services', require('./routes/professional-services'))
-app.use('/api/demandes/immobilier', require('./routes/demandes'))
+app.use('/api/demandes/immobilier', require('./routes/demandes-immobilier'))
 app.use('/api/demandes', require('./routes/user-demandes'))
 app.use('/api/devis', require('./routes/devis'))
 app.use('/api/admin', require('./routes/admin-demandes'))
@@ -38,6 +38,8 @@ app.use('/api/admin', require('./routes/admin-demandes'))
 app.use('/api/cart', require('./routes/cart'))
 app.use('/api/orders', require('./routes/orders'))
 app.use('/api/categories', require('./routes/categories'))
+app.use('/api/notifications', require('./routes/notifications'))
+app.use('/api/demandes-history', require('./routes/demandes-history'))
 
 
 // Route de santé
@@ -58,7 +60,8 @@ app.get('/health', (req, res) => {
       'demandes',
       'admin-demandes',
       'cart',           
-      'orders'          
+      'orders',
+      'demandes-history'
     ]
   })
 })
