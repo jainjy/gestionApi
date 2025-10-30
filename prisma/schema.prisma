@@ -266,36 +266,49 @@ model Favorite {
 // PRODUIT
 // ======================
 model Product {
-  id            String  @id @default(uuid())
+  id            String   @id @default(uuid())
   userId        String
   name          String
-  slug          String  @unique
+  slug          String   @unique
   description   String?
   category      String
   subcategory   String?
   price         Float
-  comparePrice  Float? // Prix de comparaison (ancien prix)
-  cost          Float? // Coût d'achat
-  sku           String? // Référence produit
-  barcode       String? // Code-barres
-  trackQuantity Boolean @default(true)
-  quantity      Int     @default(0)
-  lowStock      Int?    @default(5) // Seuil d'alerte stock faible
-  weight        Float? // Poids en kg
-  dimensions    Json? // {length, width, height}
-
+  comparePrice  Float?
+  cost          Float?
+  sku           String?
+  barcode       String?
+  trackQuantity Boolean  @default(true)
+  quantity      Int      @default(0)
+  lowStock      Int?     @default(5)
+  weight        Float?
+  dimensions    Json?
+  
   // Images
   images String[]
 
   // Métadonnées
-  status     String  @default("draft") // draft, active, inactive, archived
-  featured   Boolean @default(false)
-  visibility String  @default("public") // public, hidden, private
+  status     String   @default("draft")
+  featured   Boolean  @default(false)
+  visibility String   @default("public")
 
   // SEO
   seoTitle       String?
   seoDescription String?
 
+  // NOUVEAUX CHAMPS POUR ALIMENTATION
+  productType    String?  @default("general") // "general" | "food"
+  foodCategory   String?  // "fruits", "legumes", "produits-laitiers", etc.
+  isPerishable   Boolean? @default(false)
+  expiryDate     DateTime?
+  storageTips    String?
+  nutritionalInfo Json?   // {calories, proteins, carbs, fats, etc.}
+  allergens      String[] // ["gluten", "lactose", "nuts", ...]
+  isOrganic      Boolean? @default(false)
+  origin         String?  // Pays/région d'origine
+  brand          String?
+  unit           String?  // "kg", "pièce", "litre", "barquette"
+  
   // Relations
   User User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -309,6 +322,8 @@ model Product {
   @@index([status])
   @@index([featured])
   @@index([createdAt])
+  @@index([productType])
+  @@index([foodCategory])
 }
 
 // ======================
