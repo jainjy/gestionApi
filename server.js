@@ -3,7 +3,6 @@ const express = require('express')
 const cors = require('./middleware/cors')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
-const { authenticateToken } = require('./middleware/auth')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -20,43 +19,6 @@ app.use(cors)
 app.use(limiter)
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
-
-// ⭐⭐ MIDDLEWARE D'AUTHENTIFICATION GLOBAL - EXCLURE LES ROUTES PUBLIQUES ⭐⭐
-app.use((req, res, next) => {
-  // Liste des routes qui ne nécessitent PAS d'authentification
-  const publicRoutes = [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/forgot-password',
-    '/api/auth/reset-password',
-    '/health',
-    '/api/orders/pro',
-    '/api/orders/pro/stats',
-    '/api/orders/pro/:id/status',
-    '/api/orders/test',
-    '/api/orders/test-data',
-    '/api/cart/validate'
-  ];
-
-  // Vérifier si la route actuelle est une route publique
-  const isPublicRoute = publicRoutes.some(route => {
-    if (route.includes(':')) {
-      // Gérer les routes avec paramètres
-      const routeRegex = new RegExp('^' + route.replace(/:[^/]+/g, '([^/]+)') + '$');
-      return routeRegex.test(req.path);
-    }
-    return req.path === route || req.path.startsWith(route + '/');
-  });
-
-  if (isPublicRoute) {
-    console.log(`🔓 Route publique: ${req.path} - Pas d'authentification requise`);
-    return next();
-  }
-
-  // Pour les autres routes, appliquer l'authentification
-  console.log(`🔐 Route privée: ${req.path} - Authentification requise`);
-  authenticateToken(req, res, next);
-});
 
 // Routes
 app.use('/api/auth', require('./routes/auth'))
@@ -76,6 +38,7 @@ app.use('/api/admin', require('./routes/admin-demandes'))
 app.use('/api/cart', require('./routes/cart'))
 app.use('/api/orders', require('./routes/orders'))
 app.use('/api/categories', require('./routes/categories'))
+
 
 // Route de santé
 app.get('/health', (req, res) => {
