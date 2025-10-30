@@ -401,6 +401,7 @@ router.get("/category/:categoryName", async (req, res) => {
       allergens: product.allergens || [],
       origin: product.origin,
       unit: product.unit,
+      quantity:product.quantity,
       vendor: {
         companyName: product.User?.companyName,
       },
