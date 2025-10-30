@@ -34,7 +34,7 @@ app.use(
   "/api/professional/services",
   require("./routes/professional-services")
 );
-app.use("/api/demandes/immobilier", require("./routes/demandes"));
+app.use("/api/demandes/immobilier", require("./routes/demandes-immobilier"));
 app.use("/api/demandes", require("./routes/user-demandes"));
 app.use("/api/devis", require("./routes/devis"));
 app.use("/api/admin", require("./routes/admin-demandes"));

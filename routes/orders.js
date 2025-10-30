@@ -1,12 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db')
-
-// Middleware de logging pour le débogage
-router.use((req, res, next) => {
-  console.log(`📍 [ORDERS] ${req.method} ${req.originalUrl}`)
-  next()
-})
+const { authenticateToken } = require('../middleware/auth')
 
 /**
  * 👨‍🔧 GET /api/orders/pro - Récupérer TOUTES les commandes pour la gestion pro (SANS AUTH)
@@ -566,42 +561,36 @@ router.post('/', async (req, res) => {
 /**
  * 👤 GET /api/orders/user/my-orders - Commandes de l'utilisateur connecté
  */
-router.get('/user/my-orders', async (req, res) => {
+router.get("/user/my-orders",authenticateToken, async (req, res) => {
   try {
-    // Vérifier que l'utilisateur est authentifié
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentification requise pour voir vos commandes'
-      });
-    }
-
     const userId = req.user.id;
     const { page = 1, limit = 10, status } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     console.log(`👤 Récupération des commandes pour l'utilisateur: ${userId}`, {
       authenticated: true,
-      email: req.user.email
+      email: req.user.email,
     });
 
     // Construire les filtres
     const where = { userId };
-    if (status && status !== 'all') {
+    if (status && status !== "all") {
       where.status = status;
     }
 
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         skip,
-        take: parseInt(limit)
+        take: parseInt(limit),
       }),
-      prisma.order.count({ where })
+      prisma.order.count({ where }),
     ]);
 
-    console.log(`✅ ${orders.length} commandes trouvées pour l'utilisateur ${userId}`);
+    console.log(
+      `✅ ${orders.length} commandes trouvées pour l'utilisateur ${userId}`
+    );
 
     res.json({
       success: true,
@@ -609,22 +598,21 @@ router.get('/user/my-orders', async (req, res) => {
       userInfo: {
         id: userId,
         authenticated: true,
-        email: req.user.email
+        email: req.user.email,
       },
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
+        pages: Math.ceil(total / parseInt(limit)),
+      },
     });
-
   } catch (error) {
-    console.error('💥 Erreur récupération commandes utilisateur:', error);
+    console.error("💥 Erreur récupération commandes utilisateur:", error);
     res.status(500).json({
       success: false,
-      message: 'Erreur lors de la récupération de vos commandes',
-      error: error.message
+      message: "Erreur lors de la récupération de vos commandes",
+      error: error.message,
     });
   }
 });
