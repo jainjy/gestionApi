@@ -418,54 +418,81 @@ async function updateStock(orderItems) {
   console.log('✅ Stocks mis à jour pour', updates.length, 'produits')
 }
 
-// Garder les routes originales avec auth pour les utilisateurs normaux
+// ============================================================================
+// ROUTES AVEC AUTHENTIFICATION UTILISATEUR - AMÉLIORÉES
+// ============================================================================
+
 /**
- * 🛍️ POST /api/orders - Créer une commande (avec auth)
+ * 🛍️ POST /api/orders - Créer une commande (CORRIGÉ avec gestion d'auth)
  */
 router.post('/', async (req, res) => {
   try {
-    const { items, shippingAddress, paymentMethod } = req.body
-    // Pour le développement, utiliser un user ID par défaut
-    const userId = 'default-user-id'
+    const { items, shippingAddress, paymentMethod } = req.body;
+    
+    // DEBUG DÉTAILLÉ DE L'AUTHENTIFICATION
+    console.log('=== DEBUG AUTH DÉTAILLÉ ===');
+    console.log('🔐 Headers auth:', req.headers.authorization);
+    console.log('👤 req.user:', req.user);
+    console.log('📦 Body items count:', items?.length);
+    console.log('==========================');
+    
+    // STRATÉGIE AMÉLIORÉE POUR RÉCUPÉRER L'USER
+    let userId;
+    let isAuthenticated = false;
+    
+    // Option 1: User depuis l'authentification (req.user peuplé par le middleware)
+    if (req.user && req.user.id) {
+      userId = req.user.id;
+      isAuthenticated = true;
+      console.log('✅ UserId depuis auth middleware:', userId, req.user.email);
+    } 
+    // Option 2: Fallback intelligent
+    else {
+      // Générer un ID temporaire basé sur l'IP + timestamp
+      const clientIP = req.ip || req.connection.remoteAddress;
+      userId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      console.log('⚠️ UserId temporaire (guest):', userId, 'IP:', clientIP);
+    }
 
     console.log('🛒 Création commande pour user:', userId, {
       itemsCount: items?.length,
-      paymentMethod
-    })
+      paymentMethod,
+      userAuthenticated: isAuthenticated
+    });
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Le panier est vide'
-      })
+      });
     }
 
-    let totalAmount = 0
-    const orderItems = []
-    const stockErrors = []
+    let totalAmount = 0;
+    const orderItems = [];
+    const stockErrors = [];
 
     // Vérification des stocks
     for (const item of items) {
       const product = await prisma.product.findUnique({
         where: { id: item.productId }
-      })
+      });
 
       if (!product) {
         return res.status(400).json({
           success: false,
           message: `Produit non trouvé: ${item.name}`
-        })
+        });
       }
 
       if (product.trackQuantity && product.quantity < item.quantity) {
         stockErrors.push(
           `Stock insuffisant pour "${product.name}". Disponible: ${product.quantity}, Demandé: ${item.quantity}`
-        )
-        continue
+        );
+        continue;
       }
 
-      const itemTotal = product.price * item.quantity
-      totalAmount += itemTotal
+      const itemTotal = product.price * item.quantity;
+      totalAmount += itemTotal;
 
       orderItems.push({
         productId: product.id,
@@ -474,7 +501,7 @@ router.post('/', async (req, res) => {
         quantity: item.quantity,
         images: product.images,
         itemTotal: parseFloat(itemTotal.toFixed(2))
-      })
+      });
     }
 
     if (stockErrors.length > 0) {
@@ -482,24 +509,26 @@ router.post('/', async (req, res) => {
         success: false,
         message: 'Problèmes de stock',
         errors: stockErrors
-      })
+      });
     }
 
     // Numéro unique de commande
-    const timestamp = Date.now()
-    const random = Math.random().toString(36).substr(2, 9).toUpperCase()
-    const orderNumber = `CMD-${timestamp}-${random}`
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 9).toUpperCase();
+    const orderNumber = `CMD-${timestamp}-${random}`;
 
     console.log('📦 Création commande:', orderNumber, {
       items: orderItems.length,
-      total: totalAmount
-    })
+      total: totalAmount,
+      user: userId,
+      userAuthenticated: isAuthenticated
+    });
 
     // Enregistrement de la commande
     const order = await prisma.order.create({
       data: {
         orderNumber,
-        userId,
+        userId, // Utilise le vrai userId si authentifié, sinon le fallback
         items: orderItems,
         totalAmount: parseFloat(totalAmount.toFixed(2)),
         shippingAddress: shippingAddress || {},
@@ -507,29 +536,295 @@ router.post('/', async (req, res) => {
         status: 'pending',
         paymentStatus: 'pending'
       }
-    })
+    });
 
     // Mise à jour des stocks
-    await updateStock(orderItems)
+    await updateStock(orderItems);
 
-    console.log('✅ Commande créée:', order.orderNumber)
+    console.log('✅ Commande créée:', order.orderNumber, 'pour user:', userId);
 
     res.status(201).json({
       success: true,
       message: 'Commande créée avec succès',
-      order
-    })
+      order,
+      userInfo: {
+        id: userId,
+        authenticated: isAuthenticated,
+        email: isAuthenticated ? req.user.email : null
+      }
+    });
   } catch (error) {
-    console.error('💥 Erreur création commande:', error)
+    console.error('💥 Erreur création commande:', error);
     res.status(500).json({
       success: false,
-      message: 'Erreur lors de la création de la commande'
-    })
+      message: 'Erreur lors de la création de la commande',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
-})
+});
 
 /**
- * 📋 GET /api/orders - Commandes (avec auth modifiée)
+ * 👤 GET /api/orders/user/my-orders - Commandes de l'utilisateur connecté
+ */
+router.get('/user/my-orders', async (req, res) => {
+  try {
+    // Vérifier que l'utilisateur est authentifié
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentification requise pour voir vos commandes'
+      });
+    }
+
+    const userId = req.user.id;
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    console.log(`👤 Récupération des commandes pour l'utilisateur: ${userId}`, {
+      authenticated: true,
+      email: req.user.email
+    });
+
+    // Construire les filtres
+    const where = { userId };
+    if (status && status !== 'all') {
+      where.status = status;
+    }
+
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit)
+      }),
+      prisma.order.count({ where })
+    ]);
+
+    console.log(`✅ ${orders.length} commandes trouvées pour l'utilisateur ${userId}`);
+
+    res.json({
+      success: true,
+      orders,
+      userInfo: {
+        id: userId,
+        authenticated: true,
+        email: req.user.email
+      },
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur récupération commandes utilisateur:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération de vos commandes',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * 📦 GET /api/orders/user/stats - Statistiques des commandes pour l'utilisateur
+ */
+router.get('/user/stats', async (req, res) => {
+  try {
+    // Vérifier que l'utilisateur est authentifié
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentification requise'
+      });
+    }
+
+    const userId = req.user.id;
+
+    console.log(`📊 Récupération statistiques pour l'utilisateur: ${userId}`, {
+      authenticated: true,
+      email: req.user.email
+    });
+
+    // Récupérer toutes les commandes de l'utilisateur
+    const userOrders = await prisma.order.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const stats = {
+      total: userOrders.length,
+      pending: userOrders.filter(order => order.status === 'pending').length,
+      confirmed: userOrders.filter(order => order.status === 'confirmed').length,
+      processing: userOrders.filter(order => order.status === 'processing').length,
+      shipped: userOrders.filter(order => order.status === 'shipped').length,
+      delivered: userOrders.filter(order => order.status === 'delivered').length,
+      cancelled: userOrders.filter(order => order.status === 'cancelled').length,
+      totalSpent: userOrders.reduce((sum, order) => sum + order.totalAmount, 0),
+      // Commandes de cette semaine
+      thisWeek: userOrders.filter(order => {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        return new Date(order.createdAt) > oneWeekAgo;
+      }).length
+    };
+
+    res.json({
+      success: true,
+      stats,
+      userInfo: {
+        id: userId,
+        authenticated: true,
+        email: req.user.email
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur récupération statistiques utilisateur:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération de vos statistiques',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * 👤 GET /api/orders/user/:id - Détails d'une commande spécifique pour l'utilisateur
+ */
+router.get('/user/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Vérifier que l'utilisateur est authentifié
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentification requise'
+      });
+    }
+
+    const userId = req.user.id;
+
+    console.log(`👤 Détails de la commande ${id} pour l'utilisateur: ${userId}`, {
+      authenticated: true,
+      email: req.user.email
+    });
+
+    const order = await prisma.order.findFirst({
+      where: { 
+        id,
+        userId 
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Commande non trouvée'
+      });
+    }
+
+    res.json({
+      success: true,
+      order,
+      userInfo: {
+        id: userId,
+        authenticated: true,
+        email: req.user.email
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur récupération détail commande:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des détails de la commande',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * 🔄 PUT /api/orders/user/:id/cancel - Annuler une commande
+ */
+router.put('/user/:id/cancel', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Vérifier que l'utilisateur est authentifié
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentification requise'
+      });
+    }
+
+    const userId = req.user.id;
+
+    console.log(`👤 Annulation de la commande ${id} par l'utilisateur: ${userId}`, {
+      authenticated: true,
+      email: req.user.email
+    });
+
+    const order = await prisma.order.findFirst({
+      where: { 
+        id,
+        userId 
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Commande non trouvée'
+      });
+    }
+
+    // Vérifier si la commande peut être annulée
+    if (!['pending', 'confirmed'].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cette commande ne peut pas être annulée. Elle est déjà en cours de traitement.'
+      });
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id },
+      data: { 
+        status: 'cancelled',
+        updatedAt: new Date()
+      }
+    });
+
+    console.log(`✅ Commande ${id} annulée par l'utilisateur ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Commande annulée avec succès',
+      order: updatedOrder,
+      userInfo: {
+        id: userId,
+        authenticated: true,
+        email: req.user.email
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur annulation commande:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'annulation de la commande',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * 📋 GET /api/orders - Toutes les commandes (admin seulement)
  */
 router.get('/', async (req, res) => {
   try {
@@ -565,7 +860,7 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * 🔎 GET /api/orders/:id - Détails d'une commande (avec auth modifiée)
+ * 🔎 GET /api/orders/:id - Détails d'une commande (admin seulement)
  */
 router.get('/:id', async (req, res) => {
   try {
@@ -593,7 +888,7 @@ router.get('/:id', async (req, res) => {
 })
 
 /**
- * 🔄 PUT /api/orders/:id/status - Mettre à jour le statut d'une commande (avec auth modifiée)
+ * 🔄 PUT /api/orders/:id/status - Mettre à jour le statut d'une commande (admin seulement)
  */
 router.put('/:id/status', async (req, res) => {
   try {
@@ -643,202 +938,18 @@ router.put('/:id/status', async (req, res) => {
     })
   }
 })
-/**
- * 👤 GET /api/orders/user/my-orders - Commandes de l'utilisateur connecté
- */
-router.get('/user/my-orders', async (req, res) => {
-  try {
-    // Pour le développement, on utilise un user ID par défaut
-    // En production, vous utiliserez req.user.id depuis le middleware d'authentification
-    const userId = 'default-user-id';
-    
-    const { page = 1, limit = 10, status } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    console.log(`👤 Récupération des commandes pour l'utilisateur: ${userId}`);
-
-    // Construire les filtres
-    const where = { userId };
-    if (status && status !== 'all') {
-      where.status = status;
-    }
-
-    const [orders, total] = await Promise.all([
-      prisma.order.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit)
-      }),
-      prisma.order.count({ where })
-    ]);
-
-    console.log(`✅ ${orders.length} commandes trouvées pour l'utilisateur`);
-
-    res.json({
-      success: true,
-      orders,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
-    });
-
-  } catch (error) {
-    console.error('💥 Erreur récupération commandes utilisateur:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la récupération de vos commandes',
-      error: error.message
-    });
-  }
-});
-/**
- * 📦 GET /api/orders/user/stats - Statistiques des commandes pour l'utilisateur
- */
-router.get('/user/stats', async (req, res) => {
-  try {
-    const userId = 'default-user-id'; // À remplacer par req.user.id en production
-
-    console.log(`📊 Récupération statistiques pour l'utilisateur: ${userId}`);
-
-    // Récupérer toutes les commandes de l'utilisateur
-    const userOrders = await prisma.order.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    const stats = {
-      total: userOrders.length,
-      pending: userOrders.filter(order => order.status === 'pending').length,
-      confirmed: userOrders.filter(order => order.status === 'confirmed').length,
-      processing: userOrders.filter(order => order.status === 'processing').length,
-      shipped: userOrders.filter(order => order.status === 'shipped').length,
-      delivered: userOrders.filter(order => order.status === 'delivered').length,
-      cancelled: userOrders.filter(order => order.status === 'cancelled').length,
-      totalSpent: userOrders.reduce((sum, order) => sum + order.totalAmount, 0),
-      // Commandes de cette semaine
-      thisWeek: userOrders.filter(order => {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        return new Date(order.createdAt) > oneWeekAgo;
-      }).length
-    };
-
-    res.json({
-      success: true,
-      stats
-    });
-
-  } catch (error) {
-    console.error('💥 Erreur récupération statistiques utilisateur:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la récupération de vos statistiques',
-      error: error.message
-    });
-  }
-});
 
 /**
- * 👤 GET /api/orders/user/:id - Détails d'une commande spécifique pour l'utilisateur
+ * 🔐 GET /api/orders/test/auth - Test d'authentification
  */
-router.get('/user/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = 'default-user-id'; // À remplacer par req.user.id en production
-
-    console.log(`👤 Détails de la commande ${id} pour l'utilisateur: ${userId}`);
-
-    const order = await prisma.order.findFirst({
-      where: { 
-        id,
-        userId 
-      }
-    });
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Commande non trouvée'
-      });
-    }
-
-    res.json({
-      success: true,
-      order
-    });
-
-  } catch (error) {
-    console.error('💥 Erreur récupération détail commande:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la récupération des détails de la commande',
-      error: error.message
-    });
-  }
-});
-
-/**
- * 🔄 PUT /api/orders/user/:id/cancel - Annuler une commande (utilisateur)
- */
-router.put('/user/:id/cancel', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = 'default-user-id'; // À remplacer par req.user.id en production
-
-    console.log(`👤 Annulation de la commande ${id} par l'utilisateur: ${userId}`);
-
-    const order = await prisma.order.findFirst({
-      where: { 
-        id,
-        userId 
-      }
-    });
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Commande non trouvée'
-      });
-    }
-
-    // Vérifier si la commande peut être annulée
-    if (!['pending', 'confirmed'].includes(order.status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cette commande ne peut pas être annulée. Elle est déjà en cours de traitement.'
-      });
-    }
-
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: { 
-        status: 'cancelled',
-        updatedAt: new Date()
-      }
-    });
-
-    console.log(`✅ Commande ${id} annulée par l'utilisateur`);
-
-    res.json({
-      success: true,
-      message: 'Commande annulée avec succès',
-      order: updatedOrder
-    });
-
-  } catch (error) {
-    console.error('💥 Erreur annulation commande:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de l\'annulation de la commande',
-      error: error.message
-    });
-  }
-});
-
-
+router.get('/test/auth', (req, res) => {
+  console.log('🔐 Test authentification - User:', req.user)
+  res.json({
+    success: true,
+    user: req.user,
+    message: req.user ? 'Authentification fonctionne' : 'Aucun utilisateur authentifié',
+    timestamp: new Date().toISOString()
+  })
+})
 
 module.exports = router
