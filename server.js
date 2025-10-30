@@ -43,6 +43,7 @@ app.use("/api/cart", require("./routes/cart"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/categories", require("./routes/categories"));
 app.use("/api/admin/payments", require("./routes/admin-payments"));
+app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 
 // Route de santé
 app.get("/health", (req, res) => {
