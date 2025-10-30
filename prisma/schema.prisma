@@ -31,6 +31,7 @@ model BlogArticle {
   likes       Int       @default(0)
   comments    Int       @default(0)
   readTime    String?
+  embedding   Unsupported("vector(768)")?
 
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
@@ -217,6 +218,7 @@ model Property {
   hasTerrace  Boolean @default(false)
   hasGarden   Boolean @default(false)
   hasPool     Boolean @default(false)
+  embedding   Unsupported("vector(768)")?
 
   // SEO
   metaTitle       String?
@@ -282,6 +284,7 @@ model Product {
   lowStock      Int?     @default(5)
   weight        Float?
   dimensions    Json?
+  embedding   Unsupported("vector(768)")?
   
   // Images
   images String[]
@@ -335,6 +338,7 @@ model Metier {
   services MetierService[]
   users    UtilisateurMetier[]
   demandes    Demande[]
+  embedding   Unsupported("vector(768)")?
 }
 
 // ======================
@@ -363,6 +367,7 @@ model Service {
   demandes    Demande[]
   Review      Review[]
   Appointment Appointment[]
+  embedding   Unsupported("vector(768)")?
 } 
 
 // ======================
