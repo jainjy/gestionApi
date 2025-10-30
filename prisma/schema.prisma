@@ -26,7 +26,7 @@ model BlogArticle {
   status      String    @default("draft")
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   views       Int       @default(0)
   likes       Int       @default(0)
   comments    Int       @default(0)
@@ -80,6 +80,93 @@ model User {
   Review            Review[]
   Appointment       Appointment[]
   orders            Order[]
+  // Nouvelles relations pour les messages
+  messagesEnvoyes   Message[]            @relation("MessageExpediteur")
+  conversationsCrees Conversation[]     @relation("ConversationCreateur")
+  conversationsParticipees ConversationParticipant[]
+}
+
+// ======================
+// MESSAGES ET CONVERSATIONS
+// ======================
+model Conversation {
+  id          String      @id @default(uuid())
+  titre       String?
+  demandeId   Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  createurId  String
+  createur    User        @relation("ConversationCreateur", fields: [createurId], references: [id], onDelete: Cascade)
+  demande     Demande?    @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages    Message[]
+
+  @@index([demandeId])
+  @@index([createurId])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+model Message {
+  id              String      @id @default(uuid())
+  conversationId  String
+  expediteurId    String
+  contenu         String
+  type            MessageType @default(TEXT)
+  urlFichier      String?
+  nomFichier      String?
+  typeFichier     String?
+  evenementType   EvenementType?
+  lu              Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  expediteur   User         @relation("MessageExpediteur", fields: [expediteurId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([expediteurId])
+  @@index([createdAt])
+  @@index([evenementType])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  PDF
+  DOCUMENT
+  SYSTEM
+}
+
+enum EvenementType {
+  DEMANDE_ENVOYEE
+  ARTISAN_ACCEPTE
+  ARTISAN_REFUSE
+  PROPOSITION_RENDEZ_VOUS
+  PROPOSITION_DEVIS
+  CLIENT_SIGNE
+  RENDEZ_VOUS_FIXE
+  FACTURE_ENVOYEE
+  TRAVAUX_TERMINES
+  AVIS_LAISSE
+  CLIENT_REFUSE
+  GENERIC
 }
 
 // ======================
@@ -140,13 +227,13 @@ model Property {
   ownerId   String
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   favorites Favorite[]
+  demandes  Demande[]
 
   // Dates
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   publishedAt DateTime?
   expiresAt   DateTime? // Date d'expiration de l'annonce
-  Demande     Demande[]
 
   @@index([city])
   @@index([type])
@@ -236,7 +323,7 @@ model Metier {
 }
 
 // ======================
-// CaTEGORIE DE SERVICES
+// CATEGORIE DE SERVICES
 // ======================
 model Category {
   id       Int       @id @default(autoincrement())
@@ -339,6 +426,14 @@ model Demande {
   // Relation optionnelle vers Property
   property  Property?        @relation(fields: [propertyId], references: [id])
   artisans  DemandeArtisan[] @relation("DemandeArtisanDemande")
+  // Nouvelle relation pour les conversations
+  conversations Conversation[]
+
+  @@index([propertyId])
+  @@index([createdById])
+  @@index([serviceId])
+  @@index([statut])
+  @@index([createdAt])
 }
 
 // ======================
@@ -375,7 +470,7 @@ model DemandeHistory {
 // ======================
 model Transaction {
   id            String   @id @default(uuid())
-  userId        String? // l’utilisateur qui paie
+  userId        String? // l'utilisateur qui paie
   provider      String // "stripe" | "paypal"
   providerId    String? // ID du paiement Stripe ou PayPal
   amount        Float // Montant payé
