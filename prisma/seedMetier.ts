@@ -2,10 +2,12 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  try{
+  try {
     console.log("🌱 Seeding database with provided data...");
     // Suppression des données existantes
     await prisma.category.deleteMany();
+    await prisma.service.deleteMany();
+    await prisma.metier.deleteMany();
     console.log("✓ Catégories existantes supprimées");
 
     // Création des nouvelles catégories
@@ -241,18 +243,12 @@ async function main() {
       { id: 210, libelle: "Laveur Auto/voiture à domicile" },
     ];
 
-    const metiersMap = {}; // libelle -> id
     for (const metier of metiersData) {
-      await prisma.metier.upsert({
-        where: { id: metier.id },
-        update: metier,
-        create: metier,
+      const createdMetier = await prisma.metier.create({
+        data: metier,
       });
-      metiersMap[metier.libelle] = metier.id;
-      console.log(`➕/♻️ Métier : ${metier.libelle} (ID: ${metier.id})`);
+      console.log(`➕ Métier : ${metier.libelle} créé`);
     }
-
-
 
     console.log("🌿 Seeding terminé avec succès !");
   } catch (error) {
@@ -260,7 +256,6 @@ async function main() {
   } finally {
     await prisma.$disconnect();
   }
-
 }
 
 main()

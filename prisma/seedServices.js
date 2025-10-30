@@ -10032,20 +10032,16 @@ async function main() {
       },
     ];
 
-    const servicesMap = {}; // libelle -> id
+
     for (const service of servicesData) {
       const createData = {
-        id: service.id,
-        libelle: service.libelle.trim(), // Trim spaces
+        libelle: service.libelle,
         description: service.description,
         images: service.images || [],
       };
-      await prisma.service.upsert({
-        where: { id: service.id },
-        update: createData,
-        create: createData,
-      });
-      servicesMap[service.libelle.trim()] = service.id;
+      await prisma.service.create(
+      {data: createData},
+      );
       console.log(`➕/♻️ Service : ${service.libelle} (ID: ${service.id})`);
     }
 

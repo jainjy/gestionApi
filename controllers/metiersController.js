@@ -7,8 +7,8 @@ class MetiersController {
         include: {
           services: {
             include: {
-              service: true
-            }
+              service: true,
+            },
           },
           users: {
             include: {
@@ -17,35 +17,35 @@ class MetiersController {
                   id: true,
                   firstName: true,
                   lastName: true,
-                  email: true
-                }
-              }
-            }
-          }
+                  email: true,
+                },
+              },
+            },
+          },
         },
         orderBy: {
-          libelle: 'asc'
-        }
+          libelle: "asc",
+        },
       });
 
       // Formater la réponse pour inclure les counts
-      const formattedMetiers = metiers.map(metier => ({
+      const formattedMetiers = metiers.map((metier) => ({
         id: metier.id,
         libelle: metier.libelle,
-        services: metier.services.map(ms => ms.service),
-        users: metier.users.map(um => um.user),
+        services: metier.services.map((ms) => ms.service),
+        users: metier.users.map((um) => um.user),
         _count: {
           services: metier.services.length,
-          users: metier.users.length
-        }
+          users: metier.users.length,
+        },
       }));
 
       res.json(formattedMetiers);
     } catch (error) {
-      console.error('Erreur lors de la récupération des métiers:', error);
-      res.status(500).json({ 
-        message: 'Erreur serveur lors de la récupération des métiers',
-        error: error.message 
+      console.error("Erreur lors de la récupération des métiers:", error);
+      res.status(500).json({
+        message: "Erreur serveur lors de la récupération des métiers",
+        error: error.message,
       });
     }
   }
@@ -62,10 +62,10 @@ class MetiersController {
             include: {
               service: {
                 include: {
-                  category: true
-                }
-              }
-            }
+                  category: true,
+                },
+              },
+            },
           },
           users: {
             include: {
@@ -75,35 +75,35 @@ class MetiersController {
                   firstName: true,
                   lastName: true,
                   email: true,
-                  companyName: true
-                }
-              }
-            }
-          }
-        }
+                  companyName: true,
+                },
+              },
+            },
+          },
+        },
       });
 
       if (!metier) {
-        return res.status(404).json({ message: 'Métier non trouvé' });
+        return res.status(404).json({ message: "Métier non trouvé" });
       }
 
       // Formater la réponse
       const formattedMetier = {
         ...metier,
-        services: metier.services.map(ms => ms.service),
-        users: metier.users.map(um => um.user),
+        services: metier.services.map((ms) => ms.service),
+        users: metier.users.map((um) => um.user),
         _count: {
           services: metier.services.length,
-          users: metier.users.length
-        }
+          users: metier.users.length,
+        },
       };
 
       res.json(formattedMetier);
     } catch (error) {
-      console.error('Erreur lors de la récupération du métier:', error);
-      res.status(500).json({ 
-        message: 'Erreur serveur lors de la récupération du métier',
-        error: error.message 
+      console.error("Erreur lors de la récupération du métier:", error);
+      res.status(500).json({
+        message: "Erreur serveur lors de la récupération du métier",
+        error: error.message,
       });
     }
   }
@@ -114,8 +114,10 @@ class MetiersController {
       const { libelle } = req.body;
 
       // Validation
-      if (!libelle || libelle.trim() === '') {
-        return res.status(400).json({ message: 'Le libellé du métier est requis' });
+      if (!libelle || libelle.trim() === "") {
+        return res
+          .status(400)
+          .json({ message: "Le libellé du métier est requis" });
       }
 
       // Vérifier si le métier existe déjà
@@ -123,30 +125,41 @@ class MetiersController {
         where: {
           libelle: {
             equals: libelle.trim(),
-            mode: 'insensitive'
-          }
-        }
+            mode: "insensitive",
+          },
+        },
       });
 
       if (existingMetier) {
-        return res.status(409).json({ message: 'Un métier avec ce libellé existe déjà' });
+        return res
+          .status(409)
+          .json({ message: "Un métier avec ce libellé existe déjà" });
       }
 
+      // Créer sans spécifier l'ID
       const newMetier = await prisma.metier.create({
         data: {
-          libelle: libelle.trim()
-        }
+          libelle: libelle.trim(),
+        },
       });
 
       res.status(201).json({
-        message: 'Métier créé avec succès',
-        metier: newMetier
+        message: "Métier créé avec succès",
+        metier: newMetier,
       });
     } catch (error) {
-      console.error('Erreur lors de la création du métier:', error);
-      res.status(500).json({ 
-        message: 'Erreur serveur lors de la création du métier',
-        error: error.message 
+      console.error("Erreur lors de la création du métier:", error);
+
+      // Gestion spécifique de l'erreur de contrainte unique
+      if (error.code === "P2002") {
+        return res.status(409).json({
+          message: "Un métier avec cet ID existe déjà",
+        });
+      }
+
+      res.status(500).json({
+        message: "Erreur serveur lors de la création du métier",
+        error: error.message,
       });
     }
   }
@@ -158,17 +171,19 @@ class MetiersController {
       const { libelle } = req.body;
 
       // Validation
-      if (!libelle || libelle.trim() === '') {
-        return res.status(400).json({ message: 'Le libellé du métier est requis' });
+      if (!libelle || libelle.trim() === "") {
+        return res
+          .status(400)
+          .json({ message: "Le libellé du métier est requis" });
       }
 
       // Vérifier si le métier existe
       const existingMetier = await prisma.metier.findUnique({
-        where: { id: parseInt(id) }
+        where: { id: parseInt(id) },
       });
 
       if (!existingMetier) {
-        return res.status(404).json({ message: 'Métier non trouvé' });
+        return res.status(404).json({ message: "Métier non trouvé" });
       }
 
       // Vérifier si un autre métier a déjà ce libellé
@@ -176,34 +191,36 @@ class MetiersController {
         where: {
           libelle: {
             equals: libelle.trim(),
-            mode: 'insensitive'
+            mode: "insensitive",
           },
           id: {
-            not: parseInt(id)
-          }
-        }
+            not: parseInt(id),
+          },
+        },
       });
 
       if (duplicateMetier) {
-        return res.status(409).json({ message: 'Un autre métier avec ce libellé existe déjà' });
+        return res
+          .status(409)
+          .json({ message: "Un autre métier avec ce libellé existe déjà" });
       }
 
       const updatedMetier = await prisma.metier.update({
         where: { id: parseInt(id) },
         data: {
-          libelle: libelle.trim()
-        }
+          libelle: libelle.trim(),
+        },
       });
 
       res.json({
-        message: 'Métier mis à jour avec succès',
-        metier: updatedMetier
+        message: "Métier mis à jour avec succès",
+        metier: updatedMetier,
       });
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du métier:', error);
-      res.status(500).json({ 
-        message: 'Erreur serveur lors de la mise à jour du métier',
-        error: error.message 
+      console.error("Erreur lors de la mise à jour du métier:", error);
+      res.status(500).json({
+        message: "Erreur serveur lors de la mise à jour du métier",
+        error: error.message,
       });
     }
   }
@@ -218,42 +235,44 @@ class MetiersController {
         where: { id: parseInt(id) },
         include: {
           services: true,
-          users: true
-        }
+          users: true,
+        },
       });
 
       if (!metier) {
-        return res.status(404).json({ message: 'Métier non trouvé' });
+        return res.status(404).json({ message: "Métier non trouvé" });
       }
 
       // Vérifier les dépendances
       if (metier.services.length > 0) {
-        return res.status(400).json({ 
-          message: 'Impossible de supprimer ce métier : des services y sont associés' 
+        return res.status(400).json({
+          message:
+            "Impossible de supprimer ce métier : des services y sont associés",
         });
       }
 
       if (metier.users.length > 0) {
-        return res.status(400).json({ 
-          message: 'Impossible de supprimer ce métier : des utilisateurs y sont associés' 
+        return res.status(400).json({
+          message:
+            "Impossible de supprimer ce métier : des utilisateurs y sont associés",
         });
       }
 
       await prisma.metier.delete({
-        where: { id: parseInt(id) }
+        where: { id: parseInt(id) },
       });
 
-      res.json({ message: 'Métier supprimé avec succès' });
+      res.json({ message: "Métier supprimé avec succès" });
     } catch (error) {
-      console.error('Erreur lors de la suppression du métier:', error);
-      
-      if (error.code === 'P2025') {
-        return res.status(404).json({ message: 'Métier non trouvé' });
+      console.error("Erreur lors de la suppression du métier:", error);
+
+      if (error.code === "P2025") {
+        return res.status(404).json({ message: "Métier non trouvé" });
       }
 
-      res.status(500).json({ 
-        message: 'Erreur serveur lors de la suppression du métier',
-        error: error.message 
+      res.status(500).json({
+        message: "Erreur serveur lors de la suppression du métier",
+        error: error.message,
       });
     }
   }
@@ -262,21 +281,21 @@ class MetiersController {
   async getMetiersStats(req, res) {
     try {
       const totalMetiers = await prisma.metier.count();
-      
+
       const metiersWithServices = await prisma.metier.count({
         where: {
           services: {
-            some: {}
-          }
-        }
+            some: {},
+          },
+        },
       });
 
       const metiersWithUsers = await prisma.metier.count({
         where: {
           users: {
-            some: {}
-          }
-        }
+            some: {},
+          },
+        },
       });
 
       const topMetiers = await prisma.metier.findMany({
@@ -284,34 +303,34 @@ class MetiersController {
           _count: {
             select: {
               services: true,
-              users: true
-            }
-          }
+              users: true,
+            },
+          },
         },
         orderBy: {
           users: {
-            _count: 'desc'
-          }
+            _count: "desc",
+          },
         },
-        take: 5
+        take: 5,
       });
 
       res.json({
         total: totalMetiers,
         withServices: metiersWithServices,
         withUsers: metiersWithUsers,
-        topMetiers: topMetiers.map(metier => ({
+        topMetiers: topMetiers.map((metier) => ({
           id: metier.id,
           libelle: metier.libelle,
           servicesCount: metier._count.services,
-          usersCount: metier._count.users
-        }))
+          usersCount: metier._count.users,
+        })),
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error);
-      res.status(500).json({ 
-        message: 'Erreur serveur lors de la récupération des statistiques',
-        error: error.message 
+      console.error("Erreur lors de la récupération des statistiques:", error);
+      res.status(500).json({
+        message: "Erreur serveur lors de la récupération des statistiques",
+        error: error.message,
       });
     }
   }

@@ -13,7 +13,10 @@ router.get("/stats", async (req, res) => {
     // Volume total des 30 derniers jours
     const totalVolumeResult = await prisma.transaction.aggregate({
       where: {
-        status: "succeeded",
+        OR: [
+          { status: "succeeded" },
+          { status: "completed"},
+        ],
         createdAt: { gte: thirtyDaysAgo },
       },
       _sum: { amount: true },
