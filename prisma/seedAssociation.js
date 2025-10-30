@@ -2190,6 +2190,8 @@ async function main() {
 
     // Clean up existing associations
     await prisma.metierService.deleteMany({});
+    const servicesMap = {};
+    const metiersMap = {};
 
     for (const assoc of associationsData) {
       const metierId = metiersMap[assoc.metierLibelle];
