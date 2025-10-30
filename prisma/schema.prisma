@@ -448,6 +448,7 @@ model Demande {
   artisans  DemandeArtisan[] @relation("DemandeArtisanDemande")
   // Nouvelle relation pour les conversations
   conversations Conversation[]
+  isRead              Boolean          @default(false)
 
   @@index([propertyId])
   @@index([createdById])

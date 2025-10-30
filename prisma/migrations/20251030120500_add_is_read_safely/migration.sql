@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Demande" ADD COLUMN IF NOT EXISTS "isRead" BOOLEAN NOT NULL DEFAULT false;
