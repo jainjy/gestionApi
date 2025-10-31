@@ -37,6 +37,7 @@ app.use(
 app.use("/api/demandes/immobilier", require("./routes/demandes"));
 app.use("/api/demandes", require("./routes/user-demandes"));
 app.use("/api/devis", require("./routes/devis"));
+app.use("/api/demande-devis", require("./routes/demande_devis"));
 app.use("/api/admin", require("./routes/admin-demandes"));
 // routes pour le panier et les commandes
 app.use("/api/cart", require("./routes/cart"));

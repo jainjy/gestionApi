@@ -1,4 +1,3 @@
-// schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,99 +9,89 @@ datasource db {
   relationMode = "prisma"
 }
 
-// ======================
-// ARTICLES
-// ======================
 model BlogArticle {
-  id          String    @id @default(uuid())
+  id          String                 @id @default(uuid())
   authorId    String
   title       String
-  slug        String    @unique
+  slug        String                 @unique
   content     String
   excerpt     String?
   coverUrl    String?
   tags        String[]
-  category    String
-  status      String    @default("draft")
+  status      String                 @default("draft")
   publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  views       Int       @default(0)
-  likes       Int       @default(0)
-  comments    Int       @default(0)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  category    String
+  comments    Int                    @default(0)
+  likes       Int                    @default(0)
   readTime    String?
-  embedding   Unsupported("vector(768)")?
-
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  views       Int                    @default(0)
+  embedding   Unsupported("vector")?
+  author      User                   @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
-// ======================
-// UTILISATEUR
-// ======================
 model User {
-  id                String               @id @default(uuid())
-  email             String               @unique
-  passwordHash      String?
-  provider          Json?
-  stripeCustomerId  String?
-  firstName         String?
-  lastName          String?
-  phone             String?
-  role              String               @default("user")
-  avatar            String? // Logo ou avatar de l'utilisateur
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  resetToken        String?
-  resetTokenExpiry  DateTime?
-  blogArticles      BlogArticle[]
-  status            String               @default("inactive")
-  companyName       String?
-  demandType        String? //agence immobilier,particulier ou syndicat 
-  address           String? // Adresse postale
-  zipCode           String? // Code postal
-  city              String? // Ville
-  addressComplement String? // Complément d'adresse
-  commercialName    String? // Nom commercial
-  siret             String? // Numéro SIRET
-  providerName      String? // ex: "google"
-  providerId        String? // ex: "117349..."
-  userType          String? // PRESTATAIRE | VENDEUR | LOUEUR | CLIENT | ADMIN
-  // Nouvelles relations
-  properties        Property[]
-  favorites         Favorite[]
-  metiers           UtilisateurMetier[]
-  services          UtilisateurService[]
-  demandesCrees     Demande[]            @relation("DemandeCreePar")
-  demandesArtisan   DemandeArtisan[]     @relation("DemandeArtisanUser")
-  Product           Product[]
-  latitude          Float?
-  longitude         Float?
-  Transaction       Transaction[]
-  Review            Review[]
-  Appointment       Appointment[]
-  orders            Order[]
-  // Nouvelles relations pour les messages
-  messagesEnvoyes   Message[]            @relation("MessageExpediteur")
-  conversationsCrees Conversation[]     @relation("ConversationCreateur")
+  id                       String                    @id @default(uuid())
+  email                    String                    @unique
+  passwordHash             String?
+  provider                 Json?
+  firstName                String?
+  lastName                 String?
+  phone                    String?
+  role                     String                    @default("user")
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  resetToken               String?
+  resetTokenExpiry         DateTime?
+  status                   String                    @default("inactive")
+  companyName              String?
+  address                  String?
+  addressComplement        String?
+  city                     String?
+  commercialName           String?
+  demandType               String?
+  latitude                 Float?
+  longitude                Float?
+  siret                    String?
+  zipCode                  String?
+  avatar                   String?
+  userType                 String?
+  providerId               String?
+  providerName             String?
+  stripeCustomerId         String?
+  DevisClientToUser        String?                   @map("_DevisClientToUser")
+  DevisProviderToUser      String?                   @map("_DevisProviderToUser")
+  blogArticles             BlogArticle[]
+  properties               Property[]
+  favorites                Favorite[]
+  metiers                  UtilisateurMetier[]
+  services                 UtilisateurService[]
+  demandesCrees            Demande[]                 @relation("DemandeCreePar")
+  demandesArtisan          DemandeArtisan[]          @relation("DemandeArtisanUser")
+  Product                  Product[]
+  Transaction              Transaction[]
+  Review                   Review[]
+  Appointment              Appointment[]
+  orders                   Order[]
+  messagesEnvoyes          Message[]                 @relation("MessageExpediteur")
+  conversationsCrees       Conversation[]            @relation("ConversationCreateur")
   conversationsParticipees ConversationParticipant[]
+  devisRecus               Devis[]                   @relation("DevisClient")
+  devisEnvoyes             Devis[]                   @relation("DevisPrestataire")
 }
 
-// ======================
-// MESSAGES ET CONVERSATIONS
-// ======================
 model Conversation {
-  id          String      @id @default(uuid())
-  titre       String?
-  demandeId   Int?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  // Relations
-  createurId  String
-  createur    User        @relation("ConversationCreateur", fields: [createurId], references: [id], onDelete: Cascade)
-  demande     Demande?    @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  id           String                    @id @default(uuid())
+  titre        String?
+  demandeId    Int?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  createurId   String
+  createur     User                      @relation("ConversationCreateur", fields: [createurId], references: [id], onDelete: Cascade)
+  demande      Demande?                  @relation(fields: [demandeId], references: [id], onDelete: Cascade)
   participants ConversationParticipant[]
-  messages    Message[]
+  messages     Message[]
 
   @@index([demandeId])
   @@index([createurId])
@@ -114,9 +103,8 @@ model ConversationParticipant {
   userId         String
   joinedAt       DateTime     @default(now())
   lastReadAt     DateTime?    @default(now())
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
   @@index([conversationId])
@@ -124,27 +112,356 @@ model ConversationParticipant {
 }
 
 model Message {
-  id              String      @id @default(uuid())
-  conversationId  String
-  expediteurId    String
-  contenu         String
-  type            MessageType @default(TEXT)
-  urlFichier      String?
-  nomFichier      String?
-  typeFichier     String?
-  evenementType   EvenementType?
-  lu              Boolean     @default(false)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  // Relations
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  expediteur   User         @relation("MessageExpediteur", fields: [expediteurId], references: [id], onDelete: Cascade)
+  id             String         @id @default(uuid())
+  conversationId String
+  expediteurId   String
+  contenu        String
+  type           MessageType    @default(TEXT)
+  urlFichier     String?
+  nomFichier     String?
+  typeFichier    String?
+  evenementType  EvenementType?
+  lu             Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  expediteur     User           @relation("MessageExpediteur", fields: [expediteurId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([expediteurId])
   @@index([createdAt])
   @@index([evenementType])
+}
+
+model Property {
+  id              String                 @id @default(uuid())
+  title           String
+  description     String?
+  type            String
+  status          String
+  price           Float?
+  surface         Int?
+  rooms           Int?
+  bedrooms        Int?
+  bathrooms       Int?
+  address         String?
+  city            String
+  zipCode         String?
+  latitude        Float?
+  longitude       Float?
+  features        String[]
+  images          String[]
+  isFeatured      Boolean                @default(false)
+  isActive        Boolean                @default(true)
+  views           Int                    @default(0)
+  ownerId         String
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  publishedAt     DateTime?
+  energyClass     String?
+  expiresAt       DateTime?
+  floor           Int?
+  hasBalcony      Boolean                @default(false)
+  hasElevator     Boolean                @default(false)
+  hasGarden       Boolean                @default(false)
+  hasParking      Boolean                @default(false)
+  hasPool         Boolean                @default(false)
+  hasTerrace      Boolean                @default(false)
+  listingType     String                 @default("sale")
+  metaDescription String?
+  metaTitle       String?
+  slug            String?                @unique
+  totalFloors     Int?
+  yearBuilt       Int?
+  rentType        String?                @default("longue_duree")
+  embedding       Unsupported("vector")?
+  owner           User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  favorites       Favorite[]
+  demandes        Demande[]
+
+  @@index([city])
+  @@index([type])
+  @@index([status])
+  @@index([ownerId])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([listingType])
+  @@index([createdAt])
+}
+
+model Favorite {
+  id         String   @id @default(uuid())
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@index([propertyId])
+}
+
+model Product {
+  id              String                 @id @default(uuid())
+  name            String
+  slug            String                 @unique
+  description     String?
+  category        String
+  subcategory     String?
+  price           Float
+  comparePrice    Float?
+  cost            Float?
+  sku             String?
+  barcode         String?
+  trackQuantity   Boolean                @default(true)
+  quantity        Int                    @default(0)
+  lowStock        Int?                   @default(5)
+  weight          Float?
+  dimensions      Json?
+  images          String[]
+  status          String                 @default("draft")
+  featured        Boolean                @default(false)
+  visibility      String                 @default("public")
+  seoTitle        String?
+  seoDescription  String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  publishedAt     DateTime?
+  userId          String
+  embedding       Unsupported("vector")?
+  allergens       String[]
+  brand           String?
+  expiryDate      DateTime?
+  foodCategory    String?
+  isOrganic       Boolean?               @default(false)
+  isPerishable    Boolean?               @default(false)
+  nutritionalInfo Json?
+  origin          String?
+  productType     String?                @default("general")
+  storageTips     String?
+  unit            String?
+  User            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([status])
+  @@index([featured])
+  @@index([createdAt])
+  @@index([productType])
+  @@index([foodCategory])
+}
+
+model Metier {
+  id        Int                    @id @default(autoincrement())
+  libelle   String
+  embedding Unsupported("vector")?
+  services  MetierService[]
+  users     UtilisateurMetier[]
+  demandes  Demande[]
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String
+  services Service[]
+}
+
+model Service {
+  id          Int                    @id @default(autoincrement())
+  libelle     String
+  categoryId  Int?
+  description String?
+  images      String[]
+  duration    Int?
+  price       Float?
+  embedding   Unsupported("vector")?
+  category    Category?              @relation(fields: [categoryId], references: [id])
+  metiers     MetierService[]
+  users       UtilisateurService[]
+  demandes    Demande[]
+  Review      Review[]
+  Appointment Appointment[]
+}
+
+model MetierService {
+  metierId  Int
+  serviceId Int
+  metier    Metier  @relation(fields: [metierId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@id([metierId, serviceId])
+}
+
+model UtilisateurMetier {
+  userId   String
+  metierId Int
+  user     User   @relation(fields: [userId], references: [id])
+  metier   Metier @relation(fields: [metierId], references: [id])
+
+  @@id([userId, metierId])
+}
+
+model UtilisateurService {
+  userId    String
+  serviceId Int
+  user      User    @relation(fields: [userId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@id([userId, serviceId])
+}
+
+model Demande {
+  id                  Int              @id @default(autoincrement())
+  disponibiliteBien   String?
+  description         String?
+  contactNom          String?
+  contactPrenom       String?
+  contactEmail        String?
+  contactTel          String?
+  contactAdresse      String?
+  contactAdresseCp    String?
+  contactAdresseVille String?
+  lieuAdresse         String?
+  lieuAdresseCp       String?
+  lieuAdresseVille    String?
+  optionAssurance     Boolean?         @default(false)
+  demandeAcceptee     Boolean?         @default(false)
+  nombreArtisans      String?
+  createdById         String
+  serviceId           Int?
+  createdAt           DateTime         @default(now())
+  dateSouhaitee       DateTime?
+  heureSouhaitee      String?
+  metierId            Int?
+  propertyId          String?
+  statut              String?
+  isRead              Boolean          @default(false)
+  createdBy           User             @relation("DemandeCreePar", fields: [createdById], references: [id])
+  service             Service?         @relation(fields: [serviceId], references: [id])
+  metier              Metier?          @relation(fields: [metierId], references: [id])
+  property            Property?        @relation(fields: [propertyId], references: [id])
+  artisans            DemandeArtisan[] @relation("DemandeArtisanDemande")
+  conversations       Conversation[]
+  devis               String?
+  devis_demande       Devis[]
+
+  @@index([propertyId])
+  @@index([createdById])
+  @@index([serviceId])
+  @@index([statut])
+  @@index([createdAt])
+}
+
+model DemandeArtisan {
+  userId    String
+  demandeId Int
+  accepte   Boolean?  @default(false)
+  devis     String?
+  rdv       DateTime?
+  user      User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
+  demande   Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
+
+  @@id([userId, demandeId])
+}
+
+model DemandeHistory {
+  id        Int      @id @default(autoincrement())
+  demandeId Int
+  title     String?
+  message   String?
+  snapshot  Json?
+  createdAt DateTime @default(now())
+
+  @@index([demandeId])
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  userId        String?
+  provider      String
+  providerId    String?
+  amount        Float
+  currency      String
+  status        String
+  description   String?
+  referenceType String?
+  referenceId   String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  serviceId Int
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id        String   @id @default(uuid())
+  userId    String
+  serviceId Int
+  date      DateTime
+  time      String
+  message   String?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id              String   @id @default(uuid())
+  orderNumber     String   @unique
+  userId          String
+  items           Json
+  totalAmount     Float
+  status          String   @default("pending")
+  shippingAddress Json?
+  paymentMethod   String
+  paymentStatus   String   @default("pending")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Devis {
+  id            String   @id @default(uuid())
+  numero        String   @unique
+  dateCreation  DateTime @default(now())
+  dateValidite  DateTime
+  montantHT     Float
+  montantTTC    Float
+  tva           Float
+  status        String   @default("en_attente")
+  description   String
+  conditions    String?
+  clientId      String
+  prestataireId String
+  demandeId     Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  client        User     @relation("DevisClient", fields: [clientId], references: [id], onDelete: Cascade)
+  prestataire   User     @relation("DevisPrestataire", fields: [prestataireId], references: [id], onDelete: Cascade)
+  demande       Demande? @relation(fields: [demandeId], references: [id])
+
+  @@index([clientId])
+  @@index([prestataireId])
+  @@index([demandeId])
+  @@index([status])
+  @@index([dateCreation])
 }
 
 enum MessageType {
@@ -168,399 +485,4 @@ enum EvenementType {
   AVIS_LAISSE
   CLIENT_REFUSE
   GENERIC
-}
-
-// ======================
-// PROPRIÉTÉS
-// ======================
-model Property {
-  id          String  @id @default(uuid())
-  title       String
-  description String?
-  type        String // "house", "apartment", "villa", "land", "studio"
-  status      String // "draft", "pending", "published", "archived", "sold", "rented"
-  price       Float?
-  rentType    String? @default("longue_duree") // "saisonniere" | "longue_duree"
-
-  // Caractéristiques principales
-  surface   Int? // Surface en m²
-  rooms     Int? // Nombre de pièces
-  bedrooms  Int? // Nombre de chambres
-  bathrooms Int? // Nombre de salles de bain
-
-  // Localisation
-  address   String?
-  city      String
-  zipCode   String?
-  latitude  Float?
-  longitude Float?
-
-  // Équipements
-  features String[] // ["pool", "garden", "parking", "terrace", "balcony"]
-
-  // Images
-  images String[] // URLs des images
-
-  // Métadonnées
-  isFeatured Boolean @default(false)
-  isActive   Boolean @default(true)
-  views      Int     @default(0)
-
-  // Nouvelles colonnes ajoutées
-  listingType String  @default("sale") // "sale", "rent", "both"
-  energyClass String? // "A", "B", "C", "D", "E", "F", "G"
-  yearBuilt   Int?
-  floor       Int? // Étage
-  totalFloors Int? // Nombre total d'étages
-  hasElevator Boolean @default(false)
-  hasParking  Boolean @default(false)
-  hasBalcony  Boolean @default(false)
-  hasTerrace  Boolean @default(false)
-  hasGarden   Boolean @default(false)
-  hasPool     Boolean @default(false)
-  embedding   Unsupported("vector(768)")?
-
-  // SEO
-  metaTitle       String?
-  metaDescription String?
-  slug            String? @unique
-
-  // Relations
-  ownerId   String
-  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  favorites Favorite[]
-  demandes  Demande[]
-
-  // Dates
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  publishedAt DateTime?
-  expiresAt   DateTime? // Date d'expiration de l'annonce
-
-  @@index([city])
-  @@index([type])
-  @@index([status])
-  @@index([ownerId])
-  @@index([isActive])
-  @@index([isFeatured])
-  @@index([listingType])
-  @@index([createdAt])
-}
-
-// ======================
-// FAVORIS
-// ======================
-model Favorite {
-  id         String   @id @default(uuid())
-  userId     String
-  propertyId String
-  createdAt  DateTime @default(now())
-
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, propertyId])
-  @@index([userId])
-  @@index([propertyId])
-}
-// ======================
-// PRODUIT
-// ======================
-model Product {
-  id            String   @id @default(uuid())
-  userId        String
-  name          String
-  slug          String   @unique
-  description   String?
-  category      String
-  subcategory   String?
-  price         Float
-  comparePrice  Float?
-  cost          Float?
-  sku           String?
-  barcode       String?
-  trackQuantity Boolean  @default(true)
-  quantity      Int      @default(0)
-  lowStock      Int?     @default(5)
-  weight        Float?
-  dimensions    Json?
-  embedding   Unsupported("vector(768)")?
-  
-  // Images
-  images String[]
-
-  // Métadonnées
-  status     String   @default("draft")
-  featured   Boolean  @default(false)
-  visibility String   @default("public")
-
-  // SEO
-  seoTitle       String?
-  seoDescription String?
-
-  // NOUVEAUX CHAMPS POUR ALIMENTATION
-  productType    String?  @default("general") // "general" | "food"
-  foodCategory   String?  // "fruits", "legumes", "produits-laitiers", etc.
-  isPerishable   Boolean? @default(false)
-  expiryDate     DateTime?
-  storageTips    String?
-  nutritionalInfo Json?   // {calories, proteins, carbs, fats, etc.}
-  allergens      String[] // ["gluten", "lactose", "nuts", ...]
-  isOrganic      Boolean? @default(false)
-  origin         String?  // Pays/région d'origine
-  brand          String?
-  unit           String?  // "kg", "pièce", "litre", "barquette"
-  
-  // Relations
-  User User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Dates
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  publishedAt DateTime?
-
-  @@index([userId])
-  @@index([category])
-  @@index([status])
-  @@index([featured])
-  @@index([createdAt])
-  @@index([productType])
-  @@index([foodCategory])
-}
-
-
-// ======================
-// MÉTIERS
-// ======================
-model Metier {
-  id       Int                 @id @default(autoincrement())
-  libelle  String
-  services MetierService[]
-  users    UtilisateurMetier[]
-  demandes    Demande[]
-  embedding   Unsupported("vector(768)")?
-}
-
-// ======================
-// CATEGORIE DE SERVICES
-// ======================
-model Category {
-  id       Int       @id @default(autoincrement())
-  name     String
-  services Service[]
-}
-
-// ======================
-// SERVICES
-// ======================
-model Service {
-  id          Int                  @id @default(autoincrement())
-  libelle     String
-  description String?
-  images      String[]
-  price       Float? // <-- nouveau champ
-  duration    Int? // durée en minutes (facultatif)
-  categoryId  Int?
-  category    Category?            @relation(fields: [categoryId], references: [id])
-  metiers     MetierService[]
-  users       UtilisateurService[]
-  demandes    Demande[]
-  Review      Review[]
-  Appointment Appointment[]
-  embedding   Unsupported("vector(768)")?
-} 
-
-// ======================
-// LIAISON MÉTIER-SERVICE
-// ======================
-model MetierService {
-  metierId  Int
-  serviceId Int
-
-  metier  Metier  @relation(fields: [metierId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
-
-  @@id([metierId, serviceId])
-}
-
-// ======================
-// LIAISON UTILISATEUR-MÉTIER
-// ======================
-model UtilisateurMetier {
-  userId   String
-  metierId Int
-
-  user   User   @relation(fields: [userId], references: [id])
-  metier Metier @relation(fields: [metierId], references: [id])
-
-  @@id([userId, metierId])
-}
-
-// ======================
-// LIAISON UTILISATEUR-SERVICE
-// ======================
-model UtilisateurService {
-  userId    String
-  serviceId Int
-
-  user    User    @relation(fields: [userId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
-
-  @@id([userId, serviceId])
-}
-
-// ======================
-// DEMANDES DE SERVICES
-// ======================
-model Demande {
-  id                  Int       @id @default(autoincrement())
-  disponibiliteBien   String? // "LIBRE" | "LOUE"
-  description         String?
-  contactNom          String?
-  contactPrenom       String?
-  contactEmail        String?
-  contactTel          String?
-  contactAdresse      String?
-  contactAdresseCp    String?
-  contactAdresseVille String?
-  lieuAdresse         String?
-  lieuAdresseCp       String?
-  lieuAdresseVille    String?
-  // Champs ajoutés pour les demandes immobilières
-  propertyId          String? // Référence optionnelle vers Property.id
-  dateSouhaitee       DateTime?
-  heureSouhaitee      String?
-  optionAssurance     Boolean?  @default(false)
-  demandeAcceptee     Boolean?  @default(false)
-  nombreArtisans      String? // "UNIQUE" | "MULTIPLE"
-  createdById         String
-  serviceId           Int?
-  metierId            Int?
-  createdAt           DateTime  @default(now())
-  devis               String?  // au cas ou il y a des demandes de devis
-  statut              String?
-
-  createdBy User             @relation("DemandeCreePar", fields: [createdById], references: [id])
-  service   Service?          @relation(fields: [serviceId], references: [id])
-  metier    Metier?           @relation(fields: [metierId], references: [id])
-  // Relation optionnelle vers Property
-  property  Property?        @relation(fields: [propertyId], references: [id])
-  artisans  DemandeArtisan[] @relation("DemandeArtisanDemande")
-  // Nouvelle relation pour les conversations
-  conversations Conversation[]
-  isRead              Boolean          @default(false)
-
-  @@index([propertyId])
-  @@index([createdById])
-  @@index([serviceId])
-  @@index([statut])
-  @@index([createdAt])
-}
-
-// ======================
-// LIAISON DEMANDE-ARTISAN
-// ======================
-model DemandeArtisan {
-  userId    String
-  demandeId Int
-  accepte   Boolean?  @default(false)
-  devis     String?
-  rdv       DateTime?
-
-  user    User    @relation("DemandeArtisanUser", fields: [userId], references: [id])
-  demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
-
-  @@id([userId, demandeId])
-}
-// ======================
-// Historique des demandes (snapshot lors d'actions comme annulation/suppression)
-// ======================
-model DemandeHistory {
-  id        Int      @id @default(autoincrement())
-  demandeId Int
-  title     String?
-  message   String?
-  snapshot  Json?
-  createdAt DateTime @default(now())
-
-  @@index([demandeId])
-}
-
-// ======================
-// TRANSACTIONS (PAIEMENTS)
-// ======================
-model Transaction {
-  id            String   @id @default(uuid())
-  userId        String? // l'utilisateur qui paie
-  provider      String // "stripe" | "paypal"
-  providerId    String? // ID du paiement Stripe ou PayPal
-  amount        Float // Montant payé
-  currency      String // "usd", "eur", ...
-  status        String // "created", "succeeded", "failed", "refunded", ...
-  description   String? // description du paiement
-  referenceType String? // "product" | "demande"
-  referenceId   String? // id du produit ou de la demande
-  metadata      Json? // données additionnelles (cart, items, etc.)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relations
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-// ======================
-// REVIEW (NOTES)
-// ======================
-model Review {
-  id        String   @id @default(uuid())
-  userId    String
-  serviceId Int
-  rating    Int // 1 à 5
-  comment   String?
-  createdAt DateTime @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-}
-
-// ======================
-// Appointment (RendezVous)
-// ======================
-model Appointment {
-  id        String   @id @default(uuid())
-  userId    String // client
-  serviceId Int
-  date      DateTime
-  time      String
-  message   String?
-  status    String   @default("pending") // pending, confirmed, cancelled
-  createdAt DateTime @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-}
-
-// ======================
-// COMMANDES
-// ======================
-model Order {
-  id              String   @id @default(uuid())
-  orderNumber     String   @unique
-  userId          String
-  items           Json // Tableau d'items de la commande
-  totalAmount     Float
-  status          String   @default("pending") // pending, confirmed, processing, shipped, delivered, cancelled
-  shippingAddress Json? // Adresse de livraison
-  paymentMethod   String // card, paypal, bank_transfer
-  paymentStatus   String   @default("pending") // pending, paid, failed, refunded
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([orderNumber])
-  @@index([status])
-  @@index([createdAt])
 }

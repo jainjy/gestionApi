@@ -5,7 +5,7 @@ const { authenticateToken } = require('../middleware/auth')
 const { prisma } = require('../lib/db')
 
 // GET /api/demandes/immobilier/owner/:userId - Récupérer les demandes de visite pour les propriétés d'un utilisateur
-router.get('/immobilier/owner/:userId', authenticateToken, async (req, res) => {
+router.get('/owner/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     const { status } = req.query;
@@ -80,13 +80,12 @@ router.get('/user/:userId', authenticateToken, async (req, res) => {
     const { userId } = req.params
     const { status, metier, service } = req.query
 
-    let whereClause = { createdById: userId,NOT :{propertyId:null}}
-    
-    // Filtres optionnels
-    if (status && status !== 'Toutes') {
-      whereClause.demandeAcceptee = status === 'Terminé' ? true : 
-                                   status === 'En attente' ? false : null
+    let whereClause = { 
+      createdById: userId,
+      propertyId: { not: null }  // Seulement les demandes avec une propriété
     }
+    
+    // Aucun filtrage de status car il est géré côté client
 
     if (service) {
       whereClause.serviceId = parseInt(service)
@@ -132,6 +131,20 @@ router.get('/user/:userId', authenticateToken, async (req, res) => {
             email: true,
             phone: true
           }
+        },
+        property: {
+          include: {
+            owner: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                companyName: true
+              }
+            }
+          }
         }
       },
       orderBy: {
@@ -141,44 +154,55 @@ router.get('/user/:userId', authenticateToken, async (req, res) => {
 
     // Transformer les données pour le frontend
     const transformedDemandes = demandes.map(demande => {
-      const artisansAcceptes = demande.artisans.filter(a => a.accepte)
-        // Correction : on utilise TOUJOURS la valeur du champ statut si c'est une string non null/undefined
-        const statut = (typeof demande.statut === 'string' && demande.statut.trim() !== '')
-          ? demande.statut
-          : (demande.demandeAcceptee ? 'Terminé'
-              : artisansAcceptes.length > 0 ? 'Devis reçus'
-              : demande.artisans.length > 0 ? 'En cours'
-              : 'En attente');
+      // Détermination du statut
+      const status = String(demande.statut || '').toLowerCase();
+      const statut = status || 'en attente';
 
+      // Formatage de l'heure souhaitée
+      const formatHeure = (heure) => {
+        if (!heure || heure.trim() === '') return 'Non précisée';
+        // Vérifie si l'heure est au format HH:MM
+        if (heure.match(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/)) {
+          return heure;
+        }
+        return 'Non précisée';
+      };
+
+      // Construction de l'objet transformé
       return {
         id: demande.id,
-        titre: `Demande ${demande.service.libelle}`,
-        metier: demande.service.metiers[0]?.metier.libelle || 'Non spécifié',
-        lieu: `${demande.lieuAdresseCp} ${demande.lieuAdresseVille}`,
-        statut: statut,
-        urgence: 'Moyen', // À adapter selon vos besoins
+        titre: demande.property?.title 
+          ? `Demande de visite: ${demande.property.title}`
+          : 'Demande de visite',
+        metier: 'Visite immobilière',
+        lieu: demande.lieuAdresse 
+          ? `${demande.lieuAdresse}${demande.lieuAdresseCp ? `, ${demande.lieuAdresseCp}` : ''}${demande.lieuAdresseVille ? ` ${demande.lieuAdresseVille}` : ''}`
+          : '—',
+        statut,
         description: demande.description,
-        date: demande.createdAt.toLocaleDateString('fr-FR', { 
+        createdAt: demande.createdAt,
+        date: new Date(demande.createdAt).toLocaleDateString('fr-FR', { 
           day: 'numeric', 
           month: 'short', 
           year: 'numeric' 
         }),
-        devisCount: artisansAcceptes.length,
-        budget: 'Non estimé',
-        contactNom: demande.contactNom,
-        contactPrenom: demande.contactPrenom,
-        contactEmail: demande.contactEmail,
-        contactTel: demande.contactTel,
-        lieuAdresse: demande.lieuAdresse,
-        lieuAdresseCp: demande.lieuAdresseCp,
-        lieuAdresseVille: demande.lieuAdresseVille,
-        optionAssurance: demande.optionAssurance,
-        nombreArtisans: demande.nombreArtisans,
-        serviceId: demande.serviceId,
-        createdAt: demande.createdAt,
+        property: demande.property,
         propertyId: demande.propertyId,
-        dateSouhaitee: demande.dateSouhaitee,
-        heureSouhaitee: demande.heureSouhaitee
+        contactNom: demande.contactNom || '',
+        contactPrenom: demande.contactPrenom || '',
+        contactEmail: demande.contactEmail || '',
+        contactTel: demande.contactTel || '',
+        lieuAdresse: demande.lieuAdresse || '',
+        lieuAdresseCp: demande.lieuAdresseCp || '',
+        lieuAdresseVille: demande.lieuAdresseVille || '',
+        dateSouhaitee: demande.dateSouhaitee 
+          ? new Date(demande.dateSouhaitee).toLocaleDateString('fr-FR', { 
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            })
+          : null,
+        heureSouhaitee: formatHeure(demande.heureSouhaitee)
       }
     })
 
@@ -275,9 +299,16 @@ router.post('/', authenticateToken, async (req, res) => {
       serviceId,
       nombreArtisans,
       createdById,
-      devis, // <-- NOUVEAU CHAMP
+      devis,
       propertyId,
+      dateSouhaitee,
+      heureSouhaitee
     } = req.body
+    
+    // Format de l'heure (facultatif mais doit être valide si fourni)
+    if (heureSouhaitee && !heureSouhaitee.match(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/)) {
+      return res.status(400).json({ error: 'Le format de l\'heure doit être HH:MM' });
+    }
 
     // serviceId is an Int (autoincrement), createdById is a String (UUID) in Prisma schema.
     // Do NOT parseInt the createdById. Instead prefer the authenticated user id from middleware.
@@ -288,12 +319,6 @@ router.post('/', authenticateToken, async (req, res) => {
     const createdByIdStr = authUserId || createdById || null
 
     // Validation étendue
-    if (!serviceIdInt || Number.isNaN(serviceIdInt)) {
-      return res.status(400).json({ 
-        error: 'Le service est obligatoire et doit être un identifiant numérique valide' 
-      })
-    }
-
     if (!createdByIdStr) {
       return res.status(400).json({ error: 'L\'utilisateur (createdById) est requis' })
     }
@@ -302,15 +327,6 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({
         error: 'Les informations de contact sont obligatoires'
       })
-    }
-    // Vérifier que le service existe (select minimal fields to avoid DB column mismatch)
-    const serviceExists = await prisma.service.findUnique({
-      where: { id: serviceIdInt },
-      select: { id: true }
-    })
-
-    if (!serviceExists) {
-      return res.status(404).json({ error: 'Service non trouvé' })
     }
 
     // Vérifier que l'utilisateur existe
@@ -334,12 +350,13 @@ router.post('/', authenticateToken, async (req, res) => {
         lieuAdresseVille: lieuAdresseVille || '',
         optionAssurance: optionAssurance || false,
         description,
-        serviceId: serviceIdInt,
         // Assurer que la nouvelle demande est marquée en attente par défaut
         statut: 'en attente',
         nombreArtisans: nombreArtisans || 'UNIQUE',
         createdById: createdByIdStr,
-        propertyId:propertyId
+        propertyId: propertyId,
+        dateSouhaitee: req.body.dateSouhaitee ? new Date(req.body.dateSouhaitee + 'T00:00:00.000Z') : null,
+        heureSouhaitee: req.body.heureSouhaitee || null
       },
       include: {
         service: {
