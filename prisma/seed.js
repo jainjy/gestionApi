@@ -1,6 +1,6 @@
-// prisma/seed.ts
-import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+// prisma/seed.js
+const { PrismaClient } = require('@prisma/client')
+const bcrypt = require('bcryptjs')
 
 const prisma = new PrismaClient()
 
@@ -9,7 +9,6 @@ async function main() {
 
   // Nettoyer la base existante (optionnel)
   console.log('🧹 Nettoyage des données existantes...')
-  await prisma.vendor.deleteMany()
   await prisma.user.deleteMany()
 
   // Hasher les mots de passe
@@ -23,69 +22,54 @@ async function main() {
   // Créer les comptes administrateurs
   console.log('👑 Création des comptes administrateurs...')
   
-  const superAdmin = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email: 'superadmin@servo.mg',
       passwordHash: hashedAdmin123,
       firstName: 'Super',
       lastName: 'Admin',
       phone: '+261 34 12 345 67',
-      role: 'admin'
+      role: 'admin',
+      status: 'active'
     }
   })
 
-  const moderateur = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email: 'moderateur@servo.mg',
       passwordHash: hashedMod123,
       firstName: 'Modérateur',
       lastName: 'SERVO',
       phone: '+261 34 12 345 68',
-      role: 'admin'
+      role: 'admin',
+      status: 'active'
     }
   })
 
   // Créer les comptes professionnels
   console.log('💼 Création des comptes professionnels...')
   
-  const proUser = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email: 'pro@servo.mg',
       passwordHash: hashedPro123,
       firstName: 'Jean',
       lastName: 'Dupont',
       phone: '+261 34 12 345 69',
-      role: 'professional'
+      role: 'professional',
+      status: 'active'
     }
   })
 
-  const artisanUser = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email: 'artisan@servo.mg',
       passwordHash: hashedArt123,
       firstName: 'Marie',
       lastName: 'Martin',
       phone: '+261 34 12 345 70',
-      role: 'professional'
-    }
-  })
-
-  // Créer les vendors (professionnels)
-  await prisma.vendor.create({
-    data: {
-      userId: proUser.id,
-      companyName: 'Dupont Immobilier',
-      categories: ['immobilier', 'vente', 'location'],
-      kycStatus: 'verified'
-    }
-  })
-
-  await prisma.vendor.create({
-    data: {
-      userId: artisanUser.id,
-      companyName: 'Martin Services',
-      categories: ['artisanat', 'renovation', 'reparation'],
-      kycStatus: 'verified'
+      role: 'professional',
+      status: 'active'
     }
   })
 
@@ -99,7 +83,8 @@ async function main() {
       firstName: 'Alice',
       lastName: 'Durand',
       phone: '+261 34 12 345 71',
-      role: 'user'
+      role: 'user',
+      status: 'active'
     }
   })
 

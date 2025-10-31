@@ -22,12 +22,16 @@ app.use('/api/metiers', require('./routes/metiersRoutes'))
 app.use('/api/professional/services', require('./routes/professional-services'))
 app.use('/api/demandes', require('./routes/demandes'))
 app.use('/api/admin', require('./routes/admin-demandes'))
+
+// === AJOUTEZ CETTE LIGNE ===
+app.use('/api/financement', require('./routes/financement'))
+
 // Route de santé
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    services: ['auth', 'users', 'upload', 'articles', 'properties']
+    services: ['auth', 'users', 'upload', 'articles', 'properties', 'financement'] // Ajoutez financement ici aussi
   })
 })
 
@@ -45,4 +49,5 @@ app.use((error, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
   console.log(`Health check: http://localhost:${PORT}/health`)
+  console.log(`Financement API: http://localhost:${PORT}/api/financement`) // Ajoutez ce log
 })
