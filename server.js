@@ -47,6 +47,11 @@ app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/demandes-history", require("./routes/demandes-history"));
 
+//tourisme
+app.use("/api/tourisme", require("./routes/tourisme"));
+
+//bienetre
+app.use("/api/bienetre", require("./routes/bienetre"));
 // Route de santé
 app.get("/health", (req, res) => {
   res.json({
