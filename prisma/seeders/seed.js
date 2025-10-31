@@ -9,8 +9,7 @@ async function main() {
 
   // Nettoyer la base existante (optionnel)
   console.log('🧹 Nettoyage des données existantes...')
- await prisma.vendor.deleteMany()
-  await prisma.user.deleteMany()
+  // await prisma.user.deleteMany()
 
   // Hasher les mots de passe
   const saltRounds = 12
@@ -67,25 +66,6 @@ async function main() {
       lastName: 'Martin',
       phone: '+261 34 12 345 70',
       role: 'professional'
-    }
-  })
-
-  // Créer les vendors (professionnels)
-  await prisma.vendor.create({
-    data: {
-      userId: proUser.id,
-      companyName: 'Dupont Immobilier',
-      categories: ['immobilier', 'vente', 'location'],
-      kycStatus: 'verified'
-    }
-  })
-
-  await prisma.vendor.create({
-    data: {
-      userId: artisanUser.id,
-      companyName: 'Martin Services',
-      categories: ['artisanat', 'renovation', 'reparation'],
-      kycStatus: 'verified'
     }
   })
 

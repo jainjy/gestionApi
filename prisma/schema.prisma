@@ -523,6 +523,35 @@ model Order {
   @@index([status])
   @@index([createdAt])
 }
+//tourisme
+model Tourisme {
+  id            String   @id @default(uuid())
+  idUnique      String   @unique
+  idPrestataire String   @unique
+  title         String
+  type          String   // Remplacé TourismeType
+  price         Float
+  city          String
+  lat           Float
+  lng           Float
+  rating        Float    @default(0)
+  reviewCount   Int      @default(0)
+  images        String[]
+  amenities     String[]
+  maxGuests     Int
+  available     Boolean  @default(true)
+  provider      String   @default("direct") // Remplacé ProviderType
+  description   String?
+  bedrooms      Int?
+  bathrooms     Int?
+  area          Int?
+  instantBook   Boolean  @default(false)
+  cancellationPolicy String @default("moderate") // Remplacé CancellationPolicy
+  featured      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 
 // ======================
 // NOUVEAU MODÈLE: DEVIS
