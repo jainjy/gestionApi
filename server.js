@@ -48,6 +48,9 @@ app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/demandes-history", require("./routes/demandes-history"));
 
+// routes pour le service harmonie pro
+app.use('/api/harmonie/', require('./routes/HarmoniePro'))
+
 // Route de santé
 app.get("/health", (req, res) => {
   res.json({
