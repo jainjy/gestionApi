@@ -10,7 +10,12 @@ router.get("/user/:userId", authenticateToken, async (req, res) => {
     const { userId } = req.params;
     const { status, metier, service } = req.query;
 
-    let whereClause = { createdById: userId,propertyId:null};
+    // Clause where pour filtrer les demandes de services (serviceId not null) ET les demandes avec métier
+    let whereClause = {
+      createdById: userId,
+      propertyId: null,
+      OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
+    };
 
     // Filtres optionnels
     if (status && status !== "Toutes") {
@@ -22,11 +27,14 @@ router.get("/user/:userId", authenticateToken, async (req, res) => {
       whereClause.serviceId = parseInt(service);
     }
 
+    if (metier) {
+      whereClause.metierId = parseInt(metier);
+    }
+
     const demandes = await prisma.demande.findMany({
       where: whereClause,
       include: {
         service: {
-          // Select explicit fields to avoid selecting a non-existent `devis` column in the DB
           select: {
             id: true,
             libelle: true,
@@ -40,6 +48,12 @@ router.get("/user/:userId", authenticateToken, async (req, res) => {
                 metier: true,
               },
             },
+          },
+        },
+        metier: {
+          select: {
+            id: true,
+            libelle: true,
           },
         },
         artisans: {
@@ -72,6 +86,24 @@ router.get("/user/:userId", authenticateToken, async (req, res) => {
     // Transformer les données pour le frontend
     const transformedDemandes = demandes.map((demande) => {
       const artisansAcceptes = demande.artisans.filter((a) => a.accepte);
+
+      // Déterminer le métier selon le type de demande
+      let metierLibelle = "Non spécifié";
+      if (demande.service && demande.service.metiers.length > 0) {
+        metierLibelle =
+          demande.service.metiers[0]?.metier.libelle || "Non spécifié";
+      } else if (demande.metier) {
+        metierLibelle = demande.metier.libelle;
+      }
+
+      // Déterminer le titre selon le type de demande
+      let titre = "Demande de service";
+      if (demande.service) {
+        titre = `Demande ${demande.service.libelle}`;
+      } else if (demande.metier) {
+        titre = `Demande ${demande.metier.libelle}`;
+      }
+
       // Correction : on utilise TOUJOURS la valeur du champ statut si c'est une string non null/undefined
       const statut =
         typeof demande.statut === "string" && demande.statut.trim() !== ""
@@ -86,8 +118,8 @@ router.get("/user/:userId", authenticateToken, async (req, res) => {
 
       return {
         id: demande.id,
-        titre: `Demande ${demande.service.libelle}`,
-        metier: demande.service.metiers[0]?.metier.libelle || "Non spécifié",
+        titre: titre,
+        metier: metierLibelle,
         lieu: `${demande.lieuAdresseCp} ${demande.lieuAdresseVille}`,
         statut: statut,
         urgence: "Moyen", // À adapter selon vos besoins
@@ -109,17 +141,19 @@ router.get("/user/:userId", authenticateToken, async (req, res) => {
         optionAssurance: demande.optionAssurance,
         nombreArtisans: demande.nombreArtisans,
         serviceId: demande.serviceId,
+        metierId: demande.metierId,
         createdAt: demande.createdAt,
         propertyId: demande.propertyId,
         dateSouhaitee: demande.dateSouhaitee,
         heureSouhaitee: demande.heureSouhaitee,
+        type: demande.serviceId ? "service" : "metier", // Pour identifier le type de demande
       };
     });
 
     res.json(transformedDemandes);
   } catch (error) {
     console.error("Erreur lors de la récupération des demandes:", error);
-    res.status(500).json({ error: "Erreurserveur " });
+    res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
@@ -152,7 +186,7 @@ router.patch("/:id/statut", authenticateToken, async (req, res) => {
           data: {
             demandeId: existing.id,
             title: "Demande annulée",
-            message: "La demande a été annulée et archivées.",
+            message: "La demande a été annulée et archivée.",
             snapshot: existing,
           },
         });
@@ -185,8 +219,21 @@ router.get("/:id", authenticateToken, async (req, res) => {
     const demande = await prisma.demande.findUnique({
       where: { id: parseInt(id, 10) },
       include: {
-        service: true,
-        artisans: true,
+        service: {
+          include: {
+            metiers: {
+              include: {
+                metier: true,
+              },
+            },
+          },
+        },
+        metier: true,
+        artisans: {
+          include: {
+            user: true,
+          },
+        },
         createdBy: true,
         property: true,
       },
@@ -202,7 +249,6 @@ router.get("/:id", authenticateToken, async (req, res) => {
 // POST /api/demandes - Créer une nouvelle demande
 router.post("/", authenticateToken, async (req, res) => {
   try {
-    // DEBUG: log incoming payload to help diagnose 400 responses (temporary)
     console.log(
       "Incoming POST /api/demandes payload:",
       JSON.stringify(req.body)
@@ -218,16 +264,27 @@ router.post("/", authenticateToken, async (req, res) => {
       optionAssurance,
       description,
       serviceId,
+      metierId, // <-- NOUVEAU CHAMP pour les demandes par métier
       nombreArtisans,
       createdById,
-      devis, // <-- NOUVEAU CHAMP
+      devis,
     } = req.body;
 
-    // serviceId is an Int (autoincrement), createdById is a String (UUID) in Prisma schema.
-    // Do NOT parseInt the createdById. Instead prefer the authenticated user id from middleware.
+    // Validation : au moins serviceId OU metierId doit être fourni
+    if (!serviceId && !metierId) {
+      return res.status(400).json({
+        error: "Au moins un service ou un métier doit être spécifié",
+      });
+    }
+
     const serviceIdInt =
       serviceId !== undefined && serviceId !== null
         ? parseInt(serviceId, 10)
+        : null;
+
+    const metierIdInt =
+      metierId !== undefined && metierId !== null
+        ? parseInt(metierId, 10)
         : null;
 
     // Prefer server-side authenticated user id (safer) but fall back to body.createdById if provided.
@@ -235,13 +292,6 @@ router.post("/", authenticateToken, async (req, res) => {
     const createdByIdStr = authUserId || createdById || null;
 
     // Validation étendue
-    if (!serviceIdInt || Number.isNaN(serviceIdInt)) {
-      return res.status(400).json({
-        error:
-          "Le service est obligatoire et doit être un identifiant numérique valide",
-      });
-    }
-
     if (!createdByIdStr) {
       return res
         .status(400)
@@ -253,14 +303,29 @@ router.post("/", authenticateToken, async (req, res) => {
         error: "Les informations de contact sont obligatoires",
       });
     }
-    // Vérifier que le service existe (select minimal fields to avoid DB column mismatch)
-    const serviceExists = await prisma.service.findUnique({
-      where: { id: serviceIdInt },
-      select: { id: true },
-    });
 
-    if (!serviceExists) {
-      return res.status(404).json({ error: "Service non trouvé" });
+    // Vérifier que le service existe (si serviceId fourni)
+    if (serviceIdInt && !Number.isNaN(serviceIdInt)) {
+      const serviceExists = await prisma.service.findUnique({
+        where: { id: serviceIdInt },
+        select: { id: true },
+      });
+
+      if (!serviceExists) {
+        return res.status(404).json({ error: "Service non trouvé" });
+      }
+    }
+
+    // Vérifier que le métier existe (si metierId fourni)
+    if (metierIdInt && !Number.isNaN(metierIdInt)) {
+      const metierExists = await prisma.metier.findUnique({
+        where: { id: metierIdInt },
+        select: { id: true },
+      });
+
+      if (!metierExists) {
+        return res.status(404).json({ error: "Métier non trouvé" });
+      }
     }
 
     // Vérifier que l'utilisateur existe
@@ -285,6 +350,7 @@ router.post("/", authenticateToken, async (req, res) => {
         optionAssurance: optionAssurance || false,
         description,
         serviceId: serviceIdInt,
+        metierId: metierIdInt, // <-- NOUVEAU CHAMP
         // Assurer que la nouvelle demande est marquée en attente par défaut
         statut: "en attente",
         nombreArtisans: nombreArtisans || "UNIQUE",
@@ -292,7 +358,6 @@ router.post("/", authenticateToken, async (req, res) => {
       },
       include: {
         service: {
-          // Select explicit fields to avoid selecting a non-existent `devis` column in the DB
           select: {
             id: true,
             libelle: true,
@@ -305,6 +370,12 @@ router.post("/", authenticateToken, async (req, res) => {
                 metier: true,
               },
             },
+          },
+        },
+        metier: {
+          select: {
+            id: true,
+            libelle: true,
           },
         },
       },
@@ -348,14 +419,19 @@ router.get("/stats/:userId", authenticateToken, async (req, res) => {
     const { userId } = req.params;
 
     const totalDemandes = await prisma.demande.count({
-      where: { createdById: userId,propertyId:null },
+      where: {
+        createdById: userId,
+        propertyId: null,
+        OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
+      },
     });
 
     const demandesEnCours = await prisma.demande.count({
       where: {
         createdById: userId,
-        propertyId:null,
+        propertyId: null,
         demandeAcceptee: false,
+        OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
         artisans: {
           some: {},
         },
@@ -366,6 +442,7 @@ router.get("/stats/:userId", authenticateToken, async (req, res) => {
       where: {
         createdById: userId,
         propertyId: null,
+        OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
         artisans: {
           some: {
             accepte: true,
@@ -378,6 +455,7 @@ router.get("/stats/:userId", authenticateToken, async (req, res) => {
       where: {
         createdById: userId,
         propertyId: null,
+        OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
         demandeAcceptee: true,
       },
     });
