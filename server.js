@@ -1,8 +1,10 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("./middleware/cors");
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
+require('dotenv').config()
+const express = require('express')
+const cors = require('./middleware/cors')
+const helmet = require('helmet')
+const rateLimit = require('express-rate-limit')
+const cookieParser = require('cookie-parser')
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,11 +16,12 @@ const limiter = rateLimit({
 });
 
 // Middleware
-app.use(helmet());
-app.use(cors);
-app.use(limiter);
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(helmet())
+app.use(cors)
+app.use(limiter)
+app.use(express.json({ limit: '10mb' }))
+app.use(cookieParser())
+app.use(express.urlencoded({ extended: true }))
 
 // Routes
 app.use("/api/auth", require("./routes/auth"));
@@ -47,7 +50,7 @@ app.use("/api/admin/payments", require("./routes/admin-payments"));
 app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/demandes-history", require("./routes/demandes-history"));
-
+app.use("/api/cookies", require("./routes/cookies"));
 // routes pour le service harmonie pro
 app.use('/api/harmonie/', require('./routes/HarmoniePro'))
 
