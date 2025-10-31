@@ -15,6 +15,7 @@ router.get(
       let whereClause = {
         // Filtrer seulement les demandes avec serviceId OU metierId non null
         OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
+        propertyId: null, // Exclure les demandes immobilières
       };
 
       // Filtre par statut
@@ -40,7 +41,7 @@ router.get(
       // Recherche
       if (search) {
         whereClause.OR = [
-          ...whereClause.OR, // Conserver le filtre serviceId/metierId
+          ...(whereClause.OR || []), // Conserver le filtre existant
           { description: { contains: search, mode: "insensitive" } },
           { contactNom: { contains: search, mode: "insensitive" } },
           { contactPrenom: { contains: search, mode: "insensitive" } },
@@ -57,11 +58,22 @@ router.get(
           where: whereClause,
           include: {
             service: {
-              include: {
+              select: {
+                id: true,
+                libelle: true,
+                description: true,
+                images: true,
+                price: true,
+                duration: true,
                 category: true,
                 metiers: {
                   include: {
-                    metier: true,
+                    metier: {
+                      select: {
+                        id: true,
+                        libelle: true,
+                      },
+                    },
                   },
                 },
               },
@@ -117,9 +129,9 @@ router.get(
         let metierLibelle = "Non spécifié";
         let titre = "Demande de service";
 
-        if (demande.service && demande.service.metiers.length > 0) {
+        if (demande.service) {
           metierLibelle =
-            demande.service.metiers[0]?.metier.libelle || "Non spécifié";
+            demande.service.metiers[0]?.metier?.libelle || "Non spécifié";
           titre = `Demande ${demande.service.libelle}`;
         } else if (demande.metier) {
           metierLibelle = demande.metier.libelle;
@@ -138,7 +150,7 @@ router.get(
           statut = "En cours";
         }
 
-        // Déterminer l'urgence basée sur la date de création et d'autres facteurs
+        // Déterminer l'urgence basée sur la date de création
         const now = new Date();
         const daysSinceCreation = Math.floor(
           (now - demande.createdAt) / (1000 * 60 * 60 * 24)
@@ -223,65 +235,62 @@ router.get(
     try {
       const whereClause = {
         OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
+        propertyId: null,
       };
 
-      const totalDemandes = await prisma.demande.count({
-        where: whereClause,
-      });
-
-      const demandesEnAttente = await prisma.demande.count({
-        where: {
-          ...whereClause,
-          demandeAcceptee: false,
-          artisans: { none: {} },
-        },
-      });
-
-      const demandesEnCours = await prisma.demande.count({
-        where: {
-          ...whereClause,
-          demandeAcceptee: false,
-          artisans: { some: {} },
-        },
-      });
-
-      const demandesValidees = await prisma.demande.count({
-        where: {
-          ...whereClause,
-          demandeAcceptee: true,
-        },
-      });
-
-      const demandesUrgentes = await prisma.demande.count({
-        where: {
-          ...whereClause,
-          createdAt: {
-            gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Moins de 24h
+      const [
+        totalDemandes,
+        demandesEnAttente,
+        demandesEnCours,
+        demandesValidees,
+        demandesUrgentes,
+      ] = await Promise.all([
+        prisma.demande.count({ where: whereClause }),
+        prisma.demande.count({
+          where: {
+            ...whereClause,
+            demandeAcceptee: false,
+            artisans: { none: {} },
           },
-        },
-      });
-
-      const demandesNouvelles = await prisma.demande.count({
-        where: {
-          ...whereClause,
-          createdAt: {
-            gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Moins de 24h
+        }),
+        prisma.demande.count({
+          where: {
+            ...whereClause,
+            demandeAcceptee: false,
+            artisans: { some: {} },
           },
-        },
-      });
+        }),
+        prisma.demande.count({
+          where: {
+            ...whereClause,
+            demandeAcceptee: true,
+          },
+        }),
+        prisma.demande.count({
+          where: {
+            ...whereClause,
+            createdAt: {
+              gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+            },
+          },
+        }),
+      ]);
 
       // Statistiques par type
-      const demandesServices = await prisma.demande.count({
-        where: {
-          serviceId: { not: null },
-        },
-      });
-
-      const demandesMetiers = await prisma.demande.count({
-        where: {
-          metierId: { not: null },
-        },
-      });
+      const [demandesServices, demandesMetiers] = await Promise.all([
+        prisma.demande.count({
+          where: {
+            serviceId: { not: null },
+            propertyId: null,
+          },
+        }),
+        prisma.demande.count({
+          where: {
+            metierId: { not: null },
+            propertyId: null,
+          },
+        }),
+      ]);
 
       res.json({
         total: totalDemandes,
@@ -289,7 +298,7 @@ router.get(
         enCours: demandesEnCours,
         validees: demandesValidees,
         urgentes: demandesUrgentes,
-        nouvelles: demandesNouvelles,
+        nouvelles: demandesUrgentes, // Même calcul que urgentes
         parType: {
           services: demandesServices,
           metiers: demandesMetiers,
@@ -318,19 +327,45 @@ router.put(
         },
         include: {
           service: {
-            include: {
+            select: {
+              id: true,
+              libelle: true,
               metiers: {
                 include: {
-                  metier: true,
+                  metier: {
+                    select: {
+                      id: true,
+                      libelle: true,
+                    },
+                  },
                 },
               },
             },
           },
-          metier: true,
-          createdBy: true,
+          metier: {
+            select: {
+              id: true,
+              libelle: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
           artisans: {
             include: {
-              user: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  companyName: true,
+                },
+              },
             },
           },
         },
@@ -357,16 +392,17 @@ router.put(
       const { id } = req.params;
       const { artisanId } = req.body;
 
+      if (!artisanId) {
+        return res.status(400).json({ error: "L'ID de l'artisan est requis" });
+      }
+
       // Vérifier si la demande existe
       const demande = await prisma.demande.findUnique({
         where: { id: parseInt(id) },
-        include: {
-          service: {
-            include: {
-              metiers: true,
-            },
-          },
-          metier: true,
+        select: {
+          id: true,
+          serviceId: true,
+          metierId: true,
         },
       });
 
@@ -377,16 +413,13 @@ router.put(
       // Vérifier si l'artisan existe
       const artisan = await prisma.user.findUnique({
         where: { id: artisanId },
-        include: {
-          metiers: {
-            include: {
-              metier: true,
-            },
-          },
+        select: {
+          id: true,
           services: {
-            include: {
-              service: true,
-            },
+            select: { serviceId: true },
+          },
+          metiers: {
+            select: { metierId: true },
           },
         },
       });
@@ -397,7 +430,6 @@ router.put(
 
       // Vérifier la compatibilité selon le type de demande
       if (demande.serviceId) {
-        // Pour une demande de service, vérifier si l'artisan propose ce service
         const hasService = artisan.services.some(
           (us) => us.serviceId === demande.serviceId
         );
@@ -407,7 +439,6 @@ router.put(
           });
         }
       } else if (demande.metierId) {
-        // Pour une demande par métier, vérifier si l'artisan a ce métier
         const hasMetier = artisan.metiers.some(
           (um) => um.metierId === demande.metierId
         );
@@ -439,7 +470,7 @@ router.put(
         data: {
           userId: artisanId,
           demandeId: parseInt(id),
-          accepte: null, // En attente de réponse de l'artisan
+          accepte: null,
         },
         include: {
           user: {
@@ -531,12 +562,22 @@ router.get(
           city: true,
           metiers: {
             include: {
-              metier: true,
+              metier: {
+                select: {
+                  id: true,
+                  libelle: true,
+                },
+              },
             },
           },
           services: {
             include: {
-              service: true,
+              service: {
+                select: {
+                  id: true,
+                  libelle: true,
+                },
+              },
             },
           },
         },

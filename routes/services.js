@@ -288,5 +288,84 @@ router.get('/stats', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
+router.get("/without-category", async (req, res) => {
+  try {
+    const services = await prisma.service.findMany({
+      where: {
+        categoryId: null,
+      },
+      include: {
+        _count: {
+          select: {
+            metiers: true,
+            users: true,
+          },
+        },
+      },
+      orderBy: {
+        libelle: "asc",
+      },
+    });
+    res.json(services);
+  } catch (error) {
+    console.error(
+      "Erreur lors de la récupération des services sans catégorie:",
+      error
+    );
+    res
+      .status(500)
+      .json({
+        error: "Erreur lors de la récupération des services sans catégorie",
+      });
+  }
+});
+
+// POST /api/services/bulk-assign-category - Assigner une catégorie à plusieurs services
+router.post("/bulk-assign-category", async (req, res) => {
+  try {
+    const { categoryId, serviceIds } = req.body;
+
+    if (!categoryId) {
+      return res.status(400).json({ error: "L'ID de la catégorie est requis" });
+    }
+
+    if (!serviceIds || !Array.isArray(serviceIds) || serviceIds.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "La liste des services est requise" });
+    }
+
+    // Vérifier que la catégorie existe
+    const category = await prisma.category.findUnique({
+      where: { id: parseInt(categoryId) },
+    });
+
+    if (!category) {
+      return res.status(404).json({ error: "Catégorie non trouvée" });
+    }
+
+    // Mettre à jour les services
+    const result = await prisma.service.updateMany({
+      where: {
+        id: {
+          in: serviceIds,
+        },
+      },
+      data: {
+        categoryId: parseInt(categoryId),
+      },
+    });
+
+    res.json({
+      message: `${result.count} service(s) mis à jour avec succès`,
+      updatedCount: result.count,
+    });
+  } catch (error) {
+    console.error("Erreur lors de l'assignation en masse:", error);
+    res
+      .status(500)
+      .json({ error: "Erreur lors de l'assignation en masse des catégories" });
+  }
+});
 
 module.exports = router

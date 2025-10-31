@@ -2,8 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const metiersController = require('../controllers/metiersController');
+const servicesController = require("../controllers/servicesController");
 
-// Routes pour les métiers
+router.get("/services", servicesController.getAllServices);
 router.get('/', metiersController.getAllMetiers);
 router.get('/stats', metiersController.getMetiersStats);
 router.get('/:id', metiersController.getMetierById);
