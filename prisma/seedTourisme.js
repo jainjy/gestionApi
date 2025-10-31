@@ -6,7 +6,7 @@ async function seedTourisme() {
 
   try {
     // Supprimer les données existantes
-    await prisma.tourisme.deleteMany()
+    //await prisma.tourisme.deleteMany()
     console.log('🗑️ Anciennes données supprimées')
 
     // Données de démonstration
