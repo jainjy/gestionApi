@@ -2,6 +2,7 @@
 const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db')
+const { authenticateToken } = require('../middleware/auth')
 
 // GET /api/properties - Récupérer les propriétés avec filtres avancés
 router.get('/', async (req, res) => {
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
       type,
       listingType,
       search,
-      userId // Pour filtrer par propriétaire
+      userId
     } = req.query
 
     const where = { isActive: true }
@@ -63,14 +64,15 @@ router.get('/', async (req, res) => {
 })
 
 // POST /api/properties - Créer une nouvelle propriété
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken,async (req, res) => {
   try {
     const data = req.body
     
     // Validation des données requises
-    if (!data.title || !data.type || !data.city || !data.ownerId) {
+    if (!data.title || !data.type || !data.city ) {
       return res.status(400).json({ error: 'Champs obligatoires manquants' })
     }
+    const userId=req.user.id
 
     const newProperty = await prisma.property.create({
       data: {
@@ -89,7 +91,7 @@ router.post('/', async (req, res) => {
         rentType: data.rentType || "longue_duree",
         images: data.images || [],
         features: data.features || [],
-        ownerId: data.ownerId,
+        ownerId: userId,
         publishedAt: data.status === 'published' ? new Date() : null
       },
       include: { 
@@ -112,15 +114,17 @@ router.post('/', async (req, res) => {
 })
 
 // GET /api/properties/stats - Récupérer les statistiques
-router.get('/stats', async (req, res) => {
+router.get('/stats',authenticateToken, async (req, res) => {
   try {
-    const { userId } = req.query
+    const user=req.user;
+    console.log(user)
+    const  userId  = user.id;
     
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' })
     }
     
-    const where = { ownerId: userId }
+    const where = user.role!="admin" ?{ ownerId: userId }:{}
     
     const total = await prisma.property.count({ where })
     const published = await prisma.property.count({ 
@@ -249,7 +253,7 @@ router.get('/:id', async (req, res) => {
 })
 
 // PUT /api/properties/:id - Mettre à jour une propriété
-router.put('/:id', async (req, res) => {
+router.put('/:id',authenticateToken, async (req, res) => {
   try {
     const { id } = req.params
     const data = req.body
@@ -345,20 +349,20 @@ router.patch('/:id/views', async (req, res) => {
 })
 
 // DELETE /api/properties/:id - Supprimer une propriété (soft delete)
-router.delete('/:id', async (req, res) => {
+router.delete("/:id", authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params
+    const { id } = req.params;
 
     await prisma.property.update({
       where: { id },
-      data: { isActive: false }
-    })
-    
-    res.json({ success: true })
+      data: { isActive: false },
+    });
+
+    res.json({ success: true });
   } catch (error) {
-    console.error('Failed to delete property:', error)
-    res.status(500).json({ error: 'Failed to delete property' })
+    console.error("Failed to delete property:", error);
+    res.status(500).json({ error: "Failed to delete property" });
   }
-})
+});
 
 module.exports = router
