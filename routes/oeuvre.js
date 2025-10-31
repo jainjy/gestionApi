@@ -31,7 +31,7 @@ router.post('/new', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Libellé et catégorie requis." });
     }
 
-    const newOeuvre = await prisma.oeuvre.create({
+    const newOeuvre = await prisma.service.create({
       data: {
         libelle,
         description: description || "",
@@ -64,7 +64,7 @@ router.post('/new', authenticateToken, async (req, res) => {
 // Liste des œuvres
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    const oeuvres = await prisma.oeuvre.findMany({
+    const oeuvres = await prisma.service.findMany({
       include: { category: true },
     });
     res.json(oeuvres);
