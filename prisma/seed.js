@@ -39,7 +39,7 @@ async function main() {
     },
   });
 
-  const moderateur = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email: "moderateur@servo.mg",
       passwordHash: hashedMod123,
@@ -235,7 +235,7 @@ async function main() {
     },
   });
 
-  const artisanUser = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email: "artisan@servo.mg",
       passwordHash: hashedArt123,

@@ -53,6 +53,7 @@ app.use("/api/demandes-history", require("./routes/demandes-history"));
 app.use("/api/cookies", require("./routes/cookies"));
 // routes pour le service harmonie pro
 app.use('/api/harmonie/', require('./routes/HarmoniePro'))
+app.use("/api/financement", require("./routes/financement"));
 
 //tourisme
 app.use("/api/tourisme", require("./routes/tourisme"));

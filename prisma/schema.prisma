@@ -9,9 +9,6 @@ datasource db {
   relationMode = "prisma"
 }
 
-// ======================
-// ARTICLES
-// ======================
 model BlogArticle {
   id          String                 @id @default(uuid())
   authorId    String
@@ -35,9 +32,6 @@ model BlogArticle {
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
-// ======================
-// UTILISATEUR
-// ======================
 model User {
   id                  String    @id @default(uuid())
   email               String    @unique
@@ -70,7 +64,7 @@ model User {
   // NOUVELLES COLONNES: Relations pour les devis
   DevisClientToUser   String?   @map("_DevisClientToUser")
   DevisProviderToUser String?   @map("_DevisProviderToUser")
-
+  demandesFinancement FinancementDemande[]
   // Relations existantes
   blogArticles             BlogArticle[]
   properties               Property[]
@@ -221,18 +215,14 @@ model Favorite {
   userId     String
   propertyId String
   createdAt  DateTime @default(now())
-
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([userId, propertyId])
   @@index([userId])
   @@index([propertyId])
 }
 
-// ======================
-// PRODUIT
-// ======================
 model Product {
   id             String                 @id @default(uuid())
   name           String
@@ -287,9 +277,6 @@ model Product {
   @@index([foodCategory])
 }
 
-// ======================
-// MÉTIERS
-// ======================
 model Metier {
   id        Int                    @id @default(autoincrement())
   libelle   String
@@ -308,12 +295,10 @@ model Category {
   services Service[]
 }
 
-// ======================
-// SERVICES
-// ======================
 model Service {
   id          Int                    @id @default(autoincrement())
   libelle     String
+  categoryId  Int?
   categoryId  Int?
   description String?
   images      String[]
@@ -328,48 +313,33 @@ model Service {
   Appointment Appointment[]
 }
 
-// ======================
-// LIAISON MÉTIER-SERVICE
-// ======================
 model MetierService {
   metierId  Int
   serviceId Int
-
-  metier  Metier  @relation(fields: [metierId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
+  metier    Metier  @relation(fields: [metierId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
 
   @@id([metierId, serviceId])
 }
 
-// ======================
-// LIAISON UTILISATEUR-MÉTIER
-// ======================
 model UtilisateurMetier {
   userId   String
   metierId Int
-
-  user   User   @relation(fields: [userId], references: [id])
-  metier Metier @relation(fields: [metierId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+  metier   Metier @relation(fields: [metierId], references: [id])
 
   @@id([userId, metierId])
 }
 
-// ======================
-// LIAISON UTILISATEUR-SERVICE
-// ======================
 model UtilisateurService {
   userId    String
   serviceId Int
-
-  user    User    @relation(fields: [userId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
 
   @@id([userId, serviceId])
 }
 
-// ======================
-// DEMANDES DE SERVICES
-// ======================
 model Demande {
   id                  Int       @id @default(autoincrement())
   disponibiliteBien   String? // "LIBRE" | "LOUE"
@@ -415,18 +385,14 @@ model Demande {
   @@index([createdAt])
 }
 
-// ======================
-// LIAISON DEMANDE-ARTISAN
-// ======================
 model DemandeArtisan {
   userId    String
   demandeId Int
   accepte   Boolean?  @default(false)
   devis     String?
   rdv       DateTime?
-
-  user    User    @relation("DemandeArtisanUser", fields: [userId], references: [id])
-  demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
+  user      User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
+  demande   Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
   @@id([userId, demandeId])
 }
@@ -462,8 +428,75 @@ model Transaction {
   metadata      Json? // données additionnelles (cart, items, etc.)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
-  // Relations
+model Appointment {
+  id        String   @id
+  userId    String
+  serviceId Int
+  date      DateTime
+  time      String
+  message   String?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+}
+
+model DemandeHistory {
+  id        Int      @id @default(autoincrement())
+  demandeId Int
+  title     String?
+  message   String?
+  snapshot  Json?
+  createdAt DateTime @default(now())
+
+  @@index([demandeId])
+}
+
+model Order {
+  id              String   @id
+  orderNumber     String   @unique
+  userId          String
+  items           Json
+  totalAmount     Float
+  status          String   @default("pending")
+  shippingAddress Json?
+  paymentMethod   String
+  paymentStatus   String   @default("pending")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+
+  @@index([createdAt])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([userId])
+}
+
+model Review {
+  id        String   @id
+  userId    String
+  serviceId Int
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+// ======================
+// MODÈLES RGPD AJOUTÉS
+// ======================
+model Consent {
+  id        String    @id @default(uuid())
+  userId    String?
+  type      String
+  version   String
+  given     Boolean
+  givenAt   DateTime?
+  revokedAt DateTime?
+  ip        String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime  @default(now())
+
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -585,6 +618,34 @@ model Devis {
   @@index([dateCreation])
 }
 
+
+model FinancementDemande {
+  id          String   @id @default(uuid())
+  userId      String?
+  nom         String
+  email       String
+  telephone   String
+  message     String
+  type        String   // "simulation", "assurance", "partenaire", "contact"
+  montant     Float?
+  duree       Int?
+  estimation  Float?
+  partenaireId Int?
+  assuranceId Int?
+  status      String   @default("pending") // pending, contacted, completed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  partenaire  FinancementPartenaire? @relation(fields: [partenaireId], references: [id])
+  assurance   AssuranceService?     @relation(fields: [assuranceId], references: [id])
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
 enum MessageType {
   TEXT
   IMAGE
@@ -606,4 +667,39 @@ enum EvenementType {
   AVIS_LAISSE
   CLIENT_REFUSE
   GENERIC
+}
+
+// Modèles pour le financement et assurance
+model FinancementPartenaire {
+  id          Int      @id @default(autoincrement())
+  nom         String
+  description String
+  rating      Float
+  type        String   // "banque", "courtier", "expert"
+  avantages   String[]
+  icon        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  demandes    FinancementDemande[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model AssuranceService {
+  id          Int      @id @default(autoincrement())
+  nom         String
+  description String
+  details     String
+  icon        String
+  obligatoire Boolean  @default(false)
+  public      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  demandes    FinancementDemande[]
+
+  @@index([obligatoire])
+  @@index([isActive])
 }
