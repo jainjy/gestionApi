@@ -23,63 +23,61 @@ router.post('/', authenticateToken, async (req, res) => {
       prestataireId // ID du prestataire sélectionné
     } = req.body;
 
-    // Créer d'abord la demande
-    const demande = await prisma.demande.create({
-      data: {
-        description,
-        dateSouhaitee: dateSouhaitee ? new Date(dateSouhaitee) : null,
-        lieuAdresse,
-        lieuAdresseCp,
-        lieuAdresseVille,
-        contactNom,
-        contactPrenom,
-        contactEmail,
-        contactTel,
-        contactAdresse,
-        contactAdresseCp,
-        contactAdresseVille,
-        serviceId: serviceId ? parseInt(serviceId) : null,
-        createdById: req.user.id,
-        statut: 'en_attente',
-        nombreArtisans: 'UNIQUE'
-      }
+    // Générer un numéro unique pour le devis
+    const date = new Date();
+    const numero = `DEV-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+    // Si aucun prestataire n'est spécifié, on prend le premier administrateur comme prestataire par défaut
+    const defaultPrestataire = await prisma.user.findFirst({
+      where: { role: 'admin' }
     });
 
-    // Si un prestataire est spécifié, créer l'association DemandeArtisan
-    if (prestataireId) {
-      await prisma.demandeArtisan.create({
-        data: {
-          userId: prestataireId,
-          demandeId: demande.id,
-          accepte: false
-        }
-      });
+    if (!prestataireId && !defaultPrestataire) {
+      return res.status(400).json({ error: 'Aucun prestataire disponible pour traiter la demande' });
     }
 
-    // Retourner la demande créée avec ses relations
-    const demandeComplete = await prisma.demande.findUnique({
-      where: { id: demande.id },
+    // Créer le devis directement
+    const devis = await prisma.devis.create({
+      data: {
+        numero,
+        description,
+        dateValidite: dateSouhaitee ? new Date(dateSouhaitee) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Par défaut valide 30 jours
+        status: 'en_attente',
+        montantHT: 0, // Sera mis à jour par le prestataire
+        montantTTC: 0, // Sera mis à jour par le prestataire
+        tva: 20, // Taux par défaut
+        conditions: "À définir par le prestataire",
+        client: {
+          connect: { id: req.user.id }
+        },
+        prestataire: {
+          connect: { id: prestataireId || defaultPrestataire.id }
+        }
+      },
       include: {
-        service: true,
-        artisans: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                companyName: true
-              }
-            }
+        client: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        prestataire: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            companyName: true
           }
         }
       }
     });
 
     res.status(201).json({
-      message: 'Demande de devis créée avec succès',
-      demande: demandeComplete
+      message: 'Devis créé avec succès',
+      devis: devis
     });
   } catch (error) {
     console.error('Erreur lors de la création de la demande de devis:', error);
@@ -208,12 +206,62 @@ router.patch('/:devisId/reponse', authenticateToken, async (req, res) => {
 router.get('/user/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
+    const { role } = req.query;
 
     // Vérifier que l'utilisateur demande ses propres devis
     if (userId !== req.user.id) {
       return res.status(403).json({ error: 'Accès non autorisé' });
     }
 
+    // D'abord, récupérer toutes les demandes associées à l'utilisateur
+    const demandes = await prisma.demande.findMany({
+      where: {
+        OR: [
+          // Si l'utilisateur est un professionnel, chercher les demandes qui lui sont assignées
+          ...(role === 'professional' ? [{
+            artisans: {
+              some: {
+                userId: userId
+              }
+            }
+          }] : []),
+          // Si l'utilisateur est un client, chercher ses demandes
+          ...(role !== 'professional' ? [{
+            createdById: userId
+          }] : [])
+        ]
+      },
+      include: {
+        service: true,
+        artisans: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                companyName: true
+              }
+            }
+          }
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Ensuite, récupérer les devis associés
     const devis = await prisma.devis.findMany({
       where: {
         OR: [
@@ -250,7 +298,40 @@ router.get('/user/:userId', authenticateToken, async (req, res) => {
       }
     });
 
-    res.json(devis);
+    // Combiner et transformer les données pour le frontend
+    const transformedData = {
+      demandes: demandes.map(demande => ({
+        id: demande.id,
+        type: 'demande',
+        statut: demande.statut || 'en_attente',
+        description: demande.description,
+        date: demande.createdAt,
+        serviceId: demande.serviceId,
+        service: demande.service,
+        contactNom: demande.contactNom,
+        contactPrenom: demande.contactPrenom,
+        contactEmail: demande.contactEmail,
+        contactTel: demande.contactTel,
+        lieuAdresse: demande.lieuAdresse,
+        dateSouhaitee: demande.dateSouhaitee,
+        typeBien: demande.typeBien
+      })),
+      devis: devis.map(d => ({
+        id: d.id,
+        type: 'devis',
+        numero: d.numero,
+        status: d.status,
+        montantHT: d.montantHT,
+        montantTTC: d.montantTTC,
+        dateCreation: d.dateCreation,
+        dateValidite: d.dateValidite,
+        client: d.client,
+        prestataire: d.prestataire,
+        demande: d.demande
+      }))
+    };
+
+    res.json(transformedData);
   } catch (error) {
     console.error('Erreur lors de la récupération des devis:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des devis' });

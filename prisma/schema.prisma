@@ -337,13 +337,13 @@ model Demande {
   propertyId          String?
   statut              String?
   isRead              Boolean          @default(false)
+  devis               String?
   createdBy           User             @relation("DemandeCreePar", fields: [createdById], references: [id])
   service             Service?         @relation(fields: [serviceId], references: [id])
   metier              Metier?          @relation(fields: [metierId], references: [id])
   property            Property?        @relation(fields: [propertyId], references: [id])
   artisans            DemandeArtisan[] @relation("DemandeArtisanDemande")
   conversations       Conversation[]
-  devis               String?
   devis_demande       Devis[]
 
   @@index([propertyId])
