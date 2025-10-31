@@ -50,8 +50,12 @@ router.post('/', authenticateToken, async (req, res) => {
         nombreArtisans: nombreArtisans || 'UNIQUE',
         createdById,
         propertyId,
-        dateSouhaitee: dateSouhaitee ? new Date(dateSouhaitee + 'T00:00:00Z') : null,
-        heureSouhaitee
+        dateSouhaitee: dateSouhaitee && heureSouhaitee 
+          ? new Date(dateSouhaitee + 'T' + heureSouhaitee + ':00.000Z')
+          : dateSouhaitee 
+            ? new Date(dateSouhaitee + 'T00:00:00.000Z')
+            : null,
+        heureSouhaitee: heureSouhaitee || null
       },
       include: {
         property: {
