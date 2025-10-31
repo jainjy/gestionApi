@@ -245,7 +245,7 @@ async function main() {
 
     for (const metier of metiersData) {
       const createdMetier = await prisma.metier.create({
-        data: metier,
+        data: {libelle:metier.libelle},
       });
       console.log(`➕ Métier : ${metier.libelle} créé`);
     }
