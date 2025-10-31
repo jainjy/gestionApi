@@ -1,6 +1,38 @@
 const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db')
+const { authenticateToken } = require('../middleware/auth')
+
+function deduceProductTypeFromName(productName) {
+  if (!productName || typeof productName !== 'string') return 'general';
+  
+  const nameLower = productName.toLowerCase();
+  
+  // Mots-clés pour l'alimentation
+  const foodKeywords = [
+    'pain', 'baguette', 'croissant', 'chocolatine', 'patisserie', 'boulangerie',
+    'aliment', 'nourriture', 'food', 'manger', 'boisson', 'jus', 'cafe',
+    'the', 'lait', 'fromage', 'yaourt', 'fruit', 'legume', 'viande', 'poisson',
+    'epicerie', 'sucre', 'farine', 'beurre', 'oeuf', 'légume', 'fruit',
+    'chocolat', 'biscuit', 'gateau', 'viennoiserie', 'pâtisserie', 'saumon', 'salade'
+  ];
+  
+  if (foodKeywords.some(keyword => nameLower.includes(keyword))) {
+    return 'food';
+  }
+  
+  return 'general';
+}
+
+// Fonction pour obtenir le productType d'un item (avec fallback)
+function getItemProductType(item) {
+  // 1. Si productType est défini, on l'utilise
+  if (item.productType) return item.productType;
+  
+  // 2. Sinon, on déduit du nom
+  return deduceProductTypeFromName(item.name);
+}
+
 
 // Middleware de logging pour le débogage
 router.use((req, res, next) => {
@@ -9,39 +41,131 @@ router.use((req, res, next) => {
 })
 
 /**
- * 👨‍🔧 GET /api/orders/pro - Récupérer TOUTES les commandes pour la gestion pro (SANS AUTH)
+ * 🔧 POST /api/orders/pro/migrate-product-types - MIGRATION des productType
+ */
+router.post('/pro/migrate-product-types', async (req, res) => {
+  try {
+    console.log('🚨 DÉBUT MIGRATION DES PRODUCT TYPE...');
+    
+    const allOrders = await prisma.order.findMany();
+    let updatedCount = 0;
+    let fixedItemsCount = 0;
+
+    console.log(`📦 ${allOrders.length} commandes à traiter`);
+
+    for (const order of allOrders) {
+      if (!order.items || !Array.isArray(order.items)) continue;
+
+      let needsUpdate = false;
+      const updatedItems = order.items.map(item => {
+        if (!item.productType) {
+          needsUpdate = true;
+          fixedItemsCount++;
+          
+          const newItem = {
+            ...item,
+            productType: getItemProductType(item)
+          };
+          
+          console.log(`🔧 Item corrigé: "${item.name}" -> ${newItem.productType}`);
+          return newItem;
+        }
+        return item;
+      });
+
+      if (needsUpdate) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { items: updatedItems }
+        });
+        updatedCount++;
+        console.log(`✅ Commande ${order.orderNumber} migrée`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Migration terminée`,
+      stats: {
+        totalOrders: allOrders.length,
+        ordersUpdated: updatedCount,
+        itemsFixed: fixedItemsCount
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur migration:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+/**
+ * 👨‍🔧 GET /api/orders/pro - Récupérer TOUTES les commandes - VERSION ULTRA ROBUSTE
  */
 router.get('/pro', async (req, res) => {
   try {
-    const { page = 1, limit = 50, status } = req.query;
+    const { page = 1, limit = 50, status, productType } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    console.log(`🔍 Récupération de TOUTES les commandes (sans auth)`);
+    console.log(`🔍 Récupération commandes pro`, { 
+      productType, 
+      status,
+      page,
+      limit 
+    });
 
-    // Construire les filtres
-    const where = {};
+    // Récupérer TOUTES les commandes
+    const allOrders = await prisma.order.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Fonction pour obtenir le productType d'un item (avec fallback)
+    const getItemProductType = (item) => {
+      // 1. Si productType est défini, on l'utilise
+      if (item.productType) return item.productType;
+      
+      // 2. Sinon, on déduit du nom
+      return deduceProductTypeFromName(item.name);
+    };
+
+    // Filtrer par statut si spécifié
+    let filteredOrders = allOrders;
     if (status && status !== 'all') {
-      where.status = status;
+      filteredOrders = filteredOrders.filter(order => order.status === status);
     }
 
-    // Récupérer TOUTES les commandes SANS les données utilisateur d'abord
-    const [orders, total] = await Promise.all([
-      prisma.order.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit)
-      }),
-      prisma.order.count({ where })
-    ]);
+    // Filtrer par productType si spécifié - VERSION ROBUSTE
+    if (productType && productType !== 'all') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.items || !Array.isArray(order.items)) return false;
+        
+        const hasMatchingProductType = order.items.some(item => {
+          const itemProductType = getItemProductType(item);
+          const match = itemProductType === productType;
+          
+          // Debug seulement pour les premières occurrences
+          if (match && Math.random() < 0.1) { // 10% des matches pour éviter les logs massifs
+            console.log(`🎯 Match trouvé: "${item.name}" -> ${itemProductType} (recherché: ${productType})`);
+          }
+          
+          return match;
+        });
+        
+        return hasMatchingProductType;
+      });
+    }
 
-    console.log(`✅ ${orders.length} commandes récupérées sur ${total} total`);
+    console.log(`📊 Résultats: ${allOrders.length} -> ${filteredOrders.length} commandes`);
 
-    // Maintenant, récupérer les informations utilisateur pour chaque commande
+    // Pagination
+    const paginatedOrders = filteredOrders.slice(skip, skip + parseInt(limit));
+
+    // Récupérer les informations utilisateur
     const ordersWithUsers = await Promise.all(
-      orders.map(async (order) => {
+      paginatedOrders.map(async (order) => {
         try {
-          // Essayer de récupérer l'utilisateur
           const user = await prisma.user.findUnique({
             where: { id: order.userId },
             select: {
@@ -54,8 +178,17 @@ router.get('/pro', async (req, res) => {
             }
           });
 
+          // Filtrer les items si un productType spécifique est demandé
+          let displayItems = order.items;
+          if (productType && productType !== 'all') {
+            displayItems = order.items.filter(item => 
+              getItemProductType(item) === productType
+            );
+          }
+
           return {
             ...order,
+            items: displayItems,
             user: user || {
               id: order.userId,
               firstName: 'Client',
@@ -69,6 +202,9 @@ router.get('/pro', async (req, res) => {
           console.warn(`⚠️ Erreur récupération user ${order.userId}:`, userError.message);
           return {
             ...order,
+            items: productType && productType !== 'all' 
+              ? order.items.filter(item => getItemProductType(item) === productType)
+              : order.items,
             user: {
               id: order.userId,
               firstName: 'Client',
@@ -82,60 +218,32 @@ router.get('/pro', async (req, res) => {
       })
     );
 
+    console.log(`✅ ${ordersWithUsers.length} commandes récupérées`);
+
     res.json({
       success: true,
       orders: ordersWithUsers,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
+        total: filteredOrders.length,
+        pages: Math.ceil(filteredOrders.length / parseInt(limit))
+      },
+      filters: {
+        status: status || 'all',
+        productType: productType || 'all'
       }
     });
 
   } catch (error) {
     console.error('💥 Erreur récupération commandes pro:', error);
-    
-    // Solution de fallback ultra simple
-    try {
-      console.log('🔄 Tentative de récupération simple...');
-      const orders = await prisma.order.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 50
-      });
-
-      const ordersWithBasicInfo = orders.map(order => ({
-        ...order,
-        user: {
-          id: order.userId,
-          firstName: 'Client',
-          lastName: 'Non Trouvé',
-          email: 'client.inconnu@example.com',
-          phone: null,
-          companyName: null
-        }
-      }));
-
-      res.json({
-        success: true,
-        orders: ordersWithBasicInfo,
-        pagination: {
-          page: 1,
-          limit: 50,
-          total: orders.length,
-          pages: 1
-        }
-      });
-    } catch (fallbackError) {
-      console.error('💥 Erreur même avec fallback:', fallbackError);
-      res.status(500).json({
-        success: false,
-        message: 'Erreur lors de la récupération des commandes',
-        error: error.message
-      });
-    }
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des commandes',
+      error: error.message
+    });
   }
-})
+});
 
 /**
  * 🔄 PUT /api/orders/pro/:id/status - Mettre à jour le statut d'une commande (côté pro - SANS AUTH)
@@ -249,6 +357,133 @@ router.get('/pro/stats', async (req, res) => {
   }
 })
 
+/**
+ * 📈 GET /api/orders/pro/product-types - Récupérer les statistiques par type de produit
+ */
+router.get('/pro/product-types', async (req, res) => {
+  try {
+    console.log(`📈 Récupération statistiques par type de produit`);
+
+    // Récupérer toutes les commandes
+    const allOrders = await prisma.order.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Analyser les types de produits depuis les items des commandes
+    const productTypeStats = {};
+    let totalItems = 0;
+
+    allOrders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          totalItems++;
+          const productType = item.productType || 'Non catégorisé';
+          
+          if (!productTypeStats[productType]) {
+            productTypeStats[productType] = {
+              count: 0,
+              revenue: 0,
+              orders: new Set(),
+              products: new Set()
+            };
+          }
+          
+          productTypeStats[productType].count += item.quantity || 1;
+          productTypeStats[productType].revenue += (item.price || 0) * (item.quantity || 1);
+          productTypeStats[productType].orders.add(order.id);
+          productTypeStats[productType].products.add(item.productId);
+        });
+      }
+    });
+
+    // Convertir les Sets en arrays et formater les données
+    const formattedStats = Object.entries(productTypeStats).map(([productType, data]) => ({
+      productType,
+      itemsCount: data.count,
+      revenue: parseFloat(data.revenue.toFixed(2)),
+      ordersCount: data.orders.size,
+      productsCount: data.products.size,
+      percentage: totalItems > 0 ? ((data.count / totalItems) * 100).toFixed(1) : 0
+    }));
+
+    // Trier par revenu décroissant
+    formattedStats.sort((a, b) => b.revenue - a.revenue);
+
+    res.json({
+      success: true,
+      productTypes: formattedStats,
+      totalItems,
+      totalProductTypes: formattedStats.length
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur récupération statistiques types produits:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des statistiques par type de produit',
+      error: error.message
+    });
+  }
+});
+
+// NOUVELLE ROUTE POUR DEBUG
+/**
+ * 🐛 GET /api/orders/pro/debug - Debug des données de commandes
+ */
+router.get('/pro/debug', async (req, res) => {
+  try {
+    const allOrders = await prisma.order.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    });
+
+    const debugData = allOrders.map(order => ({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      items: order.items?.map(item => ({
+        name: item.name,
+        productType: item.productType,
+        productId: item.productId,
+        quantity: item.quantity
+      })),
+      itemsCount: order.items?.length,
+      productTypes: [...new Set(order.items?.map(item => item.productType).filter(Boolean))]
+    }));
+
+    // Analyse des productTypes existants
+    const allProductTypes = new Set();
+    allOrders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          if (item.productType) {
+            allProductTypes.add(item.productType);
+          }
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      totalOrders: allOrders.length,
+      sampleOrders: debugData,
+      allProductTypes: Array.from(allProductTypes),
+      analysis: {
+        foodOrders: allOrders.filter(order => 
+          order.items?.some(item => item.productType === 'food')
+        ).length,
+        generalOrders: allOrders.filter(order => 
+          order.items?.some(item => item.productType === 'general')
+        ).length
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur debug:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Routes de test sans authentification
 router.get('/test', (req, res) => {
   console.log('✅ Route /orders/test appelée');
@@ -335,11 +570,12 @@ router.get('/test-data', async (req, res) => {
         items: [
           {
             productId: 'prod1',
-            name: 'Produit Test 1',
+            name: 'Pain Campagne',
             price: 75.25,
             quantity: 2,
             images: ['/api/placeholder/80/80'],
-            itemTotal: 150.50
+            itemTotal: 150.50,
+            productType: 'food'
           }
         ],
         user: {
@@ -361,11 +597,12 @@ router.get('/test-data', async (req, res) => {
         items: [
           {
             productId: 'prod2',
-            name: 'Produit Test 2',
+            name: 'Ciment 25kg',
             price: 89.99,
             quantity: 1,
             images: ['/api/placeholder/80/80'],
-            itemTotal: 89.99
+            itemTotal: 89.99,
+            productType: 'general'
           }
         ],
         user: {
@@ -419,46 +656,24 @@ async function updateStock(orderItems) {
 }
 
 // ============================================================================
-// ROUTES AVEC AUTHENTIFICATION UTILISATEUR - AMÉLIORÉES
+// ROUTES AVEC AUTHENTIFICATION UTILISATEUR - CORRIGÉES
 // ============================================================================
 
 /**
- * 🛍️ POST /api/orders - Créer une commande (CORRIGÉ avec gestion d'auth)
+ * 🛍️ POST /api/orders - Créer une commande (AVEC AUTHENTIFICATION) - CORRIGÉ
  */
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { items, shippingAddress, paymentMethod } = req.body;
     
-    // DEBUG DÉTAILLÉ DE L'AUTHENTIFICATION
-    console.log('=== DEBUG AUTH DÉTAILLÉ ===');
-    console.log('🔐 Headers auth:', req.headers.authorization);
+    console.log('=== 🎯 CRÉATION COMMANDE AVEC PRODUCT TYPE ===');
     console.log('👤 req.user:', req.user);
     console.log('📦 Body items count:', items?.length);
-    console.log('==========================');
-    
-    // STRATÉGIE AMÉLIORÉE POUR RÉCUPÉRER L'USER
-    let userId;
-    let isAuthenticated = false;
-    
-    // Option 1: User depuis l'authentification (req.user peuplé par le middleware)
-    if (req.user && req.user.id) {
-      userId = req.user.id;
-      isAuthenticated = true;
-      console.log('✅ UserId depuis auth middleware:', userId, req.user.email);
-    } 
-    // Option 2: Fallback intelligent
-    else {
-      // Générer un ID temporaire basé sur l'IP + timestamp
-      const clientIP = req.ip || req.connection.remoteAddress;
-      userId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-      console.log('⚠️ UserId temporaire (guest):', userId, 'IP:', clientIP);
-    }
 
-    console.log('🛒 Création commande pour user:', userId, {
-      itemsCount: items?.length,
-      paymentMethod,
-      userAuthenticated: isAuthenticated
-    });
+    const userId = req.user.id;
+    const isAuthenticated = true;
+    
+    console.log('✅ UserId depuis auth middleware:', userId, req.user.email);
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -471,7 +686,7 @@ router.post('/', async (req, res) => {
     const orderItems = [];
     const stockErrors = [];
 
-    // Vérification des stocks
+    // Vérification des stocks et construction des items avec productType
     for (const item of items) {
       const product = await prisma.product.findUnique({
         where: { id: item.productId }
@@ -494,14 +709,18 @@ router.post('/', async (req, res) => {
       const itemTotal = product.price * item.quantity;
       totalAmount += itemTotal;
 
+      // INCLURE LE PRODUCTTYPE DANS L'ITEM DE LA COMMANDE
       orderItems.push({
         productId: product.id,
         name: product.name,
         price: product.price,
         quantity: item.quantity,
         images: product.images,
+        productType: product.productType || 'general', // ← CORRECTION IMPORTANTE
         itemTotal: parseFloat(itemTotal.toFixed(2))
       });
+
+      console.log(`📦 Item ajouté: ${product.name} (${product.productType || 'general'})`);
     }
 
     if (stockErrors.length > 0) {
@@ -521,14 +740,14 @@ router.post('/', async (req, res) => {
       items: orderItems.length,
       total: totalAmount,
       user: userId,
-      userAuthenticated: isAuthenticated
+      productTypes: [...new Set(orderItems.map(item => item.productType))]
     });
 
     // Enregistrement de la commande
     const order = await prisma.order.create({
       data: {
         orderNumber,
-        userId, // Utilise le vrai userId si authentifié, sinon le fallback
+        userId,
         items: orderItems,
         totalAmount: parseFloat(totalAmount.toFixed(2)),
         shippingAddress: shippingAddress || {},
@@ -541,7 +760,8 @@ router.post('/', async (req, res) => {
     // Mise à jour des stocks
     await updateStock(orderItems);
 
-    console.log('✅ Commande créée:', order.orderNumber, 'pour user:', userId);
+    console.log('✅ Commande créée:', order.orderNumber, 'avec productTypes:', 
+      [...new Set(orderItems.map(item => item.productType))]);
 
     res.status(201).json({
       success: true,
@@ -550,7 +770,9 @@ router.post('/', async (req, res) => {
       userInfo: {
         id: userId,
         authenticated: isAuthenticated,
-        email: isAuthenticated ? req.user.email : null
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName
       }
     });
   } catch (error) {
@@ -562,19 +784,16 @@ router.post('/', async (req, res) => {
     });
   }
 });
-
 /**
  * 👤 GET /api/orders/user/my-orders - Commandes de l'utilisateur connecté
  */
-router.get('/user/my-orders', async (req, res) => {
+router.get('/user/my-orders', authenticateToken, async (req, res) => {
   try {
-    // Vérifier que l'utilisateur est authentifié
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentification requise pour voir vos commandes'
-      });
-    }
+    // DEBUG AUTH POUR LES COMMANDES UTILISATEUR
+    console.log('=== 🔐 DEBUG AUTH MY-ORDERS ===');
+    console.log('👤 req.user:', req.user);
+    console.log('🔐 Headers auth:', req.headers.authorization);
+    console.log('==============================');
 
     const userId = req.user.id;
     const { page = 1, limit = 10, status } = req.query;
@@ -609,7 +828,9 @@ router.get('/user/my-orders', async (req, res) => {
       userInfo: {
         id: userId,
         authenticated: true,
-        email: req.user.email
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName
       },
       pagination: {
         page: parseInt(page),
@@ -632,16 +853,8 @@ router.get('/user/my-orders', async (req, res) => {
 /**
  * 📦 GET /api/orders/user/stats - Statistiques des commandes pour l'utilisateur
  */
-router.get('/user/stats', async (req, res) => {
+router.get('/user/stats', authenticateToken, async (req, res) => {
   try {
-    // Vérifier que l'utilisateur est authentifié
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentification requise'
-      });
-    }
-
     const userId = req.user.id;
 
     console.log(`📊 Récupération statistiques pour l'utilisateur: ${userId}`, {
@@ -678,7 +891,9 @@ router.get('/user/stats', async (req, res) => {
       userInfo: {
         id: userId,
         authenticated: true,
-        email: req.user.email
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName
       }
     });
 
@@ -695,18 +910,9 @@ router.get('/user/stats', async (req, res) => {
 /**
  * 👤 GET /api/orders/user/:id - Détails d'une commande spécifique pour l'utilisateur
  */
-router.get('/user/:id', async (req, res) => {
+router.get('/user/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Vérifier que l'utilisateur est authentifié
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentification requise'
-      });
-    }
-
     const userId = req.user.id;
 
     console.log(`👤 Détails de la commande ${id} pour l'utilisateur: ${userId}`, {
@@ -734,7 +940,9 @@ router.get('/user/:id', async (req, res) => {
       userInfo: {
         id: userId,
         authenticated: true,
-        email: req.user.email
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName
       }
     });
 
@@ -751,18 +959,9 @@ router.get('/user/:id', async (req, res) => {
 /**
  * 🔄 PUT /api/orders/user/:id/cancel - Annuler une commande
  */
-router.put('/user/:id/cancel', async (req, res) => {
+router.put('/user/:id/cancel', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Vérifier que l'utilisateur est authentifié
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentification requise'
-      });
-    }
-
     const userId = req.user.id;
 
     console.log(`👤 Annulation de la commande ${id} par l'utilisateur: ${userId}`, {
@@ -809,7 +1008,9 @@ router.put('/user/:id/cancel', async (req, res) => {
       userInfo: {
         id: userId,
         authenticated: true,
-        email: req.user.email
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName
       }
     });
 
@@ -826,7 +1027,7 @@ router.put('/user/:id/cancel', async (req, res) => {
 /**
  * 📋 GET /api/orders - Toutes les commandes (admin seulement)
  */
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query
     const skip = (parseInt(page) - 1) * parseInt(limit)
@@ -862,7 +1063,7 @@ router.get('/', async (req, res) => {
 /**
  * 🔎 GET /api/orders/:id - Détails d'une commande (admin seulement)
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params
 
@@ -890,7 +1091,7 @@ router.get('/:id', async (req, res) => {
 /**
  * 🔄 PUT /api/orders/:id/status - Mettre à jour le statut d'une commande (admin seulement)
  */
-router.put('/:id/status', async (req, res) => {
+router.put('/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params
     const { status } = req.body
@@ -942,14 +1143,90 @@ router.put('/:id/status', async (req, res) => {
 /**
  * 🔐 GET /api/orders/test/auth - Test d'authentification
  */
-router.get('/test/auth', (req, res) => {
-  console.log('🔐 Test authentification - User:', req.user)
+router.get('/test/auth', authenticateToken, (req, res) => {
+  console.log('🔐 Test authentification - Headers:', {
+    authorization: req.headers.authorization,
+    'user-agent': req.headers['user-agent']
+  });
+  console.log('🔐 Test authentification - User:', req.user);
+  
   res.json({
     success: true,
     user: req.user,
+    headers: {
+      authorization: req.headers.authorization ? 'PRESENT' : 'MISSING'
+    },
     message: req.user ? 'Authentification fonctionne' : 'Aucun utilisateur authentifié',
     timestamp: new Date().toISOString()
-  })
-})
+  });
+});
 
+/**
+ */
+router.get('/pro/migration-preview', async (req, res) => {
+  try {
+    console.log('🔒 APERÇU SÉCURISÉ DE LA MIGRATION');
+    
+    const sampleOrders = await prisma.order.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 3 // Seulement 3 commandes pour l'aperçu
+    });
+
+    const preview = await Promise.all(
+      sampleOrders.map(async (order) => {
+        if (!order.items || !Array.isArray(order.items)) {
+          return { orderId: order.id, changes: [] };
+        }
+
+        const changes = await Promise.all(
+          order.items.map(async (item, index) => {
+            const before = { ...item };
+            let after = { ...item };
+            
+            if (!item.productType && item.productId) {
+              const product = await prisma.product.findUnique({
+                where: { id: item.productId },
+                select: { productType: true, name: true }
+              });
+              
+              if (product) {
+                after.productType = product.productType || 'general';
+              } else {
+                after.productType = 'general';
+              }
+            } else if (!item.productType) {
+              after.productType = deduceProductTypeFromName(item.name);
+            }
+
+            return {
+              itemIndex: index,
+              itemName: item.name,
+              willChange: before.productType !== after.productType,
+              before: before.productType,
+              after: after.productType
+            };
+          })
+        );
+
+        return {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          totalChanges: changes.filter(c => c.willChange).length,
+          changes
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      message: 'Aperçu sécurisé - AUCUNE modification effectuée',
+      preview,
+      note: 'Cette route ne modifie aucune donnée'
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur aperçu migration:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 module.exports = router
