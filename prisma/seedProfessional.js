@@ -8,7 +8,7 @@ async function main() {
 
     // Récupération des métiers existants
     const metiers = await prisma.metier.findMany();
-    const metiersMap = new Map(metiers.map((m) => [m.libelle, m.id]));
+    const metiersMap = new Map(metiers.map(m => [m.libelle, m.id]));
 
     // Données des professionnels à créer
     const professionalsData = [
@@ -19,7 +19,7 @@ async function main() {
         companyName: "Électricité Générale Paris",
         metiers: ["Electricien"],
         userType: "PRESTATAIRE",
-        city: "Paris",
+        city: "Paris"
       },
       {
         email: "plomberie.quick@example.com",
@@ -28,7 +28,7 @@ async function main() {
         companyName: "Plomberie Quick Service",
         metiers: ["Plombier"],
         userType: "PRESTATAIRE",
-        city: "Lyon",
+        city: "Lyon"
       },
       {
         email: "menuiserie.bois@example.com",
@@ -37,7 +37,7 @@ async function main() {
         companyName: "Menuiserie Bois Tradition",
         metiers: ["Menuisier Bois et Charpente", "Ébéniste"],
         userType: "PRESTATAIRE",
-        city: "Bordeaux",
+        city: "Bordeaux"
       },
       {
         email: "peinture.deco@example.com",
@@ -46,7 +46,7 @@ async function main() {
         companyName: "Peinture & Décoration",
         metiers: ["Peintre"],
         userType: "PRESTATAIRE",
-        city: "Marseille",
+        city: "Marseille"
       },
       {
         email: "maçonnerie.modern@example.com",
@@ -55,7 +55,7 @@ async function main() {
         companyName: "Maçonnerie Moderne",
         metiers: ["Maçon"],
         userType: "PRESTATAIRE",
-        city: "Toulouse",
+        city: "Toulouse"
       },
       {
         email: "architecte.design@example.com",
@@ -64,7 +64,7 @@ async function main() {
         companyName: "Architecture & Design Intérieur",
         metiers: ["Architecte", "Architecte Intérieur"],
         userType: "PRESTATAIRE",
-        city: "Paris",
+        city: "Paris"
       },
       {
         email: "jardin.paysage@example.com",
@@ -73,7 +73,7 @@ async function main() {
         companyName: "Jardin & Paysage Naturel",
         metiers: ["Paysagiste", "Jardinier"],
         userType: "PRESTATAIRE",
-        city: "Nice",
+        city: "Nice"
       },
       {
         email: "climatisation.pro@example.com",
@@ -82,19 +82,16 @@ async function main() {
         companyName: "Climatisation Professionnelle",
         metiers: ["Monteur en Installation de Climatisation", "Frigoriste"],
         userType: "PRESTATAIRE",
-        city: "Lille",
+        city: "Lille"
       },
       {
         email: "solar.energy@example.com",
         firstName: "Nicolas",
         lastName: "Garcia",
         companyName: "Solar Energy Solutions",
-        metiers: [
-          "Monteur en Installation de panneau photovoltaique",
-          "Monnteur en Installation de panneau Solaire",
-        ],
+        metiers: ["Monteur en Installation de panneau photovoltaique", "Monnteur en Installation de panneau Solaire"],
         userType: "PRESTATAIRE",
-        city: "Montpellier",
+        city: "Montpellier"
       },
       {
         email: "carrelage.expert@example.com",
@@ -103,7 +100,7 @@ async function main() {
         companyName: "Carrelage Expert France",
         metiers: ["Carreleur", "Dalleur"],
         userType: "PRESTATAIRE",
-        city: "Strasbourg",
+        city: "Strasbourg"
       },
       {
         email: "charpente.tradition@example.com",
@@ -112,7 +109,7 @@ async function main() {
         companyName: "Charpente Traditionnelle",
         metiers: ["Charpentier bois"],
         userType: "PRESTATAIRE",
-        city: "Nantes",
+        city: "Nantes"
       },
       {
         email: "couvreur.expert@example.com",
@@ -121,7 +118,7 @@ async function main() {
         companyName: "Couvreur Expert Toiture",
         metiers: ["Couvreur"],
         userType: "PRESTATAIRE",
-        city: "Rennes",
+        city: "Rennes"
       },
       {
         email: "piscine.luxe@example.com",
@@ -130,7 +127,7 @@ async function main() {
         companyName: "Piscine Luxe & Design",
         metiers: ["Pisciniste", "Technicien d'équipements Piscine"],
         userType: "PRESTATAIRE",
-        city: "Cannes",
+        city: "Cannes"
       },
       {
         email: "domotique.smart@example.com",
@@ -139,7 +136,7 @@ async function main() {
         companyName: "Domotique Smart Home",
         metiers: ["Domoticien", "Monteur et Installateur en Domotique"],
         userType: "PRESTATAIRE",
-        city: "Paris",
+        city: "Paris"
       },
       {
         email: "serrurerie.securite@example.com",
@@ -148,7 +145,7 @@ async function main() {
         companyName: "Serrurerie Sécurité Plus",
         metiers: ["Sérrurier"],
         userType: "PRESTATAIRE",
-        city: "Lyon",
+        city: "Lyon"
       },
       {
         email: "nettoyage.propre@example.com",
@@ -157,7 +154,7 @@ async function main() {
         companyName: "Nettoyage Propre Service",
         metiers: ["Agent de nettoyage - Propreté", "Nettoyeur"],
         userType: "PRESTATAIRE",
-        city: "Bordeaux",
+        city: "Bordeaux"
       },
       {
         email: "demolition.express@example.com",
@@ -166,7 +163,7 @@ async function main() {
         companyName: "Démolition Express",
         metiers: ["Démolisseur"],
         userType: "PRESTATAIRE",
-        city: "Marseille",
+        city: "Marseille"
       },
       {
         email: "isolation.thermique@example.com",
@@ -175,7 +172,7 @@ async function main() {
         companyName: "Isolation Thermique Expert",
         metiers: ["Isolateur", "Monteur en Installation d'isolant"],
         userType: "PRESTATAIRE",
-        city: "Toulouse",
+        city: "Toulouse"
       },
       {
         email: "vitrerie.modern@example.com",
@@ -184,7 +181,7 @@ async function main() {
         companyName: "Vitrerie Modern Glass",
         metiers: ["Vitrier", "Miroitier"],
         userType: "PRESTATAIRE",
-        city: "Lille",
+        city: "Lille"
       },
       {
         email: "chauffage.confot@example.com",
@@ -193,8 +190,8 @@ async function main() {
         companyName: "Chauffage & Confort",
         metiers: ["Monteur de Chaudiere", "Régleur de chaudiere, chauffage"],
         userType: "PRESTATAIRE",
-        city: "Nice",
-      },
+        city: "Nice"
+      }
     ];
 
     // Création des utilisateurs professionnels
@@ -212,11 +209,10 @@ async function main() {
           city: proData.city,
           role: "user",
           status: "active",
-          passwordHash:
-            "$2a$10$dXJ3SW6G7P.XBLBvanJXu.K9Z9dM7tC8lHlBvLvJ/tC9q9Yz7XJkK", // "password" hashé
+          passwordHash: "$2a$10$dXJ3SW6G7P.XBLBvanJXu.K9Z9dM7tC8lHlBvLvJ/tC9q9Yz7XJkK", // "password" hashé
           createdAt: new Date(),
-          updatedAt: new Date(),
-        },
+          updatedAt: new Date()
+        }
       });
 
       console.log(`✅ Utilisateur créé: ${user.email}`);
@@ -224,13 +220,13 @@ async function main() {
       // Liaison avec les métiers
       for (const metierLibelle of proData.metiers) {
         const metierId = metiersMap.get(metierLibelle);
-
+        
         if (metierId) {
           await prisma.utilisateurMetier.create({
             data: {
               userId: user.id,
-              metierId: metierId,
-            },
+              metierId: metierId
+            }
           });
           console.log(`   🔗 Lié au métier: ${metierLibelle}`);
         } else {
@@ -241,16 +237,16 @@ async function main() {
 
     // Mise à jour d'utilisateurs existants (si nécessaire)
     console.log("\n🔄 Mise à jour des utilisateurs existants...");
-
+    
     // Exemple: mettre à jour un utilisateur existant pour lui ajouter un métier
     const existingUsers = await prisma.user.findMany({
       where: {
         userType: "PRESTATAIRE",
         metiers: {
-          none: {}, // Utilisateurs sans métiers
-        },
+          none: {} // Utilisateurs sans métiers
+        }
       },
-      take: 5,
+      take: 5
     });
 
     const metiersPourUpdates = [
@@ -258,14 +254,10 @@ async function main() {
       "Chef de Chantier",
       "Conducteur de travaux",
       "Diagnostiqueur",
-      "Expert Immobilier",
+      "Expert Immobilier"
     ];
 
-    for (
-      let i = 0;
-      i < Math.min(existingUsers.length, metiersPourUpdates.length);
-      i++
-    ) {
+    for (let i = 0; i < Math.min(existingUsers.length, metiersPourUpdates.length); i++) {
       const user = existingUsers[i];
       const metierLibelle = metiersPourUpdates[i];
       const metierId = metiersMap.get(metierLibelle);
@@ -274,8 +266,8 @@ async function main() {
         await prisma.utilisateurMetier.create({
           data: {
             userId: user.id,
-            metierId: metierId,
-          },
+            metierId: metierId
+          }
         });
         console.log(`✅ ${user.email} lié au métier: ${metierLibelle}`);
       }
@@ -283,36 +275,36 @@ async function main() {
 
     // Création de quelques clients (non professionnels)
     console.log("\n🔄 Création d'utilisateurs clients...");
-
+    
     const clientsData = [
       {
         email: "client.particulier@example.com",
         firstName: "Paul",
         lastName: "Durand",
         userType: "CLIENT",
-        city: "Paris",
+        city: "Paris"
       },
       {
         email: "investisseur.immobilier@example.com",
         firstName: "Sarah",
         lastName: "Lemoine",
         userType: "CLIENT",
-        city: "Lyon",
+        city: "Lyon"
       },
       {
         email: "proprietaire.bailleur@example.com",
         firstName: "Marc",
         lastName: "Fontaine",
         userType: "LOUEUR",
-        city: "Bordeaux",
+        city: "Bordeaux"
       },
       {
         email: "vendeur.particulier@example.com",
         firstName: "Julie",
         lastName: "Rousseau",
         userType: "VENDEUR",
-        city: "Marseille",
-      },
+        city: "Marseille"
+      }
     ];
 
     for (const clientData of clientsData) {
@@ -325,29 +317,29 @@ async function main() {
           city: clientData.city,
           role: "user",
           status: "active",
-          passwordHash:
-            "$2a$10$dXJ3SW6G7P.XBLBvanJXu.K9Z9dM7tC8lHlBvLvJ/tC9q9Yz7XJkK",
+          passwordHash: "$2a$10$dXJ3SW6G7P.XBLBvanJXu.K9Z9dM7tC8lHlBvLvJ/tC9q9Yz7XJkK",
           createdAt: new Date(),
-          updatedAt: new Date(),
-        },
+          updatedAt: new Date()
+        }
       });
       console.log(`✅ Client créé: ${clientData.email}`);
     }
 
     console.log("\n🌿 Seeding des professionnels terminé avec succès !");
-
+    
     // Statistiques
     const totalUsers = await prisma.user.count();
     const usersWithMetiers = await prisma.utilisateurMetier.groupBy({
-      by: ["userId"],
+      by: ['userId'],
       _count: {
-        userId: true,
-      },
+        userId: true
+      }
     });
 
     console.log(`📊 Statistiques:`);
     console.log(`   👥 Total utilisateurs: ${totalUsers}`);
     console.log(`   🔧 Utilisateurs avec métiers: ${usersWithMetiers.length}`);
+
   } catch (error) {
     console.error("❌ Erreur lors du seeding des professionnels:", error);
     throw error;
@@ -357,7 +349,7 @@ async function main() {
 // Script d'exécution
 async function runSeeder() {
   try {
-    await prisma.utilisateurService.deleteMany()
+    await main();
   } catch (error) {
     console.error("❌ Erreur lors de l'exécution du seeder:", error);
     process.exit(1);
