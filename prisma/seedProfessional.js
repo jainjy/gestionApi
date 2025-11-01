@@ -1,7 +1,7 @@
 // seed-professionals.ts
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
-
+import bcrypt from "bcryptjs";
 async function main() {
   try {
     console.log("🌱 Seeding professionals with their trades...");
@@ -193,11 +193,12 @@ async function main() {
         city: "Nice"
       }
     ];
+    const saltRounds = 12;
 
     // Création des utilisateurs professionnels
     for (const proData of professionalsData) {
       console.log(`\n🔄 Création du professionnel: ${proData.companyName}`);
-
+      const password = await bcrypt.hash("pro123", saltRounds);
       // Création de l'utilisateur
       const user = await prisma.user.create({
         data: {
@@ -209,7 +210,7 @@ async function main() {
           city: proData.city,
           role: "user",
           status: "active",
-          passwordHash: "$2a$10$dXJ3SW6G7P.XBLBvanJXu.K9Z9dM7tC8lHlBvLvJ/tC9q9Yz7XJkK", // "password" hashé
+          passwordHash: password,
           createdAt: new Date(),
           updatedAt: new Date()
         }

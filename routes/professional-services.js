@@ -65,29 +65,29 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     })
 
-    // Transformer les données des services par métiers
-    const servicesFromMetiers = userMetiers.flatMap(um =>
-      um.metier.services.map(ms => ({
-        id: ms.service.id.toString(),
-        name: ms.service.libelle,
-        description: ms.service.description,
-        category: ms.service.category?.name || 'Non catégorisé',
-        categoryId: ms.service.categoryId,
-        images: ms.service.images,
-        metiers: ms.service.metiers.map(m => ({
-          id: m.metier.id,
-          libelle: m.metier.libelle
-        })),
-        vendors: ms.service.users.map(u => ({
-          id: u.user.id,
-          name: u.user.companyName || `${u.user.firstName} ${u.user.lastName}`,
-          isCurrentUser: u.user.id === userId
-        })),
-        isAssociated: ms.service.users.some(u => u.userId === userId),
-        isFromMetier: true,
-        status: 'active'
-      }))
-    )
+    // // Transformer les données des services par métiers
+    // const servicesFromMetiers = userMetiers.flatMap(um =>
+    //   um.metier.services.map(ms => ({
+    //     id: ms.service.id.toString(),
+    //     name: ms.service.libelle,
+    //     description: ms.service.description,
+    //     category: ms.service.category?.name || 'Non catégorisé',
+    //     categoryId: ms.service.categoryId,
+    //     images: ms.service.images,
+    //     metiers: ms.service.metiers.map(m => ({
+    //       id: m.metier.id,
+    //       libelle: m.metier.libelle
+    //     })),
+    //     vendors: ms.service.users.map(u => ({
+    //       id: u.user.id,
+    //       name: u.user.companyName || `${u.user.firstName} ${u.user.lastName}`,
+    //       isCurrentUser: u.user.id === userId
+    //     })),
+    //     isAssociated: ms.service.users.some(u => u.userId === userId),
+    //     isFromMetier: true,
+    //     status: 'active'
+    //   }))
+    // )
 
     // Transformer les données des services directs
     const directServices = userServices.map(us => ({
@@ -112,7 +112,7 @@ router.get('/', authenticateToken, async (req, res) => {
     }))
 
     // Fusionner et dédupliquer les services
-    const allServices = [...directServices, ...servicesFromMetiers]
+    const allServices = [...directServices]
     const uniqueServices = allServices.filter((service, index, self) =>
       index === self.findIndex(s => s.id === service.id)
     )
