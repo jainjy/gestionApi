@@ -33,38 +33,38 @@ model BlogArticle {
 }
 
 model User {
-  id                  String    @id @default(uuid())
-  email               String    @unique
-  passwordHash        String?
-  provider            Json?
-  firstName           String?
-  lastName            String?
-  phone               String?
-  role                String    @default("user")
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  resetToken          String?
-  resetTokenExpiry    DateTime?
-  status              String    @default("inactive")
-  companyName         String?
-  address             String? // Adresse postale
-  addressComplement   String? // Complément d'adresse
-  city                String? // Ville
-  commercialName      String? // Nom commercial
-  demandType          String? // agence immobilier,particulier ou syndicat
-  latitude            Float?
-  longitude           Float?
-  siret               String? // Numéro SIRET
-  zipCode             String? // Code postal
-  avatar              String? // Logo ou avatar de l'utilisateur
-  userType            String? // PRESTATAIRE | TOURISME | BIEN ETRE | AGENCE | ADMIN |VENDEUR 
-  providerId          String? // ex: "117349..."
-  providerName        String? // ex: "google"
-  stripeCustomerId    String?
+  id                       String                    @id @default(uuid())
+  email                    String                    @unique
+  passwordHash             String?
+  provider                 Json?
+  firstName                String?
+  lastName                 String?
+  phone                    String?
+  role                     String                    @default("user")
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  resetToken               String?
+  resetTokenExpiry         DateTime?
+  status                   String                    @default("inactive")
+  companyName              String?
+  address                  String? // Adresse postale
+  addressComplement        String? // Complément d'adresse
+  city                     String? // Ville
+  commercialName           String? // Nom commercial
+  demandType               String? // agence immobilier,particulier ou syndicat
+  latitude                 Float?
+  longitude                Float?
+  siret                    String? // Numéro SIRET
+  zipCode                  String? // Code postal
+  avatar                   String? // Logo ou avatar de l'utilisateur
+  userType                 String? // PRESTATAIRE | TOURISME | BIEN ETRE | AGENCE | ADMIN |VENDEUR 
+  providerId               String? // ex: "117349..."
+  providerName             String? // ex: "google"
+  stripeCustomerId         String?
   // NOUVELLES COLONNES: Relations pour les devis
-  DevisClientToUser   String?   @map("_DevisClientToUser")
-  DevisProviderToUser String?   @map("_DevisProviderToUser")
-  demandesFinancement FinancementDemande[]
+  DevisClientToUser        String?                   @map("_DevisClientToUser")
+  DevisProviderToUser      String?                   @map("_DevisProviderToUser")
+  demandesFinancement      FinancementDemande[]
   // Relations existantes
   blogArticles             BlogArticle[]
   properties               Property[]
@@ -84,6 +84,7 @@ model User {
   // NOUVELLES RELATIONS: Pour les devis
   devisRecus               Devis[]                   @relation("DevisClient")
   devisEnvoyes             Devis[]                   @relation("DevisPrestataire")
+  Consent                  Consent[]
 }
 
 // ======================
@@ -299,7 +300,6 @@ model Service {
   id          Int                    @id @default(autoincrement())
   libelle     String
   categoryId  Int?
-  categoryId  Int?
   description String?
   images      String[]
   duration    Int? // durée en minutes (facultatif)
@@ -431,56 +431,6 @@ model Transaction {
   user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Appointment {
-  id        String   @id
-  userId    String
-  serviceId Int
-  date      DateTime
-  time      String
-  message   String?
-  status    String   @default("pending")
-  createdAt DateTime @default(now())
-}
-
-model DemandeHistory {
-  id        Int      @id @default(autoincrement())
-  demandeId Int
-  title     String?
-  message   String?
-  snapshot  Json?
-  createdAt DateTime @default(now())
-
-  @@index([demandeId])
-}
-
-model Order {
-  id              String   @id
-  orderNumber     String   @unique
-  userId          String
-  items           Json
-  totalAmount     Float
-  status          String   @default("pending")
-  shippingAddress Json?
-  paymentMethod   String
-  paymentStatus   String   @default("pending")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime
-
-  @@index([createdAt])
-  @@index([orderNumber])
-  @@index([status])
-  @@index([userId])
-}
-
-model Review {
-  id        String   @id
-  userId    String
-  serviceId Int
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now())
-}
-
 // ======================
 // MODÈLES RGPD AJOUTÉS
 // ======================
@@ -556,35 +506,35 @@ model Order {
   @@index([status])
   @@index([createdAt])
 }
+
 //tourisme
 model Tourisme {
-  id            String   @id @default(uuid())
-  idUnique      String   @unique
-  idPrestataire String   @unique
-  title         String
-  type          String   // Remplacé TourismeType
-  price         Float
-  city          String
-  lat           Float
-  lng           Float
-  rating        Float    @default(0)
-  reviewCount   Int      @default(0)
-  images        String[]
-  amenities     String[]
-  maxGuests     Int
-  available     Boolean  @default(true)
-  provider      String   @default("direct") // Remplacé ProviderType
-  description   String?
-  bedrooms      Int?
-  bathrooms     Int?
-  area          Int?
-  instantBook   Boolean  @default(false)
-  cancellationPolicy String @default("moderate") // Remplacé CancellationPolicy
-  featured      Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  idUnique           String   @unique
+  idPrestataire      String   @unique
+  title              String
+  type               String // Remplacé TourismeType
+  price              Float
+  city               String
+  lat                Float
+  lng                Float
+  rating             Float    @default(0)
+  reviewCount        Int      @default(0)
+  images             String[]
+  amenities          String[]
+  maxGuests          Int
+  available          Boolean  @default(true)
+  provider           String   @default("direct") // Remplacé ProviderType
+  description        String?
+  bedrooms           Int?
+  bathrooms          Int?
+  area               Int?
+  instantBook        Boolean  @default(false)
+  cancellationPolicy String   @default("moderate") // Remplacé CancellationPolicy
+  featured           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
-
 
 // ======================
 // NOUVEAU MODÈLE: DEVIS
@@ -618,27 +568,26 @@ model Devis {
   @@index([dateCreation])
 }
 
-
 model FinancementDemande {
-  id          String   @id @default(uuid())
-  userId      String?
-  nom         String
-  email       String
-  telephone   String
-  message     String
-  type        String   // "simulation", "assurance", "partenaire", "contact"
-  montant     Float?
-  duree       Int?
-  estimation  Float?
+  id           String   @id @default(uuid())
+  userId       String?
+  nom          String
+  email        String
+  telephone    String
+  message      String
+  type         String // "simulation", "assurance", "partenaire", "contact"
+  montant      Float?
+  duree        Int?
+  estimation   Float?
   partenaireId Int?
-  assuranceId Int?
-  status      String   @default("pending") // pending, contacted, completed
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  assuranceId  Int?
+  status       String   @default("pending") // pending, contacted, completed
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  user        User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  partenaire  FinancementPartenaire? @relation(fields: [partenaireId], references: [id])
-  assurance   AssuranceService?     @relation(fields: [assuranceId], references: [id])
+  user       User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  partenaire FinancementPartenaire? @relation(fields: [partenaireId], references: [id])
+  assurance  AssuranceService?      @relation(fields: [assuranceId], references: [id])
 
   @@index([userId])
   @@index([type])
@@ -671,16 +620,16 @@ enum EvenementType {
 
 // Modèles pour le financement et assurance
 model FinancementPartenaire {
-  id          Int      @id @default(autoincrement())
+  id          Int                  @id @default(autoincrement())
   nom         String
   description String
   rating      Float
-  type        String   // "banque", "courtier", "expert"
+  type        String // "banque", "courtier", "expert"
   avantages   String[]
   icon        String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
   demandes    FinancementDemande[]
 
   @@index([type])
@@ -688,16 +637,16 @@ model FinancementPartenaire {
 }
 
 model AssuranceService {
-  id          Int      @id @default(autoincrement())
+  id          Int                  @id @default(autoincrement())
   nom         String
   description String
   details     String
   icon        String
-  obligatoire Boolean  @default(false)
+  obligatoire Boolean              @default(false)
   public      String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
   demandes    FinancementDemande[]
 
   @@index([obligatoire])
