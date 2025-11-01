@@ -1,18 +1,8 @@
 {
-  
-
   "name": "gestionapi",
-  
-
   "version": "1.0.0",
-  
-
   "description": "Petite API Node.js pour la gestion des employés",
-  
-
   "main": "server.js",
-  
-
   "scripts": {
     "build": "npx prisma generate",
     "start": "npx prisma migrate deploy && node server.js",
@@ -22,7 +12,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seedTourisme.js"
   },
   "dependencies": {
     "@faker-js/faker": "^10.1.0",
@@ -48,10 +38,9 @@
     "passport-google-oauth20": "^2.0.0",
     "pg": "^8.16.3",
     "socket.io": "^4.8.1",
-    "stripe": "^19.1.0"
+    "stripe": "^19.1.0",
+    "uuid": "^13.0.0"
   },
-  
-
   "devDependencies": {
     "@types/node": "^24.9.1",
     "eslint": "^9.35.0",

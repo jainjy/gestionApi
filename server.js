@@ -1,13 +1,23 @@
-require('dotenv').config()
-const express = require('express')
-const cors = require('./middleware/cors')
-const helmet = require('helmet')
-const rateLimit = require('express-rate-limit')
-const cookieParser = require('cookie-parser')
+// Ajouter cette ligne tout en haut du fichier server.js
+require("dotenv").config();
+const path = require("path");
+const express = require("express");
+const cors = require("./middleware/cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const cookieParser = require("cookie-parser");
+const fs = require("fs");
 
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Créer le dossier uploads s'il n'existe pas
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log("📁 Dossier uploads créé");
+}
 
 // Rate limiting
 const limiter = rateLimit({
@@ -16,12 +26,15 @@ const limiter = rateLimit({
 });
 
 // Middleware
-app.use(helmet())
-app.use(cors)
-app.use(limiter)
-app.use(express.json({ limit: '10mb' }))
-app.use(cookieParser())
-app.use(express.urlencoded({ extended: true }))
+app.use(helmet());
+app.use(cors);
+app.use(limiter);
+app.use(express.json({ limit: "10mb" }));
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
+
+// SERVIR LES FICHIERS STATIQUES - DOIT ÊTRE APRÈS LES MIDDLEWARES DE BASE
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
 app.use("/api/auth", require("./routes/auth"));
@@ -53,22 +66,57 @@ app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/demandes-history", require("./routes/demandes-history"));
 app.use("/api/cookies", require("./routes/cookies"));
 // routes pour le service harmonie pro
-app.use('/api/harmonie/', require('./routes/HarmoniePro'))
+app.use("/api/harmonie/", require("./routes/HarmoniePro"));
 app.use("/api/financement", require("./routes/financement"));
 
 //tourisme
 app.use("/api/tourisme", require("./routes/tourisme"));
+//reservation tourisme
+app.use("/api/tourisme-bookings", require("./routes/tourisme-bookings"));
+app.use("/api/admin/tourisme", require("./routes/admin-tourisme"));
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
-
+//oeuvre
 
 const oeuvre = require("./routes/oeuvre");
 app.use("/api/oeuvre", oeuvre);
 
-const categoriesRouter = require("./routes/categories");
-app.use("/api/categories", categoriesRouter);
+// Ajouter ces imports
+const { upload } = require('./middleware/upload');
+const { authenticateToken } = require("./middleware/auth");
 
+// Ajouter ces routes après les autres routes
+app.use("/api/conversations", require("./routes/conversations"));
+
+// Routes pour les demandes pro et discussions
+app.use("/api/pro",require("./routes/proDemandes"));
+// Route pour l'upload de fichiers dans les messages
+app.post('/api/upload/message-file', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'Aucun fichier fourni'
+      });
+    }
+
+    const { uploadToSupabase } = require('./middleware/upload');
+    const fileInfo = await uploadToSupabase(req.file, 'messages');
+
+    res.json({
+      success: true,
+      url: fileInfo.url,
+      path: fileInfo.path,
+      name: fileInfo.name,
+      type: fileInfo.type
+    });
+  } catch (error) {
+    console.error('Erreur upload fichier message:', error);
+    res.status(500).json({
+      error: 'Erreur lors de l\'upload du fichier'
+    });
+  }
+});
 // Route de santé
 app.get("/health", (req, res) => {
   res.json({
@@ -87,7 +135,7 @@ app.get("/health", (req, res) => {
       "demandes",
       "admin-demandes",
       "cart",
-      "orders",
+      "orders"
     ],
   });
 });
@@ -112,6 +160,5 @@ app.use((error, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Le serveur tourne sur le port: ${PORT}`);
   console.log(`🏥 Voir la santé sur : http://localhost:${PORT}/health`);
-  console.log(`🛒 Panier: http://localhost:${PORT}/api/cart/validate`);
-  console.log(`📦 Commandes: http://localhost:${PORT}/api/orders`);
+
 });

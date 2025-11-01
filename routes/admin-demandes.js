@@ -376,6 +376,31 @@ router.put(
           },
         },
       });
+      const conversation = await prisma.conversation.create({
+        data: {
+          demandeId: demande.id,
+          titre: `Demande ${demande.service?.libelle || demande.metier?.libelle}`,
+          createurId: demande.createdById,
+          participants: {
+            create: [
+              { userId: demande.createdById }, // Client
+              ...demande.artisans.map(a => ({ userId: a.user.id })) // Artisans
+            ]
+          },
+          messages: {
+            create: {
+              contenu: "La demande a été validée par l'administrateur.",
+              expediteurId: req.user.id,
+              type: "SYSTEM",
+              evenementType: "DEMANDE_ENVOYEE"
+            }
+          }
+        },
+        include: {
+          participants: true,
+          messages: true
+        }
+      });
 
       res.json({
         message: "Demande validée avec succès",
