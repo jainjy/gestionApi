@@ -15,9 +15,15 @@ const PORT = process.env.PORT || 3001;
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    methods: ["GET", "POST"]
-  }
+    origin:
+      [
+        process.env.FRONTEND_URL,
+        process.env.FRONTEND_URL2,
+        process.env.FRONTEND_URL_LOCAL,
+      ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
+  },
 });
 
 // Gestion des connexions Socket.io
@@ -116,12 +122,19 @@ app.use("/api/cookies", require("./routes/cookies"));
 // routes pour le service harmonie pro
 app.use("/api/harmonie/", require("./routes/HarmoniePro"));
 app.use("/api/financement", require("./routes/financement"));
+app.use("/api/appointment/", require("./routes/appointment"));
 
 //tourisme
 app.use("/api/tourisme", require("./routes/tourisme"));
 //reservation tourisme
 app.use("/api/tourisme-bookings", require("./routes/tourisme-bookings"));
 app.use("/api/admin/tourisme", require("./routes/admin-tourisme"));
+//admin bookings tourisme
+app.use("/api/admin/bookings", require("./routes/admin-bookings"));
+app.use("/api/user/bookings", require("./routes/user-bookings"));
+app.use("/api/payments", require("./routes/payments"));
+//pour les facturations
+app.use("/api/professional", require("./routes/professional-billing"));
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
@@ -129,6 +142,9 @@ app.use("/api/bienetre", require("./routes/bienetre"));
 
 const oeuvre = require("./routes/oeuvre");
 app.use("/api/oeuvre", oeuvre);
+
+//pour les publicités
+app.use("/api/advertisements", require("./routes/advertisements"));
 
 // Ajouter ces imports
 const { upload } = require('./middleware/upload');

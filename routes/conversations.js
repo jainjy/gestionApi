@@ -93,22 +93,30 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
   try {
     const { demandeId } = req.params;
     const userId = req.user.id;
+    const userRole = req.user.role;
 
     // Vérifier que l'utilisateur a accès à cette conversation
     const conversation = await prisma.conversation.findFirst({
       where: {
         demandeId: parseInt(demandeId),
-        // OR: [
-        //   { createurId: userId },
-        //   {
-        //     participants: {
-        //       some: {
-        //         userId: userId,
-        //       },
-        //     },
-        //   },
-        // ],
       },
+      include: {
+        createur: {
+          select: {
+            id: true
+          }
+        },
+        participants: {
+          select: {
+            userId: true,
+            user: {
+              select: {
+                userType: true
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!conversation) {
@@ -117,11 +125,51 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
       });
     }
 
-    // Récupérer les messages
-    const messages = await prisma.message.findMany({
-      where: {
+    // Vérifier si l'utilisateur a accès à cette conversation
+    const hasAccess = conversation.createurId === userId || 
+                     conversation.participants.some(p => p.userId === userId);
+    
+    if (!hasAccess) {
+      return res.status(403).json({
+        error: "Accès non autorisé à cette conversation",
+      });
+    }
+
+    // Récupérer les IDs des participants professionnels
+    const professionalParticipantIds = conversation.participants
+      .filter((p) => p.user.role === "professional")
+      .map((p) => p.userId);
+
+    // Déterminer la condition WHERE
+    let whereClause = {
+      conversationId: conversation.id
+    };
+
+    // Si l'utilisateur est un professionnel
+    if (userRole === "professional") {
+      whereClause = {
+        AND: [{
         conversationId: conversation.id,
-      },
+        OR: [
+          // Ses propres messages
+          { expediteurId: userId },
+          // Messages du créateur
+          { expediteurId: conversation.createurId },
+          // Messages système
+          { type: "SYSTEM" }
+        ]}]
+      };
+    } 
+    // Si l'utilisateur est le créateur
+    else {
+      whereClause = {
+        conversationId: conversation.id,
+      };
+    }
+
+    // Récupérer les messages avec le filtre approprié
+    const messages = await prisma.message.findMany({
+      where: whereClause,
       include: {
         expediteur: {
           select: {
@@ -130,6 +178,8 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
             lastName: true,
             avatar: true,
             companyName: true,
+            userType: true,
+            role: true
           },
         },
       },
@@ -138,7 +188,7 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
       },
     });
 
-    // Marquer les messages comme lus pour l'utilisateur actuel
+    // Marquer les messages comme lus
     await prisma.message.updateMany({
       where: {
         conversationId: conversation.id,
@@ -158,13 +208,12 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
     });
   }
 });
-
 // POST /api/conversations/:demandeId/messages - Envoyer un message
 router.post("/:demandeId/messages", authenticateToken, async (req, res) => {
   try {
     const { demandeId } = req.params;
     const userId = req.user.id;
-    const { contenu, type = "TEXT" } = req.body;
+    const { contenu, type = "TEXT",nomFichier=null,urlFichier=null,typeFichier=null } = req.body;
 
     // Vérifier que l'utilisateur a accès à cette conversation
     const conversation = await prisma.conversation.findFirst({
@@ -192,35 +241,6 @@ router.post("/:demandeId/messages", authenticateToken, async (req, res) => {
       });
     }
 
-    // Gérer l'upload de fichier si présent
-    let urlFichier = null;
-    let nomFichier = null;
-    let typeFichier = null;
-
-    if (req.file && type !== "TEXT") {
-      // Upload vers Supabase
-      const fileExt = req.file.originalname.split(".").pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `messages/${fileName}`;
-
-      const { data, error } = await supabase.storage
-        .from("messages")
-        .upload(filePath, req.file.buffer, {
-          contentType: req.file.mimetype,
-        });
-
-      if (error) {
-        throw new Error("Erreur upload fichier");
-      }
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("messages").getPublicUrl(filePath);
-
-      urlFichier = publicUrl;
-      nomFichier = req.file.originalname;
-      typeFichier = req.file.mimetype;
-    }
 
     // Créer le message
     const message = await prisma.message.create({

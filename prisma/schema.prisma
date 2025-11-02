@@ -90,8 +90,11 @@ model User {
   // NOUVELLES RELATIONS: Pour les devis
   devisRecus               Devis[]                   @relation("DevisClient")
   devisEnvoyes             Devis[]                   @relation("DevisPrestataire")
+  subscriptions            Subscription[] // relation avec les abonnements
+  tourismeBookings         TourismeBooking[]
 
-  tourismeBookings TourismeBooking[]
+  // AJOUTEZ CETTE LIGNE - Relation avec Advertisement
+  advertisements Advertisement[]
 }
 
 // ======================
@@ -452,20 +455,22 @@ model DemandeHistory {
 // TRANSACTIONS (PAIEMENTS)
 // ======================
 model Transaction {
-  id            String   @id @default(uuid())
-  userId        String? // l'utilisateur qui paie
-  provider      String // "stripe" | "paypal"
-  providerId    String? // ID du paiement Stripe ou PayPal
-  amount        Float // Montant payé
-  currency      String // "usd", "eur", ...
-  status        String // "created", "succeeded", "failed", "refunded", ...
-  description   String? // description du paiement
-  referenceType String? // "product" | "demande"
-  referenceId   String? // id du produit ou de la demande
-  metadata      Json? // données additionnelles (cart, items, etc.)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String        @id @default(uuid())
+  userId         String? // l'utilisateur qui paie
+  subscriptionId String? // <- nullable si certaines transactions ne concernent pas d’abonnement
+  provider       String // "stripe" | "paypal"
+  providerId     String? // ID du paiement Stripe ou PayPal
+  amount         Float // Montant payé
+  currency       String // "usd", "eur", ...
+  status         String // "created", "succeeded", "failed", "refunded", ...
+  description    String? // description du paiement
+  referenceType  String? // "product" | "demande"
+  referenceId    String? // id du produit ou de la demande
+  metadata       Json? // données additionnelles (cart, items, etc.)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
 }
 
 // ======================
@@ -720,4 +725,73 @@ model TourismeBooking {
   @@index([paymentStatus])
   @@index([createdAt])
   @@index([confirmationNumber])
+}
+
+// ======================
+// PUBLICITÉS
+// ======================
+model Advertisement {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  imageUrl    String
+  targetUrl   String?
+  position    String // "header", "sidebar", "homepage", "footer"
+  type        String    @default("banner") // "banner", "popup", "video"
+  status      String    @default("active") // "active", "inactive", "scheduled"
+  startDate   DateTime?
+  endDate     DateTime?
+  priority    Int       @default(1)
+  clicks      Int       @default(0)
+  impressions Int       @default(0)
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([position])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([createdById])
+}
+
+//==================
+//ABONNEMENT ET PLAN 
+//==================
+model SubscriptionPlan {
+  id          Int      @id @default(autoincrement())
+  name        String // Nom du plan (ex: "Standard", "Premium")
+  description String?
+  price       Float // Prix mensuel ou annuel
+  interval    String   @default("month") // "month" | "year"
+  features    String[] // Ex: ["publier 10 annonces", "support prioritaire"]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id        String    @id @default(uuid())
+  userId    String
+  planId    Int?
+  startDate DateTime  @default(now())
+  endDate   DateTime?
+  status    String    @default("active") // "active", "canceled", "expired", "pending"
+  autoRenew Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
 }
