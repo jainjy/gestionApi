@@ -9,6 +9,9 @@ datasource db {
   relationMode = "prisma"
 }
 
+//===================
+//BLOG ARTICLES
+//===================
 model BlogArticle {
   id          String                 @id @default(uuid())
   authorId    String
@@ -32,6 +35,9 @@ model BlogArticle {
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
+//===================
+//UTILISATEUR
+//===================
 model User {
   id                       String                    @id @default(uuid())
   email                    String                    @unique
@@ -108,6 +114,9 @@ model Conversation {
   @@index([createurId])
 }
 
+//===================
+//PARTICIPATIONS DE DEMANDES
+//===================
 model ConversationParticipant {
   id             String    @id @default(uuid())
   conversationId String
@@ -123,6 +132,9 @@ model ConversationParticipant {
   @@index([userId])
 }
 
+//===================
+//MESSAGES DES DEMANDES OU AUTRES
+//===================
 model Message {
   id             String         @id @default(uuid())
   conversationId String
@@ -224,6 +236,9 @@ model Favorite {
   @@index([propertyId])
 }
 
+//===================
+//LES PRODUITS ALIMENTAIRE ET AUTRES
+//===================
 model Product {
   id             String                 @id @default(uuid())
   name           String
@@ -278,6 +293,9 @@ model Product {
   @@index([foodCategory])
 }
 
+//===================
+//LES METIERS
+//===================
 model Metier {
   id        Int                    @id @default(autoincrement())
   libelle   String
@@ -296,6 +314,9 @@ model Category {
   services Service[]
 }
 
+//===================
+//SERVICES 
+//===================
 model Service {
   id          Int                    @id @default(autoincrement())
   libelle     String
@@ -313,6 +334,9 @@ model Service {
   Appointment Appointment[]
 }
 
+//===================
+//LIAISON METIER ET SERVICE
+//===================
 model MetierService {
   metierId  Int
   serviceId Int
@@ -322,6 +346,9 @@ model MetierService {
   @@id([metierId, serviceId])
 }
 
+//===================
+//METIER D'UN UTILISATEUR
+//===================
 model UtilisateurMetier {
   userId   String
   metierId Int
@@ -331,6 +358,9 @@ model UtilisateurMetier {
   @@id([userId, metierId])
 }
 
+//===================
+//LES SERVICES LIER A UTILISATEUR
+//===================
 model UtilisateurService {
   userId    String
   serviceId Int
@@ -340,6 +370,9 @@ model UtilisateurService {
   @@id([userId, serviceId])
 }
 
+//===================
+//DEMANDE
+//===================
 model Demande {
   id                  Int       @id @default(autoincrement())
   disponibiliteBien   String? // "LIBRE" | "LOUE"
@@ -384,7 +417,9 @@ model Demande {
   @@index([statut])
   @@index([createdAt])
 }
-
+//===================
+//DEMANDE DES ARTISAN
+//===================
 model DemandeArtisan {
   userId    String
   demandeId Int
@@ -507,7 +542,9 @@ model Order {
   @@index([createdAt])
 }
 
-//tourisme
+// ======================
+// TOURISME
+// ======================
 model Tourisme {
   id                 String   @id @default(uuid())
   idUnique           String   @unique
@@ -568,6 +605,9 @@ model Devis {
   @@index([dateCreation])
 }
 
+// ======================
+// FINANCEMENT DEMANDE
+// ======================
 model FinancementDemande {
   id           String   @id @default(uuid())
   userId       String?
@@ -595,6 +635,7 @@ model FinancementDemande {
   @@index([createdAt])
 }
 
+//type de message
 enum MessageType {
   TEXT
   IMAGE
@@ -603,6 +644,7 @@ enum MessageType {
   SYSTEM
 }
 
+//type d'evenement
 enum EvenementType {
   DEMANDE_ENVOYEE
   ARTISAN_ACCEPTE
@@ -617,8 +659,9 @@ enum EvenementType {
   CLIENT_REFUSE
   GENERIC
 }
-
+//========================
 // Modèles pour le financement et assurance
+//========================
 model FinancementPartenaire {
   id          Int                  @id @default(autoincrement())
   nom         String
@@ -636,6 +679,9 @@ model FinancementPartenaire {
   @@index([isActive])
 }
 
+//===================
+//AssuranceService
+//===================
 model AssuranceService {
   id          Int                  @id @default(autoincrement())
   nom         String
