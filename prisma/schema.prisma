@@ -90,7 +90,6 @@ model User {
   // NOUVELLES RELATIONS: Pour les devis
   devisRecus               Devis[]                   @relation("DevisClient")
   devisEnvoyes             Devis[]                   @relation("DevisPrestataire")
-  Consent                  Consent[]
 }
 
 // ======================
@@ -115,7 +114,7 @@ model Conversation {
 }
 
 //===================
-//PARTICIPATIONS DE DEMANDES
+//PARTICIPATIONS DE CONVERSATIONS
 //===================
 model ConversationParticipant {
   id             String    @id @default(uuid())
@@ -417,6 +416,7 @@ model Demande {
   @@index([statut])
   @@index([createdAt])
 }
+
 //===================
 //DEMANDE DES ARTISAN
 //===================
@@ -464,25 +464,6 @@ model Transaction {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-// ======================
-// MODÈLES RGPD AJOUTÉS
-// ======================
-model Consent {
-  id        String    @id @default(uuid())
-  userId    String?
-  type      String
-  version   String
-  given     Boolean
-  givenAt   DateTime?
-  revokedAt DateTime?
-  ip        String?
-  userAgent String?
-  metadata  Json?
-  createdAt DateTime  @default(now())
-
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ======================
@@ -659,6 +640,7 @@ enum EvenementType {
   CLIENT_REFUSE
   GENERIC
 }
+
 //========================
 // Modèles pour le financement et assurance
 //========================

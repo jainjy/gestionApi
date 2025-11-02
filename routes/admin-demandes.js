@@ -138,17 +138,17 @@ router.get(
           titre = `Demande ${demande.metier.libelle}`;
         }
 
-        // Déterminer le statut
-        let statut = "En attente";
-        let urgence = "Moyen";
+        // // Déterminer le statut
+        // let statut = "En attente";
+        // let urgence = "Moyen";
 
-        if (demande.demandeAcceptee) {
-          statut = "Terminée";
-        } else if (artisansAcceptes.length > 0) {
-          statut = "Validée";
-        } else if (demande.artisans.length > 0) {
-          statut = "En cours";
-        }
+        // if (demande.demandeAcceptee) {
+        //   statut = "Terminée";
+        // } else if (artisansAcceptes.length > 0) {
+        //   statut = "Validée";
+        // } else if (demande.artisans.length > 0) {
+        //   statut = "En cours";
+        // }
 
         // Déterminer l'urgence basée sur la date de création
         const now = new Date();
@@ -172,7 +172,7 @@ router.get(
           titre: titre,
           metier: metierLibelle,
           lieu: `${demande.lieuAdresseCp || ""} ${demande.lieuAdresseVille || ""}`.trim(),
-          statut: statut,
+          statut: demande.statut,
           urgence: urgence,
           description: demande.description || "Aucune description fournie",
           date: demande.createdAt.toLocaleDateString("fr-FR", {
@@ -319,11 +319,17 @@ router.put(
   async (req, res) => {
     try {
       const { id } = req.params;
+      const {validate}=req.body;
+
+      if(!validate){
+        return res.status(400).json({error:"Le champ 'validate' est requis et doit être true pour valider la demande"});
+      }
 
       const demande = await prisma.demande.update({
         where: { id: parseInt(id) },
         data: {
-          demandeAcceptee: true,
+          demandeAcceptee: validate,
+          statut: validate ? "En cours" : "Refusée",
         },
         include: {
           service: {
