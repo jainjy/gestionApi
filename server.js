@@ -85,6 +85,8 @@ const { authenticateToken } = require("./middleware/auth");
 // Ajouter ces routes après les autres routes
 app.use("/api/conversations", require("./routes/conversations"));
 
+// Routes pour les demandes pro et discussions
+app.use("/api/pro",require("./routes/proDemandes"));
 // Route pour l'upload de fichiers dans les messages
 app.post('/api/upload/message-file', authenticateToken, upload.single('file'), async (req, res) => {
   try {
