@@ -37,6 +37,7 @@ app.use(
   "/api/professional/services",
   require("./routes/professional-services")
 );
+app.use("/api/mail", require("./routes/mail"));
 app.use("/api/demandes/immobilier", require("./routes/demandes-immobilier"));
 app.use("/api/demandes", require("./routes/user-demandes"));
 app.use("/api/devis", require("./routes/devis"));
@@ -60,6 +61,14 @@ app.use("/api/tourisme", require("./routes/tourisme"));
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
+
+
+const oeuvre = require("./routes/oeuvre");
+app.use("/api/oeuvre", oeuvre);
+
+const categoriesRouter = require("./routes/categories");
+app.use("/api/categories", categoriesRouter);
+
 // Route de santé
 app.get("/health", (req, res) => {
   res.json({
@@ -91,7 +100,7 @@ app.use("*", (req, res) => {
   });
 });
 
-// Middleware de gestion d'erreurs global
+// Middleware d'erreurs global
 app.use((error, req, res, next) => {
   console.error("Erreur Globales :", error);
   res.status(500).json({

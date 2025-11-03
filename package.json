@@ -1,8 +1,18 @@
 {
+  
+
   "name": "gestionapi",
+  
+
   "version": "1.0.0",
+  
+
   "description": "Petite API Node.js pour la gestion des employés",
+  
+
   "main": "server.js",
+  
+
   "scripts": {
     "build": "npx prisma generate",
     "start": "npx prisma migrate deploy && node server.js",
@@ -40,6 +50,8 @@
     "socket.io": "^4.8.1",
     "stripe": "^19.1.0"
   },
+  
+
   "devDependencies": {
     "@types/node": "^24.9.1",
     "eslint": "^9.35.0",
