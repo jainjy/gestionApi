@@ -175,4 +175,34 @@ router.get('/stats', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
+
+// === GET /api/oeuvre ===
+// Liste des œuvres
+router.get("/all", authenticateToken, async (req, res) => {
+  try {
+    const oeuvres = await prisma.service.findMany({
+      include: { 
+        category: true,
+        metiers: true,
+        users: true
+      },
+      where: {
+        category: {
+          OR: [
+            { name: { contains: "art", mode: "insensitive" } },
+            { name: { contains: "commerce", mode: "insensitive" } },
+            { name: { contains: "peinture", mode: "insensitive" } },
+            { name: { contains: "sculptures", mode: "insensitive" } },
+            { name: { contains: "artisanat", mode: "insensitive" } },
+            { name: { contains: "boutique", mode: "insensitive" } }
+          ]
+        }
+      }
+    });
+    res.json(oeuvres);
+  } catch (error) {
+    console.error("Erreur lors du chargement :", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
 module.exports = router;
