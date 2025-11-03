@@ -90,8 +90,8 @@ model User {
   // NOUVELLES RELATIONS: Pour les devis
   devisRecus               Devis[]                   @relation("DevisClient")
   devisEnvoyes             Devis[]                   @relation("DevisPrestataire")
-  
-  tourismeBookings TourismeBooking[]  
+
+  tourismeBookings TourismeBooking[]
 }
 
 // ======================
@@ -555,7 +555,7 @@ model Tourisme {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  bookings TourismeBooking[] 
+  bookings TourismeBooking[]
 }
 
 // ======================
@@ -689,25 +689,25 @@ model AssuranceService {
 // TOURISME BOOKING
 // ======================
 model TourismeBooking {
-  id                  String   @id @default(uuid())
+  id                  String    @id @default(uuid())
   listingId           String
   userId              String?
-  checkIn            DateTime
-  checkOut           DateTime
+  checkIn             DateTime
+  checkOut            DateTime
   guests              Int
   adults              Int
   children            Int
   infants             Int
   totalAmount         Float
-  serviceFee          Float    @default(15.00)
+  serviceFee          Float     @default(15.00)
   specialRequests     String?
-  paymentMethod       String   @default("card")
-  status              String   @default("pending") // pending, confirmed, cancelled, completed
-  paymentStatus       String   @default("pending") // pending, paid, failed, refunded
+  paymentMethod       String    @default("card")
+  status              String    @default("pending") // pending, confirmed, cancelled, completed
+  paymentStatus       String    @default("pending") // pending, paid, failed, refunded
   stripePaymentIntent String?
-  confirmationNumber  String   @unique
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  confirmationNumber  String    @unique
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   cancelledAt         DateTime?
 
   // Relations
