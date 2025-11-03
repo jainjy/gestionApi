@@ -14,7 +14,7 @@ const supabase = createClient(
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max
+    fileSize: 10 * 1024 * 1024, // 10MB max (augmenté pour les images d'hébergements)
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -25,48 +25,59 @@ const upload = multer({
   }
 })
 
-// POST /api/upload/image - Upload d'image
+// Fonction utilitaire pour uploader vers Supabase
+async function uploadToSupabase(file, folder, fileName = null) {
+  const fileExt = file.originalname.split('.').pop()
+  const uniqueFileName = fileName || `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+  const filePath = `${folder}/${uniqueFileName}`
+
+  // Upload vers Supabase
+  const { data, error } = await supabase.storage
+    .from('uploads')
+    .upload(filePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false
+    })
+
+  if (error) {
+    throw new Error(`Erreur upload Supabase: ${error.message}`)
+  }
+
+  // Récupérer l'URL publique
+  const { data: { publicUrl } } = supabase.storage
+    .from('uploads')
+    .getPublicUrl(filePath)
+
+  return {
+    url: publicUrl,
+    path: filePath,
+    fileName: uniqueFileName
+  }
+}
+
+// POST /api/upload/image - Upload d'image générique (blog, etc.)
 router.post('/image', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
+        success: false,
         error: 'Aucun fichier fourni'
       })
     }
 
-    // Générer un nom de fichier unique
-    const fileExt = req.file.originalname.split('.').pop()
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-    const filePath = `blog-images/${fileName}`
-
-    // Upload vers Supabase
-    const { data, error } = await supabase.storage
-      .from('blog-images')
-      .upload(filePath, req.file.buffer, {
-        contentType: req.file.mimetype
-      })
-
-    if (error) {
-      console.error('Erreur upload Supabase:', error)
-      return res.status(500).json({
-        error: 'Erreur lors de l\'upload'
-      })
-    }
-
-    // Récupérer l'URL publique
-    const { data: { publicUrl } } = supabase.storage
-      .from('blog-images')
-      .getPublicUrl(filePath)
+    const result = await uploadToSupabase(req.file, 'blog-images')
 
     res.json({ 
       success: true, 
-      url: publicUrl,
-      path: filePath
+      url: result.url,
+      path: result.path,
+      fileName: result.fileName
     })
   } catch (error) {
     console.error('Erreur lors de l\'upload:', error)
     res.status(500).json({
-      error: 'Erreur serveur'
+      success: false,
+      error: error.message || 'Erreur serveur lors de l\'upload'
     })
   }
 })
@@ -76,43 +87,145 @@ router.post('/property-image', authenticateToken, upload.single('file'), async (
   try {
     if (!req.file) {
       return res.status(400).json({
+        success: false,
         error: 'Aucun fichier fourni'
       })
     }
 
-    // Générer un nom de fichier unique
-    const fileExt = req.file.originalname.split('.').pop()
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-    const filePath = `blog-images/${fileName}`
-
-    // Upload vers Supabase
-    const { data, error } = await supabase.storage
-      .from('blog-images')
-      .upload(filePath, req.file.buffer, {
-        contentType: req.file.mimetype
-      })
-
-    if (error) {
-      console.error('Erreur upload Supabase:', error)
-      return res.status(500).json({
-        error: 'Erreur lors de l\'upload'
-      })
-    }
-
-    // Récupérer l'URL publique
-    const { data: { publicUrl } } = supabase.storage
-      .from('blog-images')
-      .getPublicUrl(filePath)
+    const result = await uploadToSupabase(req.file, 'property-images')
 
     res.json({ 
       success: true, 
-      url: publicUrl,
-      path: filePath
+      url: result.url,
+      path: result.path,
+      fileName: result.fileName
     })
   } catch (error) {
-    console.error('Erreur lors de l\'upload:', error)
+    console.error('Erreur lors de l\'upload propriété:', error)
     res.status(500).json({
-      error: 'Erreur serveur'
+      success: false,
+      error: error.message || 'Erreur serveur lors de l\'upload'
+    })
+  }
+})
+
+// POST /api/upload/tourism-image - Upload d'image pour le tourisme
+router.post('/tourism-image', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun fichier fourni'
+      })
+    }
+
+    const result = await uploadToSupabase(req.file, 'tourism-images')
+
+    res.json({ 
+      success: true, 
+      url: result.url,
+      path: result.path,
+      fileName: result.fileName
+    })
+  } catch (error) {
+    console.error('Erreur lors de l\'upload tourisme:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur serveur lors de l\'upload'
+    })
+  }
+})
+
+// TEMPORAIRE : Enlevez authenticateToken pour tester
+router.post('/tourism-multiple', upload.array('files', 10), async (req, res) => {
+  try {
+    console.log('📨 Upload multiple reçu - Test sans auth');
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun fichier fourni'
+      });
+    }
+
+    // Réponse simulée pour test
+    const results = req.files.map((file, index) => ({
+      success: true,
+      url: `https://picsum.photos/800/600?random=${index}`,
+      fileName: file.originalname,
+      originalName: file.originalname,
+      size: file.size
+    }));
+
+    res.json({
+      success: true,
+      results: results,
+      message: `${req.files.length} fichiers testés avec succès`
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur upload test:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur test: ' + error.message
+    });
+  }
+});
+
+// POST /api/upload/user-avatar - Upload d'avatar utilisateur
+router.post('/user-avatar', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun fichier fourni'
+      })
+    }
+
+    // Générer un nom de fichier basé sur l'ID utilisateur
+    const userId = req.user.id
+    const fileName = `avatar-${userId}-${Date.now()}.${req.file.originalname.split('.').pop()}`
+    
+    const result = await uploadToSupabase(req.file, 'user-avatars', fileName)
+
+    res.json({ 
+      success: true, 
+      url: result.url,
+      path: result.path,
+      fileName: result.fileName
+    })
+  } catch (error) {
+    console.error('Erreur lors de l\'upload avatar:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur serveur lors de l\'upload'
+    })
+  }
+})
+
+// POST /api/upload/product-image - Upload d'image pour produits
+router.post('/product-image', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun fichier fourni'
+      })
+    }
+
+    const result = await uploadToSupabase(req.file, 'product-images')
+
+    res.json({ 
+      success: true, 
+      url: result.url,
+      path: result.path,
+      fileName: result.fileName
+    })
+  } catch (error) {
+    console.error('Erreur lors de l\'upload produit:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur serveur lors de l\'upload'
     })
   }
 })
@@ -124,28 +237,112 @@ router.delete('/image', authenticateToken, async (req, res) => {
 
     if (!path) {
       return res.status(400).json({
+        success: false,
         error: 'Chemin du fichier requis'
       })
     }
 
     const { error } = await supabase.storage
-      .from('blog-images')
+      .from('uploads')
       .remove([path])
 
     if (error) {
       console.error('Erreur suppression Supabase:', error)
       return res.status(500).json({
-        error: 'Erreur lors de la suppression'
+        success: false,
+        error: 'Erreur lors de la suppression du fichier'
       })
     }
 
     res.json({ 
       success: true, 
-      message: 'Image supprimée avec succès'
+      message: 'Fichier supprimé avec succès'
     })
   } catch (error) {
     console.error('Erreur lors de la suppression:', error)
     res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la suppression'
+    })
+  }
+})
+
+// DELETE /api/upload/batch - Supprimer plusieurs images
+router.delete('/batch', authenticateToken, async (req, res) => {
+  try {
+    const { paths } = req.body
+
+    if (!paths || !Array.isArray(paths) || paths.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Liste des chemins de fichiers requise'
+      })
+    }
+
+    if (paths.length > 20) {
+      return res.status(400).json({
+        success: false,
+        error: 'Maximum 20 fichiers peuvent être supprimés en une fois'
+      })
+    }
+
+    const { data, error } = await supabase.storage
+      .from('uploads')
+      .remove(paths)
+
+    if (error) {
+      console.error('Erreur suppression batch Supabase:', error)
+      return res.status(500).json({
+        success: false,
+        error: 'Erreur lors de la suppression des fichiers',
+        details: error.message
+      })
+    }
+
+    res.json({ 
+      success: true, 
+      message: `${paths.length} fichiers supprimés avec succès`,
+      deleted: paths
+    })
+  } catch (error) {
+    console.error('Erreur lors de la suppression batch:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la suppression batch'
+    })
+  }
+})
+
+// GET /api/upload/buckets - Lister les buckets disponibles (admin seulement)
+router.get('/buckets', authenticateToken, async (req, res) => {
+  try {
+    // Vérifier si l'utilisateur est admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Accès non autorisé'
+      })
+    }
+
+    const { data, error } = await supabase.storage
+      .listBuckets()
+
+    if (error) {
+      console.error('Erreur liste buckets Supabase:', error)
+      return res.status(500).json({
+        success: false,
+        error: 'Erreur lors de la récupération des buckets'
+      })
+    }
+
+    res.json({ 
+      success: true, 
+      buckets: data 
+    })
+  } catch (error) {
+    console.error('Erreur lors de la récupération des buckets:', error)
+    res.status(500).json({
+      success: false,
       error: 'Erreur serveur'
     })
   }
@@ -156,18 +353,34 @@ router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
-        error: 'Fichier trop volumineux (max 5MB)'
+        success: false,
+        error: 'Fichier trop volumineux (max 10MB)'
+      })
+    }
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        error: 'Trop de fichiers uploadés'
+      })
+    }
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        success: false,
+        error: 'Champ de fichier inattendu'
       })
     }
   }
   
   if (error.message === 'Le fichier doit être une image') {
     return res.status(400).json({
+      success: false,
       error: error.message
     })
   }
   
+  console.error('Erreur upload:', error)
   res.status(500).json({
+    success: false,
     error: 'Erreur lors du traitement du fichier'
   })
 })
