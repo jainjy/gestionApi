@@ -71,10 +71,14 @@ app.use("/api/financement", require("./routes/financement"));
 
 //tourisme
 app.use("/api/tourisme", require("./routes/tourisme"));
+//reservation tourisme
+app.use("/api/tourisme-bookings", require("./routes/tourisme-bookings"));
+app.use("/api/admin/tourisme", require("./routes/admin-tourisme"));
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
 //oeuvre
+
 const oeuvre = require("./routes/oeuvre");
 app.use("/api/oeuvre", oeuvre);
 
