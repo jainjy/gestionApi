@@ -310,7 +310,69 @@ router.get(
     }
   }
 );
+// GET /api/admin/demandes/:id - Récupérer une demande spécifique
+router.get(
+  "/demandes/:id",
+  authenticateToken,
+  requireRole(["admin"]),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
+      const demande = await prisma.demande.findUnique({
+        where: { id: parseInt(id) },
+        include: {
+          service: {
+            select: {
+              id: true,
+              libelle: true,
+              description: true,
+            },
+          },
+          metier: {
+            select: {
+              id: true,
+              libelle: true,
+            },
+          },
+          artisans: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  companyName: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              companyName: true,
+            },
+          },
+        },
+      });
+
+      if (!demande) {
+        return res.status(404).json({ error: "Demande non trouvée" });
+      }
+
+      res.json(demande);
+    } catch (error) {
+      console.error("Erreur lors de la récupération de la demande:", error);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  }
+);
 // PUT /api/admin/demandes/:id/validate - Valider une demande
 router.put(
   "/demandes/:id/validate",
