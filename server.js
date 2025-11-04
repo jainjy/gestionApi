@@ -131,7 +131,9 @@ app.use("/api/admin/tourisme", require("./routes/admin-tourisme"));
 //admin bookings tourisme
 app.use("/api/admin/bookings", require("./routes/admin-bookings"));
 app.use("/api/user/bookings", require("./routes/user-bookings"));
-
+app.use("/api/payments", require("./routes/payments"));
+//pour les facturations
+app.use("/api/professional", require("./routes/professional-billing"));
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
