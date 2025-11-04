@@ -7,10 +7,58 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const fs = require("fs");
-
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    methods: ["GET", "POST"]
+  }
+});
+
+// Gestion des connexions Socket.io
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+  
+  const userId = socket.handshake.query.userId;
+  if (userId) {
+    socket.join(`user:${userId}`);
+  }
+
+  // Rejoindre une conversation
+  socket.on('join_conversation', (conversationId) => {
+    socket.join(`conversation:${conversationId}`);
+    console.log(`User ${userId} joined conversation ${conversationId}`);
+  });
+
+  // Quitter une conversation
+  socket.on('leave_conversation', (conversationId) => {
+    socket.leave(`conversation:${conversationId}`);
+  });
+
+  // Envoyer un message
+  socket.on('send_message', (message) => {
+    socket.to(`conversation:${message.conversationId}`).emit('new_message', message);
+    
+    // Notifier les participants
+    if (message.expediteurId) {
+      socket.to(`user:${message.expediteurId}`).emit('message_sent', message);
+    }
+  });
+
+  // Marquer les messages comme lus
+  socket.on('mark_messages_read', (data) => {
+    socket.to(`conversation:${data.conversationId}`).emit('message_read', data);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
 
 // Créer le dossier uploads s'il n'existe pas
 const uploadDir = path.join(__dirname, "uploads");
@@ -157,8 +205,8 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+// Remplacer app.listen par server.listen
+server.listen(PORT, () => {
   console.log(`🚀 Le serveur tourne sur le port: ${PORT}`);
   console.log(`🏥 Voir la santé sur : http://localhost:${PORT}/health`);
-
 });

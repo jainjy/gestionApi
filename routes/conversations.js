@@ -17,18 +17,11 @@ router.get(
       const conversation = await prisma.conversation.findFirst({
         where: {
           demandeId: parseInt(demandeId),
-          OR: [
-            { createurId: userId },
-            {
-              participants: {
-                some: {
-                  userId: userId,
-                },
-              },
-            },
-          ],
+        
         },
+        
         include: {
+          messages:true,
           createur: {
             select: {
               id: true,
@@ -82,6 +75,7 @@ router.get(
         participants: conversation.participants.map((p) => p.user),
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
+        messages:conversation.messages
       };
 
       res.json(response);
@@ -104,16 +98,16 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
     const conversation = await prisma.conversation.findFirst({
       where: {
         demandeId: parseInt(demandeId),
-        OR: [
-          { createurId: userId },
-          {
-            participants: {
-              some: {
-                userId: userId,
-              },
-            },
-          },
-        ],
+        // OR: [
+        //   { createurId: userId },
+        //   {
+        //     participants: {
+        //       some: {
+        //         userId: userId,
+        //       },
+        //     },
+        //   },
+        // ],
       },
     });
 
@@ -176,22 +170,22 @@ router.post("/:demandeId/messages", authenticateToken, async (req, res) => {
     const conversation = await prisma.conversation.findFirst({
       where: {
         demandeId: parseInt(demandeId),
-        OR: [
-          { createurId: userId },
-          {
-            participants: {
-              some: {
-                userId: userId,
-              },
-            },
-          },
-        ],
+        // OR: [
+        //   { createurId: userId },
+        //   {
+        //     participants: {
+        //       some: {
+        //         userId: userId,
+        //       },
+        //     },
+        //   },
+        // ],
       },
       include: {
         participants: true,
       },
     });
-    
+    console.log("conversation:",conversation)
     if (!conversation) {
       return res.status(404).json({
         error: "Conversation non trouvée",
