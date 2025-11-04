@@ -33,7 +33,7 @@ async function uploadToSupabase(file, folder, fileName = null) {
 
   // Upload vers Supabase
   const { data, error } = await supabase.storage
-    .from('uploads')
+    .from('blog-images')
     .upload(filePath, file.buffer, {
       contentType: file.mimetype,
       upsert: false
@@ -45,7 +45,7 @@ async function uploadToSupabase(file, folder, fileName = null) {
 
   // Récupérer l'URL publique
   const { data: { publicUrl } } = supabase.storage
-    .from('uploads')
+    .from('blog-images')
     .getPublicUrl(filePath)
 
   return {
@@ -243,7 +243,7 @@ router.delete('/image', authenticateToken, async (req, res) => {
     }
 
     const { error } = await supabase.storage
-      .from('uploads')
+      .from('blog-images')
       .remove([path])
 
     if (error) {
@@ -287,7 +287,7 @@ router.delete('/batch', authenticateToken, async (req, res) => {
     }
 
     const { data, error } = await supabase.storage
-      .from('uploads')
+      .from('blog-images')
       .remove(paths)
 
     if (error) {
