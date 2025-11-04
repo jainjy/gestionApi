@@ -122,6 +122,7 @@ app.use("/api/cookies", require("./routes/cookies"));
 // routes pour le service harmonie pro
 app.use("/api/harmonie/", require("./routes/HarmoniePro"));
 app.use("/api/financement", require("./routes/financement"));
+app.use("/api/appointment/", require("./routes/appointment"));
 
 //tourisme
 app.use("/api/tourisme", require("./routes/tourisme"));
