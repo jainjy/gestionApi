@@ -143,6 +143,9 @@ app.use("/api/bienetre", require("./routes/bienetre"));
 const oeuvre = require("./routes/oeuvre");
 app.use("/api/oeuvre", oeuvre);
 
+//pour les publicités
+app.use("/api/advertisements", require("./routes/advertisements"));
+
 // Ajouter ces imports
 const { upload } = require('./middleware/upload');
 const { authenticateToken } = require("./middleware/auth");
