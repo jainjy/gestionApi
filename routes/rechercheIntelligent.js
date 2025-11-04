@@ -41,7 +41,7 @@ async function generateEmbedding(text) {
 // 📦 Tables cibles pour recherche
 // ======================================
 const tables = [
-  { name: 'BlogArticle', columns: ['title', 'slug'] },
+//  { name: 'BlogArticle', columns: ['title', 'slug'] },
   { name: 'Metier', columns: ['libelle'] },
   { name: 'Product', columns: ['name', 'category', 'price', 'quantity'] },
   { name: 'Property', columns: ['title', 'type', 'price'] },
