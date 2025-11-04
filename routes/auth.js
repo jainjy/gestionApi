@@ -74,11 +74,20 @@ router.post("/signup", async (req, res) => {
       email,
       phone,
       password,
-      userType,
+      userType, // AJOUT: Récupérer userType
       companyName,
       metiers,
       demandType,
       role,
+      address,
+      addressComplement,
+      zipCode,
+      city,
+      latitude,
+      longitude,
+      siret,
+      commercialName,
+      avatar
     } = req.body;
 
     // Validation des données
@@ -102,7 +111,10 @@ router.post("/signup", async (req, res) => {
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Créer l'utilisateur avec les relations appropriées
+    // Déterminer le userType selon le rôle
+    const finalUserType = role === "professional" ? userType : "CLIENT";
+
+    // Créer l'utilisateur avec TOUS les champs
     const user = await prisma.user.create({
       data: {
         email,
@@ -111,9 +123,19 @@ router.post("/signup", async (req, res) => {
         lastName,
         phone,
         role: role === "professional" ? "professional" : "user",
+        userType: finalUserType, // AJOUT: Sauvegarder userType
         status: "inactive",
         companyName: role === "professional" ? companyName : null,
         demandType: role === "user" ? demandType : null,
+        address: address || null,
+        addressComplement: addressComplement || null,
+        zipCode: zipCode || null,
+        city: city || null,
+        latitude: latitude ? parseFloat(latitude) : null,
+        longitude: longitude ? parseFloat(longitude) : null,
+        siret: siret || null,
+        commercialName: commercialName || null,
+        avatar: avatar || null,
         ...(role === "professional" &&
           metiers && {
             metiers: {
@@ -149,6 +171,7 @@ router.post("/signup", async (req, res) => {
         status: user.status,
         companyName: user.companyName,
         demandType: user.demandType,
+        userType: user.userType,
         metiers: user.metiers,
       },
       token,
@@ -257,8 +280,17 @@ router.post("/signup-pro", async (req, res) => {
         lastName: utilisateur.lastName,
         phone: utilisateur.phone,
         role: "professional",
+        userType: utilisateur.userType, // AJOUT: Sauvegarder userType
         status: "pending_payment", // Statut spécial en attente de paiement
         companyName: utilisateur.companyName || null,
+        address: utilisateur.address || null,
+        addressComplement: utilisateur.addressComplement || null,
+        zipCode: utilisateur.zipCode || null,
+        city: utilisateur.city || null,
+        latitude: utilisateur.latitude ? parseFloat(utilisateur.latitude) : null,
+        longitude: utilisateur.longitude ? parseFloat(utilisateur.longitude) : null,
+        siret: utilisateur.siret || null,
+        commercialName: utilisateur.commercialName || null,
         metiers: utilisateur.metiers && {
           create: utilisateur.metiers.map((metierId) => ({
             metier: {
@@ -303,6 +335,7 @@ router.post("/signup-pro", async (req, res) => {
         phone: user.phone,
         role: user.role,
         status: user.status,
+        userType: user.userType,
         companyName: user.companyName,
         metiers: user.metiers,
       },
@@ -396,6 +429,7 @@ router.post("/confirm-payment", async (req, res) => {
             phone: user.phone,
             role: user.role,
             status: user.status,
+            userType: user.userType,
             companyName: user.companyName,
             metiers: user.metiers,
           },

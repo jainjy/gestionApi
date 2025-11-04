@@ -13,24 +13,24 @@ datasource db {
 //BLOG ARTICLES
 //===================
 model BlogArticle {
-  id          String                 @id @default(uuid())
+  id          String   @id @default(uuid())
   authorId    String
   title       String
-  slug        String                 @unique
+  slug        String   @unique
   content     String
   excerpt     String?
   coverUrl    String?
   tags        String[]
-  status      String                 @default("draft")
+  status      String   @default("draft")
   publishedAt DateTime?
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   category    String
-  comments    Int                    @default(0)
-  likes       Int                    @default(0)
+  comments    Int      @default(0)
+  likes       Int      @default(0)
   readTime    String?
-  views       Int                    @default(0)
-  embedding   Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  views       Int      @default(0)
+  embedding   String?  // MODIFICATION: remplacé vector par String
 
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
@@ -164,7 +164,7 @@ model Message {
 // PROPRIÉTÉS
 // ======================
 model Property {
-  id              String                 @id @default(uuid())
+  id              String   @id @default(uuid())
   title           String
   description     String?
   type            String // "house", "apartment", "villa", "land", "studio"
@@ -181,30 +181,30 @@ model Property {
   longitude       Float?
   features        String[] // ["pool", "garden", "parking", "terrace", "balcony"]
   images          String[] // URLs des images
-  isFeatured      Boolean                @default(false)
-  isActive        Boolean                @default(true)
-  views           Int                    @default(0)
+  isFeatured      Boolean @default(false)
+  isActive        Boolean @default(true)
+  views           Int     @default(0)
   ownerId         String
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   publishedAt     DateTime?
   energyClass     String? // "A", "B", "C", "D", "E", "F", "G"
   expiresAt       DateTime? // Date d'expiration de l'annonce
   floor           Int? // Étage
-  hasBalcony      Boolean                @default(false)
-  hasElevator     Boolean                @default(false)
-  hasGarden       Boolean                @default(false)
-  hasParking      Boolean                @default(false)
-  hasPool         Boolean                @default(false)
-  hasTerrace      Boolean                @default(false)
-  listingType     String                 @default("sale") // "sale", "rent", "both"
+  hasBalcony      Boolean @default(false)
+  hasElevator     Boolean @default(false)
+  hasGarden       Boolean @default(false)
+  hasParking      Boolean @default(false)
+  hasPool         Boolean @default(false)
+  hasTerrace      Boolean @default(false)
+  listingType     String  @default("sale") // "sale", "rent", "both"
   metaDescription String?
   metaTitle       String?
-  slug            String?                @unique
+  slug            String? @unique
   totalFloors     Int? // Nombre total d'étages
   yearBuilt       Int?
-  rentType        String?                @default("longue_duree") // "saisonniere" | "longue_duree"
-  embedding       Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  rentType        String? @default("longue_duree") // "saisonniere" | "longue_duree"
+  embedding       String? // MODIFICATION: remplacé vector par String
 
   // Relations
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -241,9 +241,9 @@ model Favorite {
 //LES PRODUITS ALIMENTAIRE ET AUTRES
 //===================
 model Product {
-  id             String                 @id @default(uuid())
+  id             String   @id @default(uuid())
   name           String
-  slug           String                 @unique
+  slug           String   @unique
   description    String?
   category       String
   subcategory    String?
@@ -252,33 +252,33 @@ model Product {
   cost           Float?
   sku            String?
   barcode        String?
-  trackQuantity  Boolean                @default(true)
-  quantity       Int                    @default(0)
-  lowStock       Int?                   @default(5)
+  trackQuantity  Boolean  @default(true)
+  quantity       Int      @default(0)
+  lowStock       Int?     @default(5)
   weight         Float?
   dimensions     Json?
   images         String[]
-  status         String                 @default("draft")
-  featured       Boolean                @default(false)
-  visibility     String                 @default("public")
+  status         String   @default("draft")
+  featured       Boolean  @default(false)
+  visibility     String   @default("public")
   seoTitle       String?
   seoDescription String?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   publishedAt    DateTime?
   userId         String
-  embedding      Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding      String?  // MODIFICATION: remplacé vector par String
 
   // CHAMPS POUR ALIMENTATION
   allergens       String[] // ["gluten", "lactose", "nuts", ...]
   brand           String?
   expiryDate      DateTime?
   foodCategory    String? // "fruits", "legumes", "produits-laitiers", etc.
-  isOrganic       Boolean?  @default(false)
-  isPerishable    Boolean?  @default(false)
+  isOrganic       Boolean? @default(false)
+  isPerishable    Boolean? @default(false)
   nutritionalInfo Json? // {calories, proteins, carbs, fats, etc.}
   origin          String? // Pays/région d'origine
-  productType     String?   @default("general") // "general" | "food"
+  productType     String? @default("general") // "general" | "food"
   storageTips     String?
   unit            String? // "kg", "pièce", "litre", "barquette"
 
@@ -298,9 +298,9 @@ model Product {
 //LES METIERS
 //===================
 model Metier {
-  id        Int                    @id @default(autoincrement())
+  id        Int    @id @default(autoincrement())
   libelle   String
-  embedding Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding String? // MODIFICATION: remplacé vector par String
   services  MetierService[]
   users     UtilisateurMetier[]
   demandes  Demande[]
@@ -319,15 +319,15 @@ model Category {
 //SERVICES 
 //===================
 model Service {
-  id          Int                    @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   libelle     String
   categoryId  Int?
   description String?
   images      String[]
   duration    Int? // durée en minutes (facultatif)
   price       Float? // prix du service
-  embedding   Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
-  category    Category?              @relation(fields: [categoryId], references: [id])
+  embedding   String? // MODIFICATION: remplacé vector par String
+  category    Category? @relation(fields: [categoryId], references: [id])
   metiers     MetierService[]
   users       UtilisateurService[]
   demandes    Demande[]
