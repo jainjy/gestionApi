@@ -12,24 +12,22 @@ router.post("/new", authenticateToken, async (req, res) => {
       price,
       duration,
       categoryId,
-      metierId,
+      metierIds, // Changé de metierId à metierIds
       userId,
       images,
     } = req.body;
 
-    console.log("Données reçues du frontend:", req.body); // 🔹 log initial
+    console.log("Données reçues du frontend:", req.body);
 
     // Nettoyage et typage des données
     const parsedPrice = price ? parseFloat(price) : null;
     const parsedDuration = duration ? parseInt(duration) : null;
     const parsedImages = Array.isArray(images) ? images : [];
 
-    // Si un seul metierId est envoyé, on le convertit en tableau
-    const metierIds = Array.isArray(metierId)
-      ? metierId.map((id) => parseInt(id))
-      : metierId
-        ? [parseInt(metierId)]
-        : [];
+    // Gestion des metierIds (déjà un tableau depuis le frontend)
+    const parsedMetierIds = Array.isArray(metierIds) 
+      ? metierIds.map((id) => parseInt(id)).filter(id => !isNaN(id))
+      : [];
 
     // Construction dynamique du data pour Prisma
     const data = {
@@ -45,33 +43,72 @@ router.post("/new", authenticateToken, async (req, res) => {
       data.category = { connect: { id: parseInt(categoryId) } };
     }
 
-    // Relation : métiers (plusieurs possibles)
-    if (metierIds.length > 0) {
+    // Relation : métiers (table de liaison MetierService)
+    if (parsedMetierIds.length > 0) {
       data.metiers = {
-        create: metierIds.map((id) => ({ metierId: id })),
+        create: parsedMetierIds.map((id) => ({ 
+          metier: { connect: { id } } // Correction ici
+        })),
       };
     }
 
-    // Relation : utilisateur
+    // Relation : utilisateur (table de liaison UtilisateurService)
     if (userId) {
-      data.users = { connect: { id: parseInt(userId) } };
+      // Si userId est un UUID string (pas un number)
+      if (typeof userId === 'string' && isNaN(parseInt(userId))) {
+        data.users = {
+          create: [
+            {
+              user: { connect: { id: userId } } // UUID string
+            }
+          ]
+        };
+      } else {
+        // Si c'est un number (ancienne version)
+        const parsedUserId = parseInt(userId);
+        if (!isNaN(parsedUserId)) {
+          data.users = {
+            create: [
+              {
+                user: { connect: { id: parsedUserId } }
+              }
+            ]
+          };
+        }
+      }
     }
 
-    console.log("Payload final envoyé à Prisma:", data); // 🔹 log pour debug
+    console.log("Payload final envoyé à Prisma:", data);
 
     // Création du service
     const newService = await prisma.service.create({
       data,
       include: {
         category: true,
-        metiers: { include: { metier: true } },
-        users: true,
+        metiers: { 
+          include: { 
+            metier: true 
+          } 
+        },
+        users: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
+          }
+        },
       },
     });
 
-    console.log("Service créé avec succès:", newService); // 🔹 log résultat Prisma
+    console.log("Service créé avec succès:", newService);
 
-    res.status(201).json({
+    // Formater la réponse pour correspondre au frontend
+    const formattedService = {
       id: newService.id,
       libelle: newService.libelle,
       description: newService.description,
@@ -79,10 +116,24 @@ router.post("/new", authenticateToken, async (req, res) => {
       duration: newService.duration,
       images: newService.images,
       category: newService.category,
-      metiers: newService.metiers.map((m) => m.metier),
-      users: newService.users,
+      categoryId: newService.categoryId,
+      metiers: newService.metiers.map((m) => ({
+        metier: {
+          id: m.metier.id,
+          libelle: m.metier.libelle
+        }
+      })),
+      users: newService.users.map((u) => ({
+        id: u.user.id,
+        name: `${u.user.firstName} ${u.user.lastName}`,
+        email: u.user.email,
+        rating: 0,
+        bookings: 0
+      })),
       status: "active",
-    });
+    };
+
+    res.status(201).json(formattedService);
   } catch (error) {
     console.error("Erreur lors de la création du service:", error);
 
@@ -91,104 +142,14 @@ router.post("/new", authenticateToken, async (req, res) => {
       console.error("Détails de l'erreur Prisma:", error.meta);
     }
 
-    res.status(500).json({ error: "Erreur serveur" });
+    res.status(500).json({ 
+      error: "Erreur serveur lors de la création du service",
+      details: error.message 
+    });
   }
 });
 
 // PUT /api/harmonie/:id Modification d'un service
-/*router.put("/:id", authenticateToken, async (req, res) => {
-  try {
-    const serviceId = parseInt(req.params.id);
-    let {
-      libelle,
-      description,
-      price,
-      duration,
-      categoryId,
-      metierIds, // ✅ on attend metierIds du front
-      userId,
-      images,
-    } = req.body;
-
-    if (isNaN(serviceId)) {
-      return res.status(400).json({ error: "ID de service invalide." });
-    }
-
-    const parsedPrice = price ? parseFloat(price) : null;
-    const parsedDuration = duration ? parseInt(duration) : null;
-    const parsedImages = Array.isArray(images) ? images : [];
-
-    // Nettoyage des IDs
-    const metiersToUpdate = Array.isArray(metierIds)
-      ? metierIds.map((id) => parseInt(id))
-      : [];
-
-    const existingService = await prisma.service.findUnique({
-      where: { id: serviceId },
-      include: { metiers: true },
-    });
-
-    if (!existingService) {
-      return res.status(404).json({ error: "Service introuvable." });
-    }
-
-    const data = {
-      libelle,
-      description,
-      price: parsedPrice,
-      duration: parsedDuration,
-      images: parsedImages,
-    };
-
-    // ✅ Ne pas déconnecter la catégorie si elle n’est pas envoyée
-    if (categoryId !== undefined) {
-      if (categoryId) {
-        data.category = { connect: { id: parseInt(categoryId) } };
-      } else {
-        data.category = { disconnect: true };
-      }
-    }
-
-    // ✅ Mettre à jour les métiers uniquement si un tableau est fourni
-    if (metiersToUpdate.length > 0) {
-      await prisma.metierService.deleteMany({ where: { serviceId } });
-      data.metiers = {
-        create: metiersToUpdate.map((id) => ({ metierId: id })),
-      };
-    }
-
-    // ✅ Ne pas déconnecter l’utilisateur si rien n’est envoyé
-    if (userId !== undefined) {
-      data.users = { connect: { id: parseInt(userId) } };
-    }
-
-    const updatedService = await prisma.service.update({
-      where: { id: serviceId },
-      data,
-      include: {
-        category: true,
-        metiers: { include: { metier: true } },
-        users: true,
-      },
-    });
-
-    res.json({
-      id: updatedService.id,
-      libelle: updatedService.libelle,
-      description: updatedService.description,
-      price: updatedService.price,
-      duration: updatedService.duration,
-      category: updatedService.category,
-      images: updatedService.images,
-      metiers: updatedService.metiers.map((m) => m.metier),
-      users: updatedService.users,
-      status: "active",
-    });
-  } catch (error) {
-    console.error("Erreur lors de la modification du service:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});*/
 router.put("/:id", authenticateToken, async (req, res) => {
   try {
     const serviceId = parseInt(req.params.id);
@@ -229,9 +190,17 @@ router.put("/:id", authenticateToken, async (req, res) => {
     const existingService = await prisma.service.findUnique({
       where: { id: serviceId },
       include: {
-        metiers: true,
+        metiers: {
+          include: {
+            metier: true
+          }
+        },
         category: true,
-        users: true,
+        users: {
+          include: {
+            user: true
+          }
+        },
       },
     });
 
@@ -240,8 +209,8 @@ router.put("/:id", authenticateToken, async (req, res) => {
     }
 
     console.log(
-      "📋 Service existant:",
-      existingService.metiers.map((m) => m.metierId)
+      "📋 Service existant - Métiers:",
+      existingService.metiers.map((m) => m.metier.id)
     );
 
     // Construction des données de mise à jour
@@ -268,7 +237,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
       }
     }
 
-    // ✅ Gestion des métiers (AMÉLIORÉE)
+    // ✅ Gestion des métiers (CORRIGÉE pour la structure du frontend)
     if (Array.isArray(metierIds)) {
       if (metiersToUpdate.length > 0) {
         console.log("🔄 Mise à jour des métiers...");
@@ -278,9 +247,11 @@ router.put("/:id", authenticateToken, async (req, res) => {
           where: { serviceId },
         });
 
-        // Créer les nouvelles relations
+        // Créer les nouvelles relations avec la structure correcte
         data.metiers = {
-          create: metiersToUpdate.map((id) => ({ metierId: id })),
+          create: metiersToUpdate.map((id) => ({ 
+            metier: { connect: { id } } // Structure corrigée
+          })),
         };
       } else {
         // Si tableau vide explicite, supprimer tous les métiers
@@ -292,14 +263,50 @@ router.put("/:id", authenticateToken, async (req, res) => {
     }
     // Si metierIds n'est pas fourni, on ne touche pas aux métiers existants
 
-    // ✅ Gestion de l'utilisateur
-    if (userId !== undefined && userId && !isNaN(parseInt(userId))) {
-      // Vérifier que l'utilisateur existe
-      const userExists = await prisma.user.findUnique({
-        where: { id: parseInt(userId) },
-      });
-      if (userExists) {
-        data.users = { connect: { id: parseInt(userId) } };
+    // ✅ Gestion de l'utilisateur (ADAPTÉE pour UUID string)
+    if (userId !== undefined && userId) {
+      // Si userId est un UUID string (pas un number)
+      if (typeof userId === 'string' && isNaN(parseInt(userId))) {
+        // Vérifier que l'utilisateur existe
+        const userExists = await prisma.user.findUnique({
+          where: { id: userId },
+        });
+        if (userExists) {
+          // Supprimer les anciennes relations utilisateur
+          await prisma.utilisateurService.deleteMany({
+            where: { serviceId },
+          });
+          
+          // Créer la nouvelle relation
+          data.users = {
+            create: [
+              {
+                user: { connect: { id: userId } }
+              }
+            ]
+          };
+        }
+      } else {
+        // Si c'est un number (ancienne version)
+        const parsedUserId = parseInt(userId);
+        if (!isNaN(parsedUserId)) {
+          const userExists = await prisma.user.findUnique({
+            where: { id: parsedUserId },
+          });
+          if (userExists) {
+            await prisma.utilisateurService.deleteMany({
+              where: { serviceId },
+            });
+            
+            data.users = {
+              create: [
+                {
+                  user: { connect: { id: parsedUserId } }
+                }
+              ]
+            };
+          }
+        }
       }
     }
 
@@ -317,16 +324,21 @@ router.put("/:id", authenticateToken, async (req, res) => {
           },
         },
         users: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
+          }
         },
       },
     });
 
-    // Formatage de la réponse
+    // Formatage de la réponse pour correspondre au frontend
     const response = {
       id: updatedService.id,
       libelle: updatedService.libelle,
@@ -334,13 +346,25 @@ router.put("/:id", authenticateToken, async (req, res) => {
       price: updatedService.price,
       duration: updatedService.duration,
       category: updatedService.category,
+      categoryId: updatedService.categoryId,
       images: updatedService.images,
-      metiers: updatedService.metiers.map((m) => m.metier),
-      users: updatedService.users,
+      metiers: updatedService.metiers.map((m) => ({
+        metier: {
+          id: m.metier.id,
+          libelle: m.metier.libelle
+        }
+      })),
+      users: updatedService.users.map((u) => ({
+        id: u.user.id,
+        name: `${u.user.firstName} ${u.user.lastName}`,
+        email: u.user.email,
+        rating: 0,
+        bookings: 0
+      })),
       status: "active",
     };
 
-    console.log("✅ Service modifié avec succès:", response);
+    console.log("✅ Service modifié avec succès");
     res.json(response);
   } catch (error) {
     console.error("❌ Erreur lors de la modification du service:", error);
@@ -461,38 +485,8 @@ router.get("/services", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/harmonie/views
-/*router.get("/views", authenticateToken, async (req, res) => {
-  try {
-    const métiersCibles = ["Thérapeute", "Masseur", "Formateur", "Podcasteur"];
-    const result = {};
 
-    // Boucle sur chaque métier cible
-    for (const libelle of métiersCibles) {
-      const services = await prisma.service.findMany({
-        where: {
-          metiers: {
-            some: {
-              metier: { libelle: libelle },
-            },
-          },
-        },
-        include: {
-          metiers: { include: { metier: true } },
-          category: true,
-          users: true,
-        },
-      });
-
-      result[libelle] = services;
-    }
-
-    res.json(result);
-  } catch (error) {
-    console.error("Erreur lors de la récupération des services :", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});*/
+//front bienetre
 router.get("/views", authenticateToken, async (req, res) => {
   try {
     const métiersCibles = ["Thérapeute", "Masseur", "Formateur", "Podcasteur"];
