@@ -74,6 +74,10 @@ app.use("/api/tourisme", require("./routes/tourisme"));
 //reservation tourisme
 app.use("/api/tourisme-bookings", require("./routes/tourisme-bookings"));
 app.use("/api/admin/tourisme", require("./routes/admin-tourisme"));
+//admin bookings tourisme
+app.use("/api/admin/bookings", require("./routes/admin-bookings"));
+app.use("/api/user/bookings", require("./routes/user-bookings"));
+
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
