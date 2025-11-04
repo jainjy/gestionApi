@@ -15,9 +15,15 @@ const PORT = process.env.PORT || 3001;
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    methods: ["GET", "POST"]
-  }
+    origin:
+      [
+        process.env.FRONTEND_URL,
+        process.env.FRONTEND_URL2,
+        process.env.FRONTEND_URL_LOCAL,
+      ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
+  },
 });
 
 // Gestion des connexions Socket.io
