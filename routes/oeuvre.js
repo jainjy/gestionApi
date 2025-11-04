@@ -176,6 +176,56 @@ router.get('/stats', authenticateToken, async (req, res) => {
   }
 })
 
+
+//modification
+// === PUT /api/oeuvre/:id ===
+router.put("/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { libelle, description, price, duration, categoryId, images } = req.body;
+
+    if (!libelle || !categoryId) {
+      return res.status(400).json({ error: "Libellé et catégorie requis." });
+    }
+
+    const updatedOeuvre = await prisma.service.update({
+      where: { id: parseInt(id) },
+      data: {
+        libelle,
+        description: description || "",
+        price: price ? parseFloat(price) : null,
+        duration: duration ? parseInt(duration) : null,
+        categoryId: parseInt(categoryId),
+        images: images || [],
+      },
+    });
+
+    res.json(updatedOeuvre);
+  } catch (error) {
+    console.error("Erreur lors de la modification :", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+//suppresion
+// === DELETE /api/oeuvre/:id ===
+router.delete("/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.service.delete({
+      where: { id: parseInt(id) },
+    });
+
+    res.json({ message: "Œuvre supprimée avec succès !" });
+  } catch (error) {
+    console.error("Erreur lors de la suppression :", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+
+
+
 // === GET /api/oeuvre ===
 // Liste des œuvres
 router.get("/all", authenticateToken, async (req, res) => {
@@ -205,4 +255,10 @@ router.get("/all", authenticateToken, async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 });
+
+
+
+
+//effectif
+
 module.exports = router;
