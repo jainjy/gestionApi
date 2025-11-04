@@ -49,6 +49,7 @@ app.use("/api/demandes-history", require("./routes/demandes-history"));
 
 // routes pour le service harmonie pro
 app.use('/api/harmonie/', require('./routes/HarmoniePro'))
+app.use('/api/appointment/', require('./routes/appointment'))
 
 // Route de santé
 app.get("/health", (req, res) => {
