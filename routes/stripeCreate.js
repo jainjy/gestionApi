@@ -1,10 +1,8 @@
 const express = require('express')
 const router = express.Router()
-
-const { authenticateToken } = require('../middleware/auth')
 const { prisma } = require('../lib/db');
 const stripe = require('../utils/stripe');
-router.post("/connect-account", async (req, res) => {
+router.post('/connect-account', async (req, res) => {
   try {
     const { userId, email } = req.body;
 
@@ -34,3 +32,4 @@ router.post("/connect-account", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+module.exports = router;

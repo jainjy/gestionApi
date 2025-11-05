@@ -1,9 +1,6 @@
-import express from "express";
-import { PrismaClient } from "@prisma/client";
-import { authenticateToken, requireRole } from "../middleware/auth";
-
+const { prisma } = require("../lib/db");
+const express = require("express");
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/subscription-plans - Récupérer tous les plans actifs
 router.get("/", async (req, res) => {
@@ -87,7 +84,7 @@ router.get("/:planType", async (req, res) => {
 });
 
 // POST /api/subscription-plans - Créer un nouveau plan (Admin)
-router.post("/", authenticateToken, requireRole["admin"], async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     // Vérifier si l'utilisateur est admin
     if (req.user.role !== "ADMIN") {
@@ -141,8 +138,6 @@ router.post("/", authenticateToken, requireRole["admin"], async (req, res) => {
 // PUT /api/subscription-plans/:id - Mettre à jour un plan (Admin)
 router.put(
   "/:id",
-  authenticateToken,
-  requireRole["admin"],
   async (req, res) => {
     try {
       if (req.user.role !== "ADMIN") {
@@ -179,5 +174,4 @@ router.put(
     }
   }
 );
-
-export default router;
+module.exports = router;
