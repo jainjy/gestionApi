@@ -92,6 +92,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
 app.use("/api/auth", require("./routes/auth"));
+app.use("/api/subscription-plans", require("./routes/subscriptionPlans"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/upload", require("./routes/upload"));
 app.use("/api/articles", require("./routes/articles"));
@@ -135,6 +136,7 @@ app.use("/api/user/bookings", require("./routes/user-bookings"));
 app.use("/api/payments", require("./routes/payments"));
 //pour les facturations
 app.use("/api/professional", require("./routes/professional-billing"));
+app.use("/api/stripe", require("./routes/stripeCreate"));
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
