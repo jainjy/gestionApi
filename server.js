@@ -4,6 +4,9 @@ const path = require("path");
 const express = require("express");
 const cors = require("./middleware/cors");
 const helmet = require("helmet");
+//test
+const bodyParser = require("body-parser");
+
 const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const fs = require("fs");
@@ -81,6 +84,9 @@ const limiter = rateLimit({
   max: 100, // limite chaque IP à 100 requêtes par windowMs
 });
 
+//test
+app.use(bodyParser.json());
+
 // Middleware
 app.use(helmet());
 app.use(cors);
@@ -143,8 +149,11 @@ app.use("/api/stripe", require("./routes/stripeCreate"));
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
-//oeuvre
 
+// Nouvelle route : suggestions intelligentes
+app.use("/api/suggestion", require("./routes/suggestionIntelligent"));
+
+//oeuvre
 const oeuvre = require("./routes/oeuvre");
 app.use("/api/oeuvre", oeuvre);
 

@@ -95,7 +95,66 @@ model User {
 
   // AJOUTEZ CETTE LIGNE - Relation avec Advertisement
   advertisements Advertisement[]
+
+  //relation pour suggetion intelligente 
+   activities     UserActivity[]
+  preferences    UserPreference[]
+  events         UserEvent[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
 }
+// ======================
+// 📊 ACTIVITÉS UTILISATEUR
+// ======================
+
+model UserActivity {
+  id          String   @id @default(uuid())
+  userId      String
+  entityType  String   // "product" | "service" | "metier" | "property"
+  entityId    String
+  action      String   // "view" | "click" | "like" | "purchase"
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([action])
+}
+  // ======================
+// ❤️ PRÉFÉRENCES UTILISATEUR
+// ======================
+model UserPreference {
+  id            String   @id @default(uuid())
+  userId        String
+  category      String?  // ex: "électroménager", "tourisme", "mode", etc.
+  interestScore Float    @default(0.5) // Score entre 0 et 1
+  lastUpdated   DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+}
+
+// ======================
+// ⚙️ ÉVÉNEMENTS UTILISATEUR
+// ======================
+model UserEvent {
+  id          String   @id @default(uuid())
+  userId      String
+  eventType   String   // "search" | "filter" | "scroll" | "hover" | "share"
+  eventData   Json?    // {query: "machine à laver", duration: 12}
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([eventType])
+}
+
 
 // ======================
 // MESSAGES ET CONVERSATIONS
