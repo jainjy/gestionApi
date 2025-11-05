@@ -3,35 +3,45 @@ const router = express.Router();
 const nodemailer = require("nodemailer");
 
 router.post("/", async (req, res) => {
+
   const { email, subject, message } = req.body;
+
+  console.log("Reponses du req body:", req.body);
 
   if (!email || !subject || !message) {
     return res.status(400).json({ error: "Tous les champs sont requis." });
   }
 
   try {
+
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      secure: false,
       auth: {
-        user: process.env.EMAIL_USER, // ton email serveur
-        pass: process.env.EMAIL_PASS, // mot de passe ou App Password
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
       },
     });
 
     await transporter.sendMail({
-      from: `"Site Contact" <${process.env.EMAIL_USER}>`, // ton email serveur
-      to: "randrianantenainamioraharilaza@gmail.com", // email du listing
-      replyTo: email, // l'email du client connecté
+      from: `"Site Servo" <${process.env.SMTP_USER}>`,
+      to: email,
+      replyTo: process.env.SMTP_USER,
       subject,
       text: message,
     });
 
-    res.json({ success: true, message: "Email envoyé !" });
-  }catch (error) {
-  console.error("Erreur Nodemailer :", error);
-  res.status(500).json({ error: error.message || "Impossible d'envoyer le mail." });
-}
+res.json({
+  success: true,
+  status: "success",
+  message: "Email envoyé avec succès !"
+});
 
+  } catch (error) {
+    console.error("Erreur Nodemailer:", error);
+    res.status(500).json({ error: error.message || "Impossible d'envoyer le mail." });
+  }
 });
 
 module.exports = router;
