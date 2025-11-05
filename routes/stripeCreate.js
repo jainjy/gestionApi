@@ -32,4 +32,15 @@ router.post('/connect-account', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.get('/account-info/:accountId', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const account = await stripe.accounts.retrieve(accountId);
+    res.json(account);
+  } catch (error) {
+    console.error("❌ Stripe Retrieve Account error:", error);
+    res.status(500).json({ error: error.message });
+  }});
 module.exports = router;
+
