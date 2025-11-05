@@ -78,8 +78,8 @@ router.get("/", authenticateToken, async (req, res) => {
     });
     const oeuvres = [];
     for (const category of categories) {
-      if(category.services.length > 0) {
-        category.category={id: category.id, name: category.name};
+      if (category.services.length > 0) {
+        category.category = { id: category.id, name: category.name };
         oeuvres.push(...category.services);
       }
 
@@ -117,64 +117,40 @@ router.get("/categories", async (req, res) => {
   }
 });
 // GET /api/oeuvre/stats - Statistiques des oeuvres pour le professionnel connecté
-router.get('/stats', authenticateToken, async (req, res) => {
+ router.get('/stats', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id
+    const categoriesCibles = ["Art", "Commerce", "Artisanat", "Peinture", "Sculpture"];
 
-    // Services associés
-    const associatedServices = await prisma.utilisateurService.count({
-      where: { userId }
-    })
-
-    // Métiers du professionnel
-    const userMetiers = await prisma.utilisateurMetier.count({
-      where: { userId }
-    })
-
-    // Services disponibles via métiers
-    const userMetiersList = await prisma.utilisateurMetier.findMany({
-      where: { userId },
-      select: { metierId: true }
-    })
-
-    const metierIds = userMetiersList.map(um => um.metierId)
-
-    const availableServicesCount = await prisma.service.count({
+    const totalStats = await prisma.service.aggregate({
+      _count: { id: true },
+      _sum: { price: true },
       where: {
-        metiers: {
-          some: {
-            metierId: {
-              in: metierIds
-            }
-          }
-        },
-        NOT: {
-          users: {
-            some: {
-              userId: userId
-            }
+        category: {
+          name: {
+            in: categoriesCibles
           }
         }
       }
-    })
+    });
 
-    // Demandes liées aux services du professionnel
-    const demandesCount = await prisma.demandeArtisan.count({
-      where: { userId }
-    })
+    const totalPrix = totalStats._sum.price ?? 0;
 
-    res.json({
-      associatedServices,
-      userMetiers,
-      availableServicesCount,
-      demandesCount,
-      totalPotentialServices: associatedServices + availableServicesCount
-    })
+    // Même structure que tu voulais
+    const response = res.json({
+      totalGlobal: {
+        totalOeuvres: totalStats._count.id,
+        totalPrix
+      }
+    });
+
   } catch (error) {
-    console.error('Erreur lors de la récupération des statistiques:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
+    console.error('Erreur lors de la récupération des statistiques :', error);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
-})
+});
+
+
+
 
 
 //modification
@@ -231,7 +207,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
 router.get("/all", authenticateToken, async (req, res) => {
   try {
     const oeuvres = await prisma.service.findMany({
-      include: { 
+      include: {
         category: true,
         metiers: true,
         users: true

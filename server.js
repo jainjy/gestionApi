@@ -9,60 +9,62 @@ const cookieParser = require("cookie-parser");
 const fs = require("fs");
 const http = require("http");
 const { Server } = require("socket.io");
-
+const { upload } = require("./middleware/upload");
+const { authenticateToken } = require("./middleware/auth");
 const app = express();
 const PORT = process.env.PORT || 3001;
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin:
-      [
-        process.env.FRONTEND_URL,
-        process.env.FRONTEND_URL2,
-        process.env.FRONTEND_URL_LOCAL,
-      ],
+    origin: [
+      process.env.FRONTEND_URL,
+      process.env.FRONTEND_URL2,
+      process.env.FRONTEND_URL_LOCAL,
+    ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   },
 });
 
 // Gestion des connexions Socket.io
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-  
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
+
   const userId = socket.handshake.query.userId;
   if (userId) {
     socket.join(`user:${userId}`);
   }
 
   // Rejoindre une conversation
-  socket.on('join_conversation', (conversationId) => {
+  socket.on("join_conversation", (conversationId) => {
     socket.join(`conversation:${conversationId}`);
     console.log(`User ${userId} joined conversation ${conversationId}`);
   });
 
   // Quitter une conversation
-  socket.on('leave_conversation', (conversationId) => {
+  socket.on("leave_conversation", (conversationId) => {
     socket.leave(`conversation:${conversationId}`);
   });
 
   // Envoyer un message
-  socket.on('send_message', (message) => {
-    socket.to(`conversation:${message.conversationId}`).emit('new_message', message);
-    
+  socket.on("send_message", (message) => {
+    socket
+      .to(`conversation:${message.conversationId}`)
+      .emit("new_message", message);
+
     // Notifier les participants
     if (message.expediteurId) {
-      socket.to(`user:${message.expediteurId}`).emit('message_sent', message);
+      socket.to(`user:${message.expediteurId}`).emit("message_sent", message);
     }
   });
 
   // Marquer les messages comme lus
-  socket.on('mark_messages_read', (data) => {
-    socket.to(`conversation:${data.conversationId}`).emit('message_read', data);
+  socket.on("mark_messages_read", (data) => {
+    socket.to(`conversation:${data.conversationId}`).emit("message_read", data);
   });
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
   });
 });
 
@@ -123,6 +125,7 @@ app.use("/api/cookies", require("./routes/cookies"));
 app.use("/api/harmonie/", require("./routes/HarmoniePro"));
 app.use("/api/financement", require("./routes/financement"));
 app.use("/api/appointment/", require("./routes/appointment"));
+app.use("/api/subscription-plans", require("./routes/subscriptionPlanRoutes"));
 
 //tourisme
 app.use("/api/tourisme", require("./routes/tourisme"));
@@ -135,6 +138,7 @@ app.use("/api/user/bookings", require("./routes/user-bookings"));
 app.use("/api/payments", require("./routes/payments"));
 //pour les facturations
 app.use("/api/professional", require("./routes/professional-billing"));
+app.use("/api/stripe", require("./routes/stripeCreate"));
 
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
@@ -146,41 +150,42 @@ app.use("/api/oeuvre", oeuvre);
 //pour les publicités
 app.use("/api/advertisements", require("./routes/advertisements"));
 
-// Ajouter ces imports
-const { upload } = require('./middleware/upload');
-const { authenticateToken } = require("./middleware/auth");
-
 // Ajouter ces routes après les autres routes
 app.use("/api/conversations", require("./routes/conversations"));
 
 // Routes pour les demandes pro et discussions
-app.use("/api/pro",require("./routes/proDemandes"));
+app.use("/api/pro", require("./routes/proDemandes"));
 // Route pour l'upload de fichiers dans les messages
-app.post('/api/upload/message-file', authenticateToken, upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        error: 'Aucun fichier fourni'
+app.post(
+  "/api/upload/message-file",
+  authenticateToken,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          error: "Aucun fichier fourni",
+        });
+      }
+
+      const { uploadToSupabase } = require("./middleware/upload");
+      const fileInfo = await uploadToSupabase(req.file, "messages");
+
+      res.json({
+        success: true,
+        url: fileInfo.url,
+        path: fileInfo.path,
+        name: fileInfo.name,
+        type: fileInfo.type,
+      });
+    } catch (error) {
+      console.error("Erreur upload fichier message:", error);
+      res.status(500).json({
+        error: "Erreur lors de l'upload du fichier",
       });
     }
-
-    const { uploadToSupabase } = require('./middleware/upload');
-    const fileInfo = await uploadToSupabase(req.file, 'messages');
-
-    res.json({
-      success: true,
-      url: fileInfo.url,
-      path: fileInfo.path,
-      name: fileInfo.name,
-      type: fileInfo.type
-    });
-  } catch (error) {
-    console.error('Erreur upload fichier message:', error);
-    res.status(500).json({
-      error: 'Erreur lors de l\'upload du fichier'
-    });
   }
-});
+);
 // Route de santé
 app.get("/health", (req, res) => {
   res.json({
@@ -199,7 +204,7 @@ app.get("/health", (req, res) => {
       "demandes",
       "admin-demandes",
       "cart",
-      "orders"
+      "orders",
     ],
   });
 });

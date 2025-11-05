@@ -758,23 +758,34 @@ model Advertisement {
   @@index([createdById])
 }
 
-//==================
-//ABONNEMENT ET PLAN 
-//==================
+// ======================
+// PLANS D'ABONNEMENT
+// ======================
 model SubscriptionPlan {
   id          Int      @id @default(autoincrement())
-  name        String // Nom du plan (ex: "Standard", "Premium")
+  name        String // "Pro Immobilier Complet", "Prestataires de Services", etc.
   description String?
-  price       Float // Prix mensuel ou annuel
-  interval    String   @default("month") // "month" | "year"
-  features    String[] // Ex: ["publier 10 annonces", "support prioritaire"]
+  price       Float // 139, 39, 49, 19
+  interval    String   @default("month")
+  features    String[] // Liste des fonctionnalités
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // NOUVEAUX CHAMPS POUR CORRESPONDRE AU FRONTEND
+  planType  String // "real_estate", "services", "furniture", "wellness"
+  userTypes String[] // ["VENDEUR", "LOUEUR"], ["PRESTATAIRE"], etc.
+  popular   Boolean  @default(false)
+  color     String? // "blue", "emerald", "purple", "pink"
+  icon      String? // Nom de l'icône ou emoji
+
+  // Relations
   subscriptions Subscription[]
 }
 
+// ======================
+// ABONNEMENTS UTILISATEURS
+// ======================
 model Subscription {
   id        String    @id @default(uuid())
   userId    String
