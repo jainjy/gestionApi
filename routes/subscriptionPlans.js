@@ -1,6 +1,6 @@
 import express from "express";
 import { PrismaClient } from "@prisma/client";
-import { protect } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth";
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -87,7 +87,7 @@ router.get("/:planType", async (req, res) => {
 });
 
 // POST /api/subscription-plans - Créer un nouveau plan (Admin)
-router.post("/", protect, async (req, res) => {
+router.post("/", authenticateToken, requireRole["admin"], async (req, res) => {
   try {
     // Vérifier si l'utilisateur est admin
     if (req.user.role !== "ADMIN") {
@@ -139,40 +139,45 @@ router.post("/", protect, async (req, res) => {
 });
 
 // PUT /api/subscription-plans/:id - Mettre à jour un plan (Admin)
-router.put("/:id", protect, async (req, res) => {
-  try {
-    if (req.user.role !== "ADMIN") {
-      return res.status(403).json({
+router.put(
+  "/:id",
+  authenticateToken,
+  requireRole["admin"],
+  async (req, res) => {
+    try {
+      if (req.user.role !== "ADMIN") {
+        return res.status(403).json({
+          success: false,
+          message: "Accès non autorisé",
+        });
+      }
+
+      const { id } = req.params;
+      const updateData = req.body;
+
+      // Convertir le prix en float si présent
+      if (updateData.price) {
+        updateData.price = parseFloat(updateData.price);
+      }
+
+      const updatedPlan = await prisma.subscriptionPlan.update({
+        where: { id: parseInt(id) },
+        data: updateData,
+      });
+
+      res.json({
+        success: true,
+        message: "Plan mis à jour avec succès",
+        data: updatedPlan,
+      });
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du plan:", error);
+      res.status(500).json({
         success: false,
-        message: "Accès non autorisé",
+        message: "Erreur serveur lors de la mise à jour du plan",
       });
     }
-
-    const { id } = req.params;
-    const updateData = req.body;
-
-    // Convertir le prix en float si présent
-    if (updateData.price) {
-      updateData.price = parseFloat(updateData.price);
-    }
-
-    const updatedPlan = await prisma.subscriptionPlan.update({
-      where: { id: parseInt(id) },
-      data: updateData,
-    });
-
-    res.json({
-      success: true,
-      message: "Plan mis à jour avec succès",
-      data: updatedPlan,
-    });
-  } catch (error) {
-    console.error("Erreur lors de la mise à jour du plan:", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur serveur lors de la mise à jour du plan",
-    });
   }
-});
+);
 
 export default router;
