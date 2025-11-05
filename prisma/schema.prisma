@@ -426,15 +426,31 @@ model Demande {
 //DEMANDE DES ARTISAN
 //===================
 model DemandeArtisan {
-  userId    String
-  demandeId Int
-  accepte   Boolean?  @default(false)
-  devis     String?
-  rdv       DateTime?
-  user      User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
-  demande   Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
+  userId          String
+  demandeId       Int
+  accepte         Boolean?  @default(false)
+  devis           String?
+  devisFileUrl    String? // URL du fichier de devis
+  devisFileName   String? // Nom du fichier de devis
+  devisFileType   String? // Type du fichier de devis
+  rdv             DateTime?
+  rdvNotes        String? // Notes pour le rendez-vous
+  factureFileUrl  String? // URL du fichier de facture
+  factureFileName String? // Nom du fichier de facture
+  factureFileType String? // Type du fichier de facture
+  factureMontant  Float? // Montant de la facture
+  factureStatus   String?   @default("en_attente") // en_attente, validee, refusee
+  createdAt       DateTime  @default(now())
+updatedAt DateTime? @updatedAt
+
+
+  user    User    @relation("DemandeArtisanUser", fields: [userId], references: [id])
+  demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
   @@id([userId, demandeId])
+  @@index([userId])
+  @@index([demandeId])
+  @@index([factureStatus])
 }
 
 // ======================

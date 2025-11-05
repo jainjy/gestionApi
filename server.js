@@ -126,7 +126,8 @@ app.use("/api/harmonie/", require("./routes/HarmoniePro"));
 app.use("/api/financement", require("./routes/financement"));
 app.use("/api/appointment/", require("./routes/appointment"));
 app.use("/api/subscription-plans", require("./routes/subscriptionPlanRoutes"));
-
+//demandes des artisans
+app.use("/api/demande-actions", require("./routes/demande-actions"));
 //tourisme
 app.use("/api/tourisme", require("./routes/tourisme"));
 //reservation tourisme
