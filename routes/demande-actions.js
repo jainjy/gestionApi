@@ -11,8 +11,8 @@ router.post("/:demandeId/proposer-rdv", authenticateToken, async (req, res) => {
   try {
     const { demandeId } = req.params;
     const userId = req.user.id;
-    const { date, heure, notes } = req.body;
-
+    const { date, notes } = req.body;
+    console.log("la date :",date)
     // Vérifier que l'utilisateur est artisan sur cette demande
     const demandeArtisan = await prisma.demandeArtisan.findFirst({
       where: {
@@ -36,7 +36,7 @@ router.post("/:demandeId/proposer-rdv", authenticateToken, async (req, res) => {
         },
       },
       data: {
-        rdv: new Date(`${date}T${heure}`),
+        rdv: new Date(`${date}`),
         rdvNotes: notes,
       },
     });
@@ -53,7 +53,7 @@ router.post("/:demandeId/proposer-rdv", authenticateToken, async (req, res) => {
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
-          contenu: `Rendez-vous proposé pour le ${new Date(date).toLocaleDateString('fr-FR')} à ${heure}`,
+          contenu: `Rendez-vous proposé pour le ${new Date(date).toLocaleDateString('fr-FR')}`,
           type: "SYSTEM",
           evenementType: "PROPOSITION_RENDEZ_VOUS",
         },
@@ -357,7 +357,7 @@ router.put("/:demandeId/modifier-rdv", authenticateToken, async (req, res) => {
   try {
     const { demandeId } = req.params;
     const userId = req.user.id;
-    const { date, heure, notes } = req.body;
+    const { date, notes } = req.body;
 
     const updatedDemandeArtisan = await prisma.demandeArtisan.update({
       where: {
@@ -367,7 +367,7 @@ router.put("/:demandeId/modifier-rdv", authenticateToken, async (req, res) => {
         },
       },
       data: {
-        rdv: new Date(`${date}T${heure}`),
+        rdv: new Date(`${date}`),
         rdvNotes: notes,
       },
     });
@@ -384,7 +384,7 @@ router.put("/:demandeId/modifier-rdv", authenticateToken, async (req, res) => {
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
-          contenu: `Rendez-vous modifié pour le ${new Date(date).toLocaleDateString('fr-FR')} à ${heure}`,
+          contenu: `Rendez-vous modifié pour le ${new Date(date).toLocaleDateString('fr-FR')}`,
           type: "SYSTEM",
           evenementType: "PROPOSITION_RENDEZ_VOUS",
         },

@@ -68,12 +68,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Créer le dossier uploads s'il n'existe pas
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log("📁 Dossier uploads créé");
-}
 
 // Rate limiting
 const limiter = rateLimit({
@@ -88,9 +82,6 @@ app.use(limiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
-
-// SERVIR LES FICHIERS STATIQUES - DOIT ÊTRE APRÈS LES MIDDLEWARES DE BASE
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
 app.use("/api/auth", require("./routes/auth"));
