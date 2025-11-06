@@ -44,21 +44,49 @@ router.get(
 
       // Construire la clause WHERE pour les demandes compatibles
       let whereClause = {
-        OR: [
-          // Demandes avec service que le professionnel propose
+        AND: [
           {
-            serviceId: {
-              in: userServiceIds.length > 0 ? userServiceIds : undefined,
-            },
+            OR: [
+              // Demandes avec service que le professionnel propose
+              {
+                serviceId: {
+                  in: userServiceIds.length > 0 ? userServiceIds : undefined,
+                },
+              },
+              // Demandes avec métier que le professionnel possède
+              {
+                metierId: {
+                  in: userMetierIds.length > 0 ? userMetierIds : undefined,
+                },
+              },
+            ].filter(
+              (condition) => Object.values(condition)[0].in !== undefined
+            ),
           },
-          // Demandes avec métier que le professionnel possède
           {
-            metierId: {
-              in: userMetierIds.length > 0 ? userMetierIds : undefined,
-            },
+            propertyId: null, // Exclure les demandes immobilières
           },
-        ].filter((condition) => Object.values(condition)[0].in !== undefined),
-        propertyId: null, // Exclure les demandes immobilières
+          {
+            // 🔥 Seulement les demandes artisan correspondantes ou libres
+            OR: [
+              // 1️⃣ Demandes où l’artisan n’est pas encore assigné
+              {
+                artisans: {
+                  none: { userId },
+                },
+              },
+              // 2️⃣ Demandes où il est déjà assigné et accepte ou pas encore décidé
+              {
+                artisans: {
+                  some: {
+                    userId,
+                    OR: [{ accepte: true }, { accepte: null }],
+                  },
+                },
+              },
+            ],
+          },
+        ],
       };
 
       // Filtre par statut
@@ -423,60 +451,92 @@ router.post(
       const { id } = req.params;
       const userId = req.user.id;
 
-      // Vérifier si la demande existe et est assignée au professionnel
-      const demandeArtisan = await prisma.demandeArtisan.findUnique({
-        where: {
-          userId_demandeId: {
-            userId: userId,
-            demandeId: parseInt(id),
-          },
-        },
+      // Vérifier si la demande existe
+      const demande = await prisma.demande.findUnique({
+        where: { id: parseInt(id) },
         include: {
-          demande: {
-            include: {
-              createdBy: true,
-              service: true,
-              metier: true,
-            },
-          },
+          service: true,
+          metier: true,
+          createdBy: true,
         },
       });
 
-      if (!demandeArtisan) {
-        return res.status(404).json({
-          error: "Demande non trouvée ou non assignée",
+      if (!demande) {
+        return res.status(404).json({ error: "Demande non trouvée" });
+      }
+
+      // Vérifier si l'artisan a le bon métier/service
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          services: demande.serviceId
+            ? { where: { serviceId: demande.serviceId } }
+            : undefined,
+          metiers: demande.metierId
+            ? { where: { metierId: demande.metierId } }
+            : undefined,
+        },
+      });
+
+      if (demande.serviceId && (!user.services || user.services.length === 0)) {
+        return res.status(400).json({
+          error: "Vous ne proposez pas ce service",
         });
       }
 
-      // Mettre à jour l'assignation
-      const updatedAssignment = await prisma.demandeArtisan.update({
+      if (demande.metierId && (!user.metiers || user.metiers.length === 0)) {
+        return res.status(400).json({
+          error: "Vous ne possédez pas ce métier",
+        });
+      }
+
+      // Vérifier si une relation DemandeArtisan existe déjà
+      let demandeArtisan = await prisma.demandeArtisan.findUnique({
         where: {
           userId_demandeId: {
             userId: userId,
             demandeId: parseInt(id),
           },
         },
-        data: {
-          accepte: true,
-        },
         include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              companyName: true,
-            },
-          },
-          demande: {
-            include: {
-              createdBy: true,
-            },
-          },
+          user: true,
+          demande: true,
         },
       });
 
-      // Créer ou mettre à jour la conversation
+      // Si elle n'existe pas, la créer automatiquement
+      if (!demandeArtisan) {
+        demandeArtisan = await prisma.demandeArtisan.create({
+          data: {
+            userId: userId,
+            demandeId: parseInt(id),
+            accepte: true,
+          },
+          include: {
+            user: true,
+            demande: true,
+          },
+        });
+      } else {
+        // Sinon, simplement la mettre à jour
+        demandeArtisan = await prisma.demandeArtisan.update({
+          where: {
+            userId_demandeId: {
+              userId: userId,
+              demandeId: parseInt(id),
+            },
+          },
+          data: {
+            accepte: true,
+          },
+          include: {
+            user: true,
+            demande: true,
+          },
+        });
+      }
+
+      // Créer ou récupérer la conversation associée à la demande
       let conversation = await prisma.conversation.findFirst({
         where: {
           demandeId: parseInt(id),
@@ -487,18 +547,18 @@ router.post(
         conversation = await prisma.conversation.create({
           data: {
             demandeId: parseInt(id),
-            titre: `Demande ${updatedAssignment.demande.service?.libelle || updatedAssignment.demande.metier?.libelle}`,
-            createurId: updatedAssignment.demande.createdById,
+            titre: `Demande ${demande.service?.libelle || demande.metier?.libelle}`,
+            createurId: demande.createdById,
             participants: {
               create: [
-                { userId: updatedAssignment.demande.createdById }, // Client
+                { userId: demande.createdById }, // Client
                 { userId: userId }, // Artisan
               ],
             },
           },
         });
       } else {
-        // Ajouter l'artisan comme participant s'il n'est pas déjà présent
+        // Ajouter l'artisan comme participant s'il ne l'est pas encore
         await prisma.conversationParticipant.upsert({
           where: {
             conversationId_userId: {
@@ -514,12 +574,12 @@ router.post(
         });
       }
 
-      // Ajouter un message système
+      // Ajouter un message système d’acceptation
       await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
-          contenu: `${updatedAssignment.user.companyName || updatedAssignment.user.firstName} a accepté la demande.`,
+          contenu: `${demandeArtisan.user.companyName || demandeArtisan.user.firstName} a accepté la demande.`,
           type: "SYSTEM",
           evenementType: "ARTISAN_ACCEPTE",
         },
@@ -527,7 +587,7 @@ router.post(
 
       res.json({
         message: "Demande acceptée avec succès",
-        assignment: updatedAssignment,
+        assignment: demandeArtisan,
         conversationId: conversation.id,
       });
     } catch (error) {
@@ -536,6 +596,7 @@ router.post(
     }
   }
 );
+
 
 // POST /api/pro/demandes/:id/decline - Refuser une demande
 router.post(
@@ -547,7 +608,16 @@ router.post(
       const { id } = req.params;
       const userId = req.user.id;
       const { raison } = req.body;
-
+      const demande = await prisma.demande.findUnique({
+        where: {
+          id: parseInt(id),
+        },
+      });
+      if (!demande) {
+        return res.status(404).json({
+          error: "Demande non trouvée",
+        });
+      }
       // Vérifier si la demande existe et est assignée au professionnel
       const demandeArtisan = await prisma.demandeArtisan.findUnique({
         where: {
@@ -562,21 +632,21 @@ router.post(
         },
       });
 
-      if (!demandeArtisan) {
-        return res.status(404).json({
-          error: "Demande non trouvée ou non assignée",
-        });
-      }
-
       // Mettre à jour l'assignation
-      const updatedAssignment = await prisma.demandeArtisan.update({
+      const updatedAssignment = await prisma.demandeArtisan.upsert({
         where: {
           userId_demandeId: {
             userId: userId,
             demandeId: parseInt(id),
           },
         },
-        data: {
+        create: {
+          demandeId: parseInt(id),
+          userId: userId,
+          accepte: false,
+          recruited:false,
+        },
+        update: {
           accepte: false,
         },
       });
@@ -667,7 +737,7 @@ router.post(
         data: {
           userId: userId,
           demandeId: parseInt(id),
-          accepte: null,
+          accepte: true,
           devis: devis,
         },
         include: {

@@ -51,7 +51,7 @@ function requireRole(roles) {
       return next()
     }
 
-    res.status(403).json({ error: 'Accès non autorisé' })
+    res.status(403).json({ error: 'Accès non autorisés' })
   }
 }
 

@@ -465,4 +465,184 @@ router.put("/:demandeId/modifier-devis", authenticateToken, upload.single("devis
   }
 });
 
+// POST /api/demande-actions/:demandeId/signer-devis - Signer un devis (client)
+router.post("/:demandeId/signer-devis", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+    const { artisanId } = req.body;
+
+    // Vérifier que l'utilisateur est bien le client de cette demande
+    const demande = await prisma.demande.findUnique({
+      where: { id: parseInt(demandeId) },
+      include: {
+        artisans: true
+      }
+    });
+
+    if (!demande) {
+      return res.status(404).json({
+        error: "Demande non trouvée",
+      });
+    }
+
+    if (demande.createdById !== userId) {
+      return res.status(403).json({
+        error: "Vous n'êtes pas autorisé à signer ce devis",
+      });
+    }
+
+    // Vérifier que l'artisan existe sur cette demande
+    const artisanDemande = demande.artisans.find(a => a.userId === artisanId);
+    if (!artisanDemande) {
+      return res.status(404).json({
+        error: "Artisan non trouvé sur cette demande",
+      });
+    }
+
+    // Mettre à jour le statut recruited de l'artisan
+    const updatedDemandeArtisan = await prisma.demandeArtisan.update({
+      where: {
+        userId_demandeId: {
+          userId: artisanId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+      data: {
+        recruited: true,
+      },
+    });
+
+    // Mettre à jour le statut de la demande
+    const updatedDemande = await prisma.demande.update({
+      where: {
+        id: parseInt(demandeId),
+      },
+      data: {
+        statut: "assignée",
+        demandeAcceptee: true,
+      },
+    });
+
+    // Créer un message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: "Devis signé - L'artisan a été sélectionné pour réaliser les travaux",
+          type: "SYSTEM",
+          evenementType: "CLIENT_SIGNE",
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Devis signé avec succès",
+      demande: updatedDemande,
+      artisan: updatedDemandeArtisan,
+    });
+  } catch (error) {
+    console.error("Erreur signature devis:", error);
+    res.status(500).json({
+      error: "Erreur lors de la signature du devis",
+    });
+  }
+});
+
+// POST /api/demande-actions/:demandeId/payer-facture - Payer une facture (client)
+router.post("/:demandeId/payer-facture", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+    const { artisanId } = req.body;
+
+    // Simulation de paiement Stripe
+    // Dans une vraie implémentation, vous utiliseriez le SDK Stripe
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+    // Récupérer les détails de la facture
+    const demandeArtisan = await prisma.demandeArtisan.findUnique({
+      where: {
+        userId_demandeId: {
+          userId: artisanId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+    });
+
+    if (!demandeArtisan || !demandeArtisan.factureMontant) {
+      return res.status(404).json({
+        error: "Facture non trouvée",
+      });
+    }
+
+    // Simulation de création d'intent de paiement Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(demandeArtisan.factureMontant * 100), // Convertir en centimes
+      currency: 'eur',
+      metadata: {
+        demandeId: demandeId,
+        artisanId: artisanId,
+        clientId: userId,
+      },
+    });
+
+    // Simuler un paiement réussi (dans la réalité, vous attendriez le webhook de confirmation)
+    // Pour la démo, on marque directement comme payé
+    const updatedDemandeArtisan = await prisma.demandeArtisan.update({
+      where: {
+        userId_demandeId: {
+          userId: artisanId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+      data: {
+        factureStatus: "validee",
+      },
+    });
+
+    // Message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: `Facture payée - Montant: ${demandeArtisan.factureMontant}€`,
+          type: "SYSTEM",
+          evenementType: "FACTURE_ENVOYEE",
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Paiement effectué avec succès",
+      paymentIntent: paymentIntent.client_secret,
+      facture: {
+        montant: demandeArtisan.factureMontant,
+        status: "validee",
+      },
+    });
+  } catch (error) {
+    console.error("Erreur paiement facture:", error);
+    res.status(500).json({
+      error: "Erreur lors du paiement de la facture",
+    });
+  }
+});
+
 module.exports = router;
