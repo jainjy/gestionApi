@@ -201,6 +201,38 @@ router.delete("/:id", authenticateToken, async (req, res) => {
 
 
 
+// GET /services?search=terme
+router.get("/", authenticateToken, async (req, res) => {
+  try {
+    const { search } = req.query; // récupère le terme de recherche
+
+    let services;
+    if (search) {
+      service = await prisma.service.findMany({
+        where: {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { category: { contains: search, mode: "insensitive" } },
+           
+          ]
+        },
+        include: { vendor: true } // inclure les infos du vendeur si nécessaire
+      });
+    } else {
+      // si pas de recherche, renvoyer tous les services
+      services = await prisma.service.findMany({
+        include: { vendor: true }
+      });
+    }
+
+    res.json(services);
+  } catch (error) {
+    console.error("Erreur lors de la récupération des services :", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+
 
 // === GET /api/oeuvre ===
 // Liste des œuvres
