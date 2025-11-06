@@ -3,7 +3,7 @@ const router = express.Router()
 const { authenticateToken } = require('../middleware/auth')
 const { prisma } = require('../lib/db')
 // GET /api/services - Récupérer tous les services avec leurs catégories
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const services = await prisma.service.findMany({
       // Select explicit scalar fields and nested relations to avoid selecting non-existent DB columns
@@ -368,4 +368,4 @@ router.post("/bulk-assign-category", async (req, res) => {
   }
 });
 
-module.exports = router
+module.exports = router;
