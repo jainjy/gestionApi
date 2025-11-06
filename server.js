@@ -138,6 +138,9 @@ app.use("/api/payments", require("./routes/payments"));
 app.use("/api/professional", require("./routes/professional-billing"));
 app.use("/api/stripe", require("./routes/stripeCreate"));
 
+//pour les estimations immobilières
+app.use("/api/estimation", require("./routes/estimation"));
+
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
 
