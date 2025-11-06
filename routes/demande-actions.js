@@ -3,6 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const { authenticateToken } = require("../middleware/auth");
 const { upload } = require("../middleware/upload");
+const stripe = require("../utils/stripe");
 
 const prisma = new PrismaClient();
 
@@ -563,11 +564,6 @@ router.post("/:demandeId/payer-facture", authenticateToken, async (req, res) => 
     const { demandeId } = req.params;
     const userId = req.user.id;
     const { artisanId } = req.body;
-
-    // Simulation de paiement Stripe
-    // Dans une vraie implémentation, vous utiliseriez le SDK Stripe
-    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
     // Récupérer les détails de la facture
     const demandeArtisan = await prisma.demandeArtisan.findUnique({
       where: {
@@ -623,7 +619,7 @@ router.post("/:demandeId/payer-facture", authenticateToken, async (req, res) => 
           expediteurId: userId,
           contenu: `Facture payée - Montant: ${demandeArtisan.factureMontant}€`,
           type: "SYSTEM",
-          evenementType: "FACTURE_ENVOYEE",
+          evenementType: "FACTURE_PAYEE",
         },
       });
     }

@@ -137,7 +137,8 @@ app.use("/api/payments", require("./routes/payments"));
 //pour les facturations
 app.use("/api/professional", require("./routes/professional-billing"));
 app.use("/api/stripe", require("./routes/stripeCreate"));
-
+//pour les notations
+app.use("/api/reviews", require("./routes/reviews"));
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
 
