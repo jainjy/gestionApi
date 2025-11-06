@@ -502,6 +502,8 @@ model DemandeArtisan {
   factureStatus   String?   @default("en_attente") // en_attente, validee,confirmer, refusee
   createdAt       DateTime  @default(now())
   updatedAt       DateTime? @updatedAt
+  travauxTermines Boolean? @default(false) // Nouveau champ pour suivre l'état des travaux
+  factureConfirmee Boolean? @default(false) // Nouveau champ pour confirmation du paiement par le pro
   recruited       Boolean? //si l'artisan a ete pris pour le demandes de services
   user    User    @relation("DemandeArtisanUser", fields: [userId], references: [id])
   demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
@@ -721,6 +723,8 @@ enum EvenementType {
   FACTURE_ENVOYEE
   FACTURE_PAYEE
   FACTURE_SIGNE
+  FACTURE_CONFIRMEE
+  FACTURE_REFUSEE
   TRAVAUX_TERMINES
   AVIS_LAISSE
   CLIENT_REFUSE

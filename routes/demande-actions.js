@@ -640,5 +640,217 @@ router.post("/:demandeId/payer-facture", authenticateToken, async (req, res) => 
     });
   }
 });
+// POST /api/demande-actions/:demandeId/confirmer-paiement - Confirmer le paiement (Pro)
+router.post("/:demandeId/confirmer-paiement", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+    const { confirmer } = req.body; // true ou false
+
+    // Vérifier que l'utilisateur est artisan sur cette demande
+    const demandeArtisan = await prisma.demandeArtisan.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+        userId: userId,
+      },
+    });
+
+    if (!demandeArtisan) {
+      return res.status(403).json({
+        error: "Vous n'êtes pas artisan sur cette demande",
+      });
+    }
+
+    // Vérifier que la facture est payée
+    if (demandeArtisan.factureStatus !== "validee") {
+      return res.status(400).json({
+        error: "La facture n'est pas encore payée",
+      });
+    }
+
+    // Mettre à jour la confirmation du paiement
+    const updatedDemandeArtisan = await prisma.demandeArtisan.update({
+      where: {
+        userId_demandeId: {
+          userId: userId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+      data: {
+        factureConfirmee: confirmer,
+      },
+    });
+
+    // Créer un message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      const message = confirmer 
+        ? "Paiement confirmé par l'artisan" 
+        : "Paiement refusé par l'artisan - Merci de contacter le support";
+      
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: message,
+          type: "SYSTEM",
+          evenementType: confirmer ? "FACTURE_CONFIRMEE" : "FACTURE_REFUSEE",
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      message: confirmer ? "Paiement confirmé avec succès" : "Paiement refusé",
+      factureConfirmee: confirmer,
+    });
+  } catch (error) {
+    console.error("Erreur confirmation paiement:", error);
+    res.status(500).json({
+      error: "Erreur lors de la confirmation du paiement",
+    });
+  }
+});
+
+// POST /api/demande-actions/:demandeId/terminer-travaux - Marquer les travaux comme terminés (Pro)
+router.post("/:demandeId/terminer-travaux", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+
+    // Vérifier que l'utilisateur est artisan sur cette demande
+    const demandeArtisan = await prisma.demandeArtisan.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+        userId: userId,
+      },
+    });
+
+    if (!demandeArtisan) {
+      return res.status(403).json({
+        error: "Vous n'êtes pas artisan sur cette demande",
+      });
+    }
+
+    // Vérifier que la facture est confirmée
+    if (!demandeArtisan.factureConfirmee) {
+      return res.status(400).json({
+        error: "Le paiement doit être confirmé avant de marquer les travaux comme terminés",
+      });
+    }
+
+    // Marquer les travaux comme terminés
+    const updatedDemandeArtisan = await prisma.demandeArtisan.update({
+      where: {
+        userId_demandeId: {
+          userId: userId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+      data: {
+        travauxTermines: true,
+      },
+    });
+
+    // Créer un message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: "Travaux marqués comme terminés par l'artisan",
+          type: "SYSTEM",
+          evenementType: "TRAVAUX_TERMINES",
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Travaux marqués comme terminés avec succès",
+      travauxTermines: true,
+    });
+  } catch (error) {
+    console.error("Erreur fin des travaux:", error);
+    res.status(500).json({
+      error: "Erreur lors du marquage des travaux comme terminés",
+    });
+  }
+});
+
+// POST /api/demande-actions/:demandeId/confirmer-travaux-termines - Confirmer la fin des travaux (Client)
+router.post("/:demandeId/confirmer-travaux-termines", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+    const { confirmer } = req.body;
+
+    // Vérifier que l'utilisateur est le client de cette demande
+    const demande = await prisma.demande.findUnique({
+      where: { id: parseInt(demandeId) },
+    });
+
+    if (!demande || demande.createdById !== userId) {
+      return res.status(403).json({
+        error: "Vous n'êtes pas autorisé à confirmer les travaux",
+      });
+    }
+
+    // Mettre à jour le statut de la demande
+    const updatedDemande = await prisma.demande.update({
+      where: {
+        id: parseInt(demandeId),
+      },
+      data: {
+        statut: confirmer ? "terminée" : "en_cours",
+      },
+    });
+
+    // Créer un message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      const message = confirmer 
+        ? "Travaux confirmés comme terminés par le client" 
+        : "Travaux non confirmés - Merci de contacter l'artisan";
+      
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: message,
+          type: "SYSTEM",
+          evenementType: confirmer ? "TRAVAUX_CONFIRMES" : "TRAVAUX_NON_CONFIRMES",
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      message: confirmer ? "Travaux confirmés comme terminés" : "Confirmation refusée",
+      statut: updatedDemande.statut,
+    });
+  } catch (error) {
+    console.error("Erreur confirmation travaux:", error);
+    res.status(500).json({
+      error: "Erreur lors de la confirmation des travaux",
+    });
+  }
+});
 
 module.exports = router;
