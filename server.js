@@ -2,7 +2,7 @@
 require("dotenv").config();
 const path = require("path");
 const express = require("express");
-const cors = require('cors');
+const cors = require("./middleware/cors");
 const helmet = require("helmet");
 //test
 const bodyParser = require("body-parser");
@@ -19,21 +19,14 @@ const PORT = process.env.PORT || 3001;
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: true, // Allow all origins temporarily
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+    origin: [
+      process.env.FRONTEND_URL,
+      process.env.FRONTEND_URL2,
+      process.env.FRONTEND_URL_LOCAL,
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
-    transports: ['websocket', 'polling'],
-    allowEIO3: true
   },
-  allowEIO3: true,
-  pingTimeout: 60000,
-});
-
-// Middleware pour Socket.IO
-io.engine.on("headers", (headers, req) => {
-  headers["Access-Control-Allow-Origin"] = "http://localhost:5173";
-  headers["Access-Control-Allow-Credentials"] = true;
 });
 
 // Gestion des connexions Socket.io
@@ -85,18 +78,8 @@ const limiter = rateLimit({
   max: 100, // limite chaque IP à 100 requêtes par windowMs
 });
 
-//test
-// CORS configuration for main Express app
-app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'EIO', 'transport'],
-  exposedHeaders: ['Access-Control-Allow-Origin']
-}));
-
 app.use(bodyParser.json());
-
+app.use(cors);
 // Configure Helmet with less restrictive settings
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
