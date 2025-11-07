@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "EvenementType" ADD VALUE 'TRAVAUX_CONFIRMES';
