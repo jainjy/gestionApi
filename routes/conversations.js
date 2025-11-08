@@ -127,7 +127,7 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
 
     // Vérifier si l'utilisateur a accès à cette conversation
     const hasAccess = conversation.createurId === userId || 
-                     conversation.participants.some(p => p.userId === userId);
+                     conversation.participants.some(p => p.userId === userId)||userRole=="admin";
     
     if (!hasAccess) {
       return res.status(403).json({
