@@ -72,10 +72,19 @@ io.on("connection", (socket) => {
 });
 
 
-// Rate limiting
+// Rate limiting pour les limitation de nombres de requetes 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limite chaque IP à 100 requêtes par windowMs
+  windowMs: 10 * 60 * 1000, // 🔸 Fenêtre de 10 minutes
+  max: 300, // 🔸 300 requêtes par IP dans cette période
+  standardHeaders: true, // ✅ Envoie les infos de limites dans les en-têtes `RateLimit-*`
+  legacyHeaders: false, // ✅ Désactive les anciens headers `X-RateLimit-*`
+  message: {
+    status: 429,
+    error: "Trop de requêtes : veuillez réessayer dans quelques minutes.",
+  },
+  handler: (req, res, next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 app.use(bodyParser.json());
@@ -86,7 +95,7 @@ app.use(helmet({
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
   contentSecurityPolicy: false
 }));
-app.use(limiter);
+app.use("/api",limiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));

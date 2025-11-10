@@ -168,10 +168,11 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
     else if (userRole === "admin") {
       whereClause = {
         conversationId: conversation.id,
+        type: "SYSTEM",
       };
     } else {
       whereClause = {
-        conversationId: conversation.id, type: "SYSTEM" 
+        conversationId: conversation.id
       };
     }
 

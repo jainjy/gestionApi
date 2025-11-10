@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "Product" ADD COLUMN     "clickCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "purchaseCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "viewCount" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "UserPreference" ALTER COLUMN "category" DROP NOT NULL,
+ALTER COLUMN "interestScore" SET DEFAULT 0.5;

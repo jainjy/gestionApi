@@ -335,7 +335,7 @@ model Product {
   updatedAt      DateTime               @updatedAt
   publishedAt    DateTime?
   userId         String
-   viewCount       Int      @default(0)
+  viewCount       Int      @default(0)
   clickCount      Int      @default(0)
   purchaseCount   Int      @default(0)
   embedding      Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée

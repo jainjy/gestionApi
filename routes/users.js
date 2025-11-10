@@ -36,6 +36,7 @@ router.get("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
       email: user.email,
       phone: user.phone,
       role: user.role,
+      avatar:user.avatar,
       status: user.status,
       companyName: user.companyName,
       demandType: user.demandType,
