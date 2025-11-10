@@ -66,61 +66,12 @@ router.get(
           {
             propertyId: null, // Exclure les demandes immobilières
           },
-          {
-            // 🔥 Seulement les demandes artisan correspondantes ou libres
-            OR: [
-              // 1️⃣ Demandes où l’artisan n’est pas encore assigné
-              {
-                artisans: {
-                  none: { userId },
-                },
-              },
-              // 2️⃣ Demandes où il est déjà assigné et accepte ou pas encore décidé
-              {
-                artisans: {
-                  some: {
-                    userId,
-                    OR: [{ accepte: true }, { accepte: null }],
-                  },
-                },
-              },
-            ],
-          },
         ],
       };
 
-      // Filtre par statut
+      // Filtre par statut - Utiliser directement le statut de la base
       if (status && status !== "Toutes") {
-        switch (status) {
-          case "En attente":
-            whereClause.demandeAcceptee = false;
-            whereClause.artisans = { none: { userId } };
-            break;
-          case "En cours":
-            whereClause.demandeAcceptee = false;
-            whereClause.artisans = { some: { userId } };
-            break;
-          case "Validée":
-            whereClause.demandeAcceptee = true;
-            whereClause.artisans = { some: { userId, accepte: true } };
-            break;
-          case "Refusée":
-            whereClause.artisans = {
-              some: {
-                userId,
-                accepte: false,
-              },
-            };
-            break;
-          case "Assignée":
-            whereClause.artisans = {
-              some: {
-                userId,
-                accepte: null,
-              },
-            };
-            break;
-        }
+        whereClause.statut = status;
       }
 
       // Recherche
@@ -206,7 +157,7 @@ router.get(
         prisma.demande.count({ where: whereClause }),
       ]);
 
-      // Transformer les données pour le frontend pro
+      // Transformer les données pour le frontend pro - CONSERVER LE VRAI STATUT
       const transformedDemandes = demandes.map((demande) => {
         const artisanAssignment = demande.artisans.find(
           (a) => a.userId === userId
@@ -225,19 +176,7 @@ router.get(
           titre = `Demande ${demande.metier.libelle}`;
         }
 
-        // Déterminer le statut pour le professionnel
-        let statut = "Disponible";
-        if (artisanAssignment) {
-          if (artisanAssignment.accepte === true) {
-            statut = "Validée";
-          } else if (artisanAssignment.accepte === false) {
-            statut = "Refusée";
-          } else {
-            statut = "Assignée";
-          }
-        }
-
-        // Déterminer l'urgence basée sur la date de création
+        // DÉTERMINER L'URGENCE BASÉE SUR LA DATE DE CRÉATION
         const now = new Date();
         const daysSinceCreation = Math.floor(
           (now - demande.createdAt) / (1000 * 60 * 60 * 24)
@@ -260,7 +199,8 @@ router.get(
           titre: titre,
           metier: metierLibelle,
           lieu: `${demande.lieuAdresseCp || ""} ${demande.lieuAdresseVille || ""}`.trim(),
-          statut: statut,
+          // UTILISER DIRECTEMENT LE STATUT DE LA BASE DE DONNÉES
+          statut: demande.statut || "En attente",
           urgence: urgence,
           description: demande.description || "Aucune description fournie",
           date: demande.createdAt.toLocaleDateString("fr-FR", {
@@ -361,57 +301,48 @@ router.get(
 
       const [
         totalDemandes,
-        demandesDisponibles,
-        demandesAssignees,
+        demandesEnAttente,
+        demandesEnCours,
         demandesValidees,
         demandesRefusees,
+        demandesTerminees,
         demandesUrgentes,
       ] = await Promise.all([
         // Total des demandes compatibles
         prisma.demande.count({ where: whereClause }),
-        // Demandes disponibles (non assignées au professionnel)
+        // Demandes en attente
         prisma.demande.count({
           where: {
             ...whereClause,
-            artisans: {
-              none: { userId },
-            },
+            statut: "en attente",
           },
         }),
-        // Demandes assignées en attente de réponse
+        // Demandes en cours
         prisma.demande.count({
           where: {
             ...whereClause,
-            artisans: {
-              some: {
-                userId,
-                accepte: null,
-              },
-            },
+            statut: "en cours",
           },
         }),
-        // Demandes validées (acceptées par le professionnel)
+        // Demandes validées
         prisma.demande.count({
           where: {
             ...whereClause,
-            artisans: {
-              some: {
-                userId,
-                accepte: true,
-              },
-            },
+            statut: "validée",
           },
         }),
-        // Demandes refusées par le professionnel
+        // Demandes refusées
         prisma.demande.count({
           where: {
             ...whereClause,
-            artisans: {
-              some: {
-                userId,
-                accepte: false,
-              },
-            },
+            statut: "refusée",
+          },
+        }),
+        // Demandes terminées
+        prisma.demande.count({
+          where: {
+            ...whereClause,
+            statut: "terminée",
           },
         }),
         // Demandes urgentes (moins de 24h)
@@ -427,10 +358,11 @@ router.get(
 
       res.json({
         total: totalDemandes,
-        disponibles: demandesDisponibles,
-        assignees: demandesAssignees,
+        enAttente: demandesEnAttente,
+        enCours: demandesEnCours,
         validees: demandesValidees,
         refusees: demandesRefusees,
+        terminees: demandesTerminees,
         urgentes: demandesUrgentes,
         nouvelles: demandesUrgentes,
       });
