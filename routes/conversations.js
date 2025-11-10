@@ -17,11 +17,10 @@ router.get(
       const conversation = await prisma.conversation.findFirst({
         where: {
           demandeId: parseInt(demandeId),
-        
         },
-        
+
         include: {
-          messages:true,
+          messages: true,
           createur: {
             select: {
               id: true,
@@ -75,7 +74,7 @@ router.get(
         participants: conversation.participants.map((p) => p.user),
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
-        messages:conversation.messages
+        messages: conversation.messages,
       };
 
       res.json(response);
@@ -103,20 +102,20 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
       include: {
         createur: {
           select: {
-            id: true
-          }
+            id: true,
+          },
         },
         participants: {
           select: {
             userId: true,
             user: {
               select: {
-                userType: true
-              }
-            }
-          }
-        }
-      }
+                userType: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!conversation) {
@@ -126,9 +125,11 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
     }
 
     // Vérifier si l'utilisateur a accès à cette conversation
-    const hasAccess = conversation.createurId === userId || 
-                     conversation.participants.some(p => p.userId === userId)||userRole=="admin";
-    
+    const hasAccess =
+      conversation.createurId === userId ||
+      conversation.participants.some((p) => p.userId === userId) ||
+      userRole == "admin";
+
     if (!hasAccess) {
       return res.status(403).json({
         error: "Accès non autorisé à cette conversation",
@@ -142,28 +143,35 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
 
     // Déterminer la condition WHERE
     let whereClause = {
-      conversationId: conversation.id
+      conversationId: conversation.id,
     };
 
     // Si l'utilisateur est un professionnel
     if (userRole === "professional") {
       whereClause = {
-        AND: [{
-        conversationId: conversation.id,
-        OR: [
-          // Ses propres messages
-          { expediteurId: userId },
-          // Messages du créateur
-          { expediteurId: conversation.createurId },
-          // Messages système
-          { type: "SYSTEM" }
-        ]}]
+        AND: [
+          {
+            conversationId: conversation.id,
+            OR: [
+              // Ses propres messages
+              { expediteurId: userId },
+              // Messages du créateur
+              { expediteurId: conversation.createurId },
+              // Messages système
+              { type: "SYSTEM" },
+            ],
+          },
+        ],
       };
-    } 
+    }
     // Si l'utilisateur est le créateur
-    else {
+    else if (userRole === "admin") {
       whereClause = {
         conversationId: conversation.id,
+      };
+    } else {
+      whereClause = {
+        conversationId: conversation.id, type: "SYSTEM" 
       };
     }
 
@@ -179,7 +187,7 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
             avatar: true,
             companyName: true,
             userType: true,
-            role: true
+            role: true,
           },
         },
       },
@@ -213,7 +221,13 @@ router.post("/:demandeId/messages", authenticateToken, async (req, res) => {
   try {
     const { demandeId } = req.params;
     const userId = req.user.id;
-    const { contenu, type = "TEXT",nomFichier=null,urlFichier=null,typeFichier=null } = req.body;
+    const {
+      contenu,
+      type = "TEXT",
+      nomFichier = null,
+      urlFichier = null,
+      typeFichier = null,
+    } = req.body;
 
     // Vérifier que l'utilisateur a accès à cette conversation
     const conversation = await prisma.conversation.findFirst({
@@ -234,13 +248,12 @@ router.post("/:demandeId/messages", authenticateToken, async (req, res) => {
         participants: true,
       },
     });
-    console.log("conversation:",conversation)
+    console.log("conversation:", conversation);
     if (!conversation) {
       return res.status(404).json({
         error: "Conversation non trouvée",
       });
     }
-
 
     // Créer le message
     const message = await prisma.message.create({
