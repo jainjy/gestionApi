@@ -1,3 +1,4 @@
+// routes/aliments.js
 const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/db");
@@ -201,7 +202,7 @@ router.get("/categories", async (req, res) => {
   }
 });
 
-// GET /api/aliments/food-categories - Récupérer toutes les sous-catégories alimentaires
+// GET /api/aliments/food-categories - Récupérer toutes les foodCategory
 router.get("/food-categories", async (req, res) => {
   try {
     const foodCategories = await prisma.product.groupBy({
@@ -229,9 +230,150 @@ router.get("/food-categories", async (req, res) => {
     );
   } catch (error) {
     console.error(
-      "Erreur lors de la récupération des sous-catégories alimentaires:",
+      "Erreur lors de la récupération des food-categories:",
       error
     );
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// CORRIGÉ: GET /api/aliments/food-category/:foodCategoryName
+router.get("/food-category/:foodCategoryName", async (req, res) => {
+  try {
+    const { foodCategoryName } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Débogage
+    console.log("🔍 Food category recherchée:", foodCategoryName);
+    const decodedCategoryName = decodeURIComponent(foodCategoryName);
+    console.log("🔍 Food category décodée:", decodedCategoryName);
+
+    // Recherche insensible à la casse
+    const whereCondition = {
+      productType: "food",
+      status: "active",
+      foodCategory: {
+        equals: decodedCategoryName,
+        mode: 'insensitive'
+      }
+    };
+
+    console.log("🔍 Condition de recherche:", whereCondition);
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where: whereCondition,
+        include: {
+          User: {
+            select: {
+              firstName: true,
+              lastName: true,
+              companyName: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.product.count({
+        where: whereCondition,
+      }),
+    ]);
+
+    console.log(`📦 Produits trouvés pour ${decodedCategoryName}:`, products.length);
+
+    // Si aucun produit, vérifier les catégories disponibles
+    if (products.length === 0) {
+      const availableCategories = await prisma.product.groupBy({
+        by: ['foodCategory'],
+        where: {
+          productType: "food",
+          status: "active",
+          foodCategory: {
+            not: null
+          }
+        },
+        _count: {
+          id: true
+        }
+      });
+      
+      console.log("📋 FoodCategory disponibles:", availableCategories);
+    }
+
+    const formattedProducts = products.map((product) => ({
+      id: product.id,
+      name: product.name,
+      description: product.description,
+      category: product.category,
+      subcategory: product.subcategory,
+      price: product.price,
+      comparePrice: product.comparePrice,
+      images: product.images || [],
+      isOrganic: !!product.isOrganic,
+      allergens: product.allergens || [],
+      origin: product.origin,
+      unit: product.unit,
+      quantity: product.quantity,
+      featured: !!product.featured,
+      vendor: {
+        companyName: product.User?.companyName,
+      },
+    }));
+
+    res.json({
+      products: formattedProducts,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit)),
+      },
+      foodCategory: decodedCategoryName,
+    });
+  } catch (error) {
+    console.error(
+      "❌ Erreur lors de la récupération des produits par food-category:",
+      error
+    );
+    res.status(500).json({ 
+      error: "Erreur serveur",
+      details: error.message 
+    });
+  }
+});
+
+// NOUVELLE ROUTE: Debug des food categories
+router.get("/debug/food-categories", async (req, res) => {
+  try {
+    const foodCategories = await prisma.product.groupBy({
+      by: ['foodCategory'],
+      where: {
+        productType: "food",
+        status: "active",
+        foodCategory: {
+          not: null
+        }
+      },
+      _count: {
+        id: true
+      },
+      orderBy: {
+        foodCategory: "asc"
+      }
+    });
+
+    res.json({
+      availableFoodCategories: foodCategories,
+      message: "Liste des foodCategory disponibles avec le nombre de produits"
+    });
+  } catch (error) {
+    console.error("Erreur debug food categories:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -401,7 +543,7 @@ router.get("/category/:categoryName", async (req, res) => {
       allergens: product.allergens || [],
       origin: product.origin,
       unit: product.unit,
-      quantity:product.quantity,
+      quantity: product.quantity,
       vendor: {
         companyName: product.User?.companyName,
       },
