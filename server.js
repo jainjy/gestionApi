@@ -1,4 +1,3 @@
-// Ajouter cette ligne tout en haut du fichier server.js
 require("dotenv").config();
 const path = require("path");
 const express = require("express");
@@ -11,6 +10,23 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { upload } = require("./middleware/upload");
 const { authenticateToken } = require("./middleware/auth");
+
+// AJOUT: Import Prisma pour vérifier la connexion DB
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+// Fonction de vérification de la connexion DB
+async function checkDatabaseConnection() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Connexion à la base de données réussie');
+    return true;
+  } catch (error) {
+    console.error('❌ Impossible de se connecter à la base de données:', error.message);
+    return false;
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 const server = http.createServer(app);
@@ -75,6 +91,16 @@ if (!fs.existsSync(uploadDir)) {
   console.log("📁 Dossier uploads créé");
 }
 
+// Créer les sous-dossiers pour les médias
+const mediaDirs = ['audio', 'videos', 'thumbnails'];
+mediaDirs.forEach(dir => {
+  const dirPath = path.join(__dirname, "uploads", dir);
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+    console.log(`📁 Dossier ${dir} créé`);
+  }
+});
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -82,17 +108,86 @@ const limiter = rateLimit({
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      mediaSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "https:"],
+      fontSrc: ["'self'", "https:"],
+      objectSrc: ["'none'"],
+      frameSrc: ["'self'"]
+    }
+  }
+}));
 app.use(cors);
 app.use(limiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-// SERVIR LES FICHIERS STATIQUES - DOIT ÊTRE APRÈS LES MIDDLEWARES DE BASE
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// 🔥 CORRECTION CRITIQUE: Middleware CORS très permissif pour les fichiers média
+app.use('/media', (req, res, next) => {
+  // Headers CORS très permissifs pour les fichiers média
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS, POST, PUT');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', '*');
+  res.header('Access-Control-Max-Age', '86400');
+  
+  // Désactiver certaines protections de sécurité pour les fichiers média
+  res.removeHeader('X-Content-Type-Options');
+  res.removeHeader('X-Frame-Options');
+  
+  // Gérer les requêtes OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
 
-// Routes
+// 🔥 MIDDLEWARE POUR DÉSACTIVER HELMET POUR LES MÉDIAS
+app.use('/media', (req, res, next) => {
+  // Temporairement désactiver helmet pour les fichiers média
+  res.removeHeader('Content-Security-Policy');
+  res.removeHeader('Cross-Origin-Embedder-Policy');
+  res.removeHeader('Cross-Origin-Opener-Policy');
+  res.removeHeader('Cross-Origin-Resource-Policy');
+  next();
+});
+
+// 🔥 SERVIR LES FICHIERS MÉDIA AVEC LES BONS HEADERS
+app.use("/media/audio", express.static(path.join(__dirname, "uploads/audio"), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+  }
+}));
+
+app.use("/media/videos", express.static(path.join(__dirname, "uploads/videos"), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    // 🔥 IMPORTANT: Headers pour la lecture cross-origin
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  }
+}));
+
+app.use("/media/thumbnails", express.static(path.join(__dirname, "uploads/thumbnails"), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+  }
+}));
+
+// Routes API
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/upload", require("./routes/upload"));
@@ -148,6 +243,9 @@ app.use("/api/bienetre", require("./routes/bienetre"));
 const oeuvre = require("./routes/oeuvre");
 app.use("/api/oeuvre", oeuvre);
 
+// NOUVELLE ROUTE POUR LES MÉDIAS (BIEN-ÊTRE)
+app.use("/api/media", require("./routes/media"));
+
 //pour les publicités
 app.use("/api/advertisements", require("./routes/advertisements"));
 
@@ -187,6 +285,33 @@ app.post(
     }
   }
 );
+
+// 🔥 ROUTE DE TEST POUR LES FICHIERS MÉDIA
+app.get("/media/test/:filename", (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(__dirname, "uploads/videos", filename);
+  
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    console.log('✅ Fichier trouvé:', {
+      filename,
+      size: stats.size,
+      path: filePath
+    });
+    
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(filePath);
+  } else {
+    console.log('❌ Fichier non trouvé:', filePath);
+    res.status(404).json({
+      success: false,
+      message: 'Fichier non trouvé',
+      path: filePath
+    });
+  }
+});
+
 // Route de santé
 app.get("/health", (req, res) => {
   res.json({
@@ -206,6 +331,7 @@ app.get("/health", (req, res) => {
       "admin-demandes",
       "cart",
       "orders",
+      "media"
     ],
   });
 });
@@ -227,8 +353,18 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Remplacer app.listen par server.listen
-server.listen(PORT, () => {
+// MODIFICATION: Remplacer le server.listen avec vérification DB
+server.listen(PORT, async () => {
   console.log(`🚀 Le serveur tourne sur le port: ${PORT}`);
   console.log(`🏥 Voir la santé sur : http://localhost:${PORT}/health`);
+  
+  // Vérifier la connexion à la base de données
+  const dbConnected = await checkDatabaseConnection();
+  
+  if (dbConnected) {
+    console.log('📊 Base de données prête');
+  } else {
+    console.log('🚨 Mode dégradé - Base de données non accessible');
+    console.log('💡 Vérifiez que PostgreSQL est démarré: net start postgresql-x64-17');
+  }
 });

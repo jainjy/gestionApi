@@ -30,7 +30,7 @@ model BlogArticle {
   likes       Int                    @default(0)
   readTime    String?
   views       Int                    @default(0)
-  embedding   Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding   String? // CHANGEMENT: vector sans dimension spécifiée
 
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
@@ -95,6 +95,12 @@ model User {
 
   // AJOUTEZ CETTE LIGNE - Relation avec Advertisement
   advertisements Advertisement[]
+
+  // RELATION POUR PODCAST 
+ podcasts        Podcast[]              // Podcasts créés par l'utilisateur
+  videos          Video[]                // Vidéos créées par l'utilisateur
+  mediaFavorites  UserMediaFavorite[]    // Favoris médias de l'utilisateur
+  wellBeingStats  WellBeingStats?        // Statistiques bien-être
 }
 
 // ======================
@@ -207,7 +213,7 @@ model Property {
   totalFloors     Int? // Nombre total d'étages
   yearBuilt       Int?
   rentType        String?                @default("longue_duree") // "saisonniere" | "longue_duree"
-  embedding       Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding       String? // CHANGEMENT: vector sans dimension spécifiée
 
   // Relations
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -270,7 +276,7 @@ model Product {
   updatedAt      DateTime               @updatedAt
   publishedAt    DateTime?
   userId         String
-  embedding      Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding      String? // CHANGEMENT: vector sans dimension spécifiée
 
   // CHAMPS POUR ALIMENTATION
   allergens       String[] // ["gluten", "lactose", "nuts", ...]
@@ -303,7 +309,7 @@ model Product {
 model Metier {
   id        Int                    @id @default(autoincrement())
   libelle   String
-  embedding Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding String? // CHANGEMENT: vector sans dimension spécifiée
   services  MetierService[]
   users     UtilisateurMetier[]
   demandes  Demande[]
@@ -329,7 +335,7 @@ model Service {
   images      String[]
   duration    Int? // durée en minutes (facultatif)
   price       Float? // prix du service
-  embedding   Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding   String? // CHANGEMENT: vector sans dimension spécifiée
   category    Category?              @relation(fields: [categoryId], references: [id])
   metiers     MetierService[]
   users       UtilisateurService[]
@@ -821,4 +827,108 @@ model Subscription {
   @@index([userId])
   @@index([planId])
   @@index([status])
+}
+
+
+// ======================
+// MODÈLES POUR LES MÉDIAS (PODCASTS & VIDÉOS)
+// ======================
+
+// Modèle pour les catégories de médias
+model MediaCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  type        String   // "podcast", "video"
+  description String?
+  color       String?  // Couleur pour le frontend (blue, green, purple, etc.)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  podcasts Podcast[]
+  videos   Video[]
+  
+  @@index([type])
+}
+
+// Modifiez les modèles Podcast et Video :
+
+model Podcast {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  duration    String
+  audioFile   String?  // Chemin du fichier audio
+  audioUrl    String?  // URL publique pour lecture
+  imageUrl    String
+  categoryId  Int
+  authorId    String?
+  isPremium   Boolean  @default(false)
+  listens     Int      @default(0)
+  isActive    Boolean  @default(true)
+  fileSize    Int?     // Taille en bytes
+  mimeType    String?  // "audio/mpeg", etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  category MediaCategory @relation(fields: [categoryId], references: [id])
+  author   User?         @relation(fields: [authorId], references: [id])
+}
+
+model Video {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  duration     String
+  videoFile    String?  // Chemin du fichier vidéo
+  videoUrl     String?  // URL publique pour lecture
+  thumbnailUrl String
+  categoryId   Int
+  authorId     String?
+  isPremium    Boolean  @default(false)
+  views        Int      @default(0)
+  isActive     Boolean  @default(true)
+  fileSize     Int?     // Taille en bytes
+  mimeType     String?  // "video/mp4", etc.
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  category MediaCategory @relation(fields: [categoryId], references: [id])
+  author   User?         @relation(fields: [authorId], references: [id])
+}
+
+
+// Modèle pour les favoris utilisateur
+model UserMediaFavorite {
+  id        String   @id @default(uuid())
+  userId    String
+  mediaId   String
+  mediaType String   // "podcast", "video"
+  createdAt DateTime @default(now())
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, mediaId, mediaType])
+  @@index([userId])
+  @@index([mediaId, mediaType])
+}
+
+// ======================
+// MODÈLE POUR LES STATISTIQUES BIEN-ÊTRE
+// ======================
+model WellBeingStats {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  totalSessions Int    @default(0)
+  totalDuration Int    @default(0) // en minutes
+  favoriteCategory String?
+  lastActivityAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
 }
