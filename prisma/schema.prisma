@@ -39,38 +39,39 @@ model BlogArticle {
 //UTILISATEUR
 //===================
 model User {
-  id                       String                    @id @default(uuid())
-  email                    String                    @unique
-  passwordHash             String?
-  provider                 Json?
-  firstName                String?
-  lastName                 String?
-  phone                    String?
-  role                     String                    @default("user")
-  createdAt                DateTime                  @default(now())
-  updatedAt                DateTime                  @updatedAt
-  resetToken               String?
-  resetTokenExpiry         DateTime?
-  status                   String                    @default("inactive")
-  companyName              String?
-  address                  String? // Adresse postale
-  addressComplement        String? // Complément d'adresse
-  city                     String? // Ville
-  commercialName           String? // Nom commercial
-  demandType               String? // agence immobilier,particulier ou syndicat
-  latitude                 Float?
-  longitude                Float?
-  siret                    String? // Numéro SIRET
-  zipCode                  String? // Code postal
-  avatar                   String? // Logo ou avatar de l'utilisateur
-  userType                 String? // PRESTATAIRE | TOURISME | BIEN ETRE | AGENCE | ADMIN |VENDEUR 
-  providerId               String? // ex: "117349..."
-  providerName             String? // ex: "google"
-  stripeCustomerId         String?
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  passwordHash        String?
+  provider            Json?
+  firstName           String?
+  lastName            String?
+  phone               String?
+  role                String               @default("user")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  resetToken          String?
+  resetTokenExpiry    DateTime?
+  status              String               @default("inactive")
+  companyName         String?
+  address             String? // Adresse postale
+  addressComplement   String? // Complément d'adresse
+  city                String? // Ville
+  commercialName      String? // Nom commercial
+  demandType          String? // agence immobilier,particulier ou syndicat
+  latitude            Float?
+  longitude           Float?
+  siret               String? // Numéro SIRET
+  zipCode             String? // Code postal
+  avatar              String? // Logo ou avatar de l'utilisateur
+  userType            String? // PRESTATAIRE | TOURISME | BIEN ETRE | AGENCE | ADMIN |VENDEUR 
+  providerId          String? // ex: "117349..."
+  providerName        String? // ex: "google"
+  stripeCustomerId    String?
   // NOUVELLES COLONNES: Relations pour les devis
-  DevisClientToUser        String?                   @map("_DevisClientToUser")
-  DevisProviderToUser      String?                   @map("_DevisProviderToUser")
-  demandesFinancement      FinancementDemande[]
+  DevisClientToUser   String?              @map("_DevisClientToUser")
+  DevisProviderToUser String?              @map("_DevisProviderToUser")
+  demandesFinancement FinancementDemande[]
+
   // Relations existantes
   blogArticles             BlogArticle[]
   properties               Property[]
@@ -87,14 +88,11 @@ model User {
   messagesEnvoyes          Message[]                 @relation("MessageExpediteur")
   conversationsCrees       Conversation[]            @relation("ConversationCreateur")
   conversationsParticipees ConversationParticipant[]
-  // NOUVELLES RELATIONS: Pour les devis
   devisRecus               Devis[]                   @relation("DevisClient")
   devisEnvoyes             Devis[]                   @relation("DevisPrestataire")
-  subscriptions            Subscription[] // relation avec les abonnements
+  subscriptions            Subscription[]
   tourismeBookings         TourismeBooking[]
-
-  // AJOUTEZ CETTE LIGNE - Relation avec Advertisement
-  advertisements Advertisement[]
+  advertisements           Advertisement[]
 
   //relation pour suggetion intelligente 
   activities  UserActivity[]
@@ -106,30 +104,37 @@ model User {
   @@index([status])
 }
 
+
 // ======================
 // 📊 ACTIVITÉS UTILISATEUR
 // ======================
 
 model UserActivity {
-  id         String   @id @default(uuid())
-  userId     String
-  entityType String // "product" | "service" | "metier" | "property"
-  entityId   String
-  action     String // "view" | "click" | "like" | "purchase"
-  createdAt  DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  entityType  String // "product", "service", "job", etc.
+  entityId    String
+  action      String // "view", "click", "purchase", "search", "long_view"
+  duration    Int? // Durée en secondes pour les vues longues
+  searchQuery String? // Pour les recherches
+  metadata    Json?
+  createdAt   DateTime @default(now())
 
+  // 🔗 Relation vers User
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([entityType])
-  @@index([action])
+  @@index([createdAt])
+  @@index([action]) 
 }
+
+// ======================
 
 // ======================
 // ❤️ PRÉFÉRENCES UTILISATEUR
 // ======================
 model UserPreference {
-  id            String   @id @default(uuid())
+  id            String   @id @default(cuid())
   userId        String
   category      String? // ex: "électroménager", "tourisme", "mode", etc.
   interestScore Float    @default(0.5) // Score entre 0 et 1
@@ -137,8 +142,8 @@ model UserPreference {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, category])
   @@index([userId])
-  @@index([category])
 }
 
 // ======================
@@ -150,7 +155,13 @@ model UserEvent {
   eventType String // "search" | "filter" | "scroll" | "hover" | "share"
   eventData Json? // {query: "machine à laver", duration: 12}
   createdAt DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  eventType String // "search" | "filter" | "scroll" | "hover" | "share"
+  eventData Json? // {query: "machine à laver", duration: 12}
+  createdAt DateTime @default(now())
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -330,6 +341,9 @@ model Product {
   updatedAt      DateTime               @updatedAt
   publishedAt    DateTime?
   userId         String
+   viewCount       Int      @default(0)
+  clickCount      Int      @default(0)
+  purchaseCount   Int      @default(0)
   embedding      Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
 
   // CHAMPS POUR ALIMENTATION

@@ -5,14 +5,13 @@ async function seedTourisme() {
   console.log('🏨 Début du seeding tourisme...')
 
   try {
-    // Supprimer les données existantes
-    //await prisma.tourisme.deleteMany()
+    // Supprimer toutes les données existantes
+    await prisma.tourisme.deleteMany({})
     console.log('🗑️ Anciennes données supprimées')
 
     // Données de démonstration
     const tourismListings = [
       {
-        id: 'TL-001',
         idUnique: 'TL-001',
         idPrestataire: 'PRO-001',
         title: 'Hôtel de Charme Centre Ville',
@@ -40,7 +39,6 @@ async function seedTourisme() {
         featured: true
       },
       {
-        id: 'TL-002',
         idUnique: 'TL-002',
         idPrestataire: 'PRO-002',
         title: 'Appartement Moderne Tour Eiffel',
@@ -69,7 +67,6 @@ async function seedTourisme() {
         featured: true
       },
       {
-        id: 'TL-003',
         idUnique: 'TL-003',
         idPrestataire: 'PRO-003',
         title: 'Villa Luxueuse avec Piscine',
@@ -98,7 +95,6 @@ async function seedTourisme() {
         featured: true
       },
       {
-        id: 'TL-004',
         idUnique: 'TL-004',
         idPrestataire: 'PRO-004',
         title: 'Maison d\'Hôtes Provençale',
@@ -127,6 +123,7 @@ async function seedTourisme() {
       }
     ]
 
+    // Insertion dans la base
     for (const listing of tourismListings) {
       await prisma.tourisme.create({ data: listing })
       console.log(`✅ ${listing.title} créé`)
@@ -137,20 +134,15 @@ async function seedTourisme() {
   } catch (error) {
     console.error('❌ Erreur lors du seeding:', error)
     throw error
+  } finally {
+    await prisma.$disconnect()
   }
 }
 
-// Export
+// Export pour usage ailleurs
 module.exports = { seedTourisme }
 
 // Exécution directe
 if (require.main === module) {
   seedTourisme()
-    .catch((e) => {
-      console.error(e)
-      process.exit(1)
-    })
-    .finally(async () => {
-      await prisma.$disconnect()
-    })
 }

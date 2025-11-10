@@ -1,13 +1,13 @@
-import { PrismaClient } from '@prisma/client'
+const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 async function main() {
-  
+  console.log('🌱 Début du seeding des propriétés...')
 
   // 🔹 Vérifie que le owner existe
   const owner = await prisma.user.findFirst()
   if (!owner) {
-    throw new Error(`Aucun utilisateur trouvé avec l'ID ${owner}`)
+    throw new Error('Aucun utilisateur trouvé dans la base de données')
   }
   const ownerId = owner.id
 
@@ -36,7 +36,7 @@ async function main() {
           'https://picsum.photos/800/400?random=1',
           'https://picsum.photos/800/400?random=2'
         ],
-        ownerId,
+        ownerId: ownerId,
         isFeatured: true,
       },
       {
@@ -59,7 +59,7 @@ async function main() {
           'https://picsum.photos/800/400?random=3',
           'https://picsum.photos/800/400?random=4'
         ],
-        ownerId,
+        ownerId: ownerId,
         isFeatured: false,
       },
       {
@@ -77,7 +77,7 @@ async function main() {
         images: [
           'https://picsum.photos/800/400?random=5'
         ],
-        ownerId,
+        ownerId: ownerId,
         isFeatured: false,
       },
     ]
@@ -103,7 +103,7 @@ async function main() {
   // 🔹 Récupère quelques propriétés existantes
   const allProps = await prisma.property.findMany({ take: 2 })
 
-  // 🔹 Crée des favoris pour l’utilisateur test
+  // 🔹 Crée des favoris pour l'utilisateur test
   for (const prop of allProps) {
     await prisma.favorite.upsert({
       where: {
