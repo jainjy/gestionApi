@@ -155,13 +155,7 @@ model UserEvent {
   eventType String // "search" | "filter" | "scroll" | "hover" | "share"
   eventData Json? // {query: "machine à laver", duration: 12}
   createdAt DateTime @default(now())
-  id        String   @id @default(uuid())
-  userId    String
-  eventType String // "search" | "filter" | "scroll" | "hover" | "share"
-  eventData Json? // {query: "machine à laver", duration: 12}
-  createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])

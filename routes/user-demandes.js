@@ -211,7 +211,41 @@ router.patch("/:id/statut", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
+// routes/demandes.js - Ajouter cette route
+router.get("/:id/artisans-stats", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    const artisans = await prisma.demandeArtisan.findMany({
+      where: {
+        demandeId: parseInt(id),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            email: true,
+            phone: true,
+            avatar: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    res.json(artisans);
+  } catch (error) {
+    console.error("Erreur chargement stats artisans:", error);
+    res.status(500).json({
+      error: "Erreur lors du chargement des statistiques des artisans",
+    });
+  }
+});
 // GET /api/demandes/:id - Retourne une demande brute (utilitaire pour debug)
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
