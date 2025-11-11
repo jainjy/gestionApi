@@ -529,7 +529,6 @@ router.post(
   }
 );
 
-
 // POST /api/pro/demandes/:id/decline - Refuser une demande
 router.post(
   "/demandes/:id/decline",

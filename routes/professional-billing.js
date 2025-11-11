@@ -5,7 +5,7 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 // GET /api/professional/billing/payments - Paiements reçus par le professionnel
-router.get("/billing/payments", authenticateToken, async (req, res) => {
+router.get("/payments", authenticateToken, async (req, res) => {
   try {
     const { period = "3m" } = req.query;
 
@@ -76,7 +76,7 @@ router.get("/billing/payments", authenticateToken, async (req, res) => {
 });
 
 // GET /api/professional/billing/invoices - Factures générées par le professionnel
-router.get("/billing/invoices", authenticateToken, async (req, res) => {
+router.get("/invoices", authenticateToken, async (req, res) => {
   try {
     const invoices = await prisma.devis.findMany({
       where: {
@@ -121,7 +121,7 @@ router.get("/billing/invoices", authenticateToken, async (req, res) => {
 });
 
 // GET /api/professional/billing/analytics - Statistiques de facturation
-router.get("/billing/analytics", authenticateToken, async (req, res) => {
+router.get("/analytics", authenticateToken, async (req, res) => {
   try {
     const { period = "3m" } = req.query;
 
@@ -215,7 +215,7 @@ router.get("/billing/analytics", authenticateToken, async (req, res) => {
 });
 
 // POST /api/professional/billing/invoices - Créer une nouvelle facture
-router.post("/billing/invoices", authenticateToken, async (req, res) => {
+router.post("/invoices", authenticateToken, async (req, res) => {
   try {
     const {
       clientId,
@@ -281,7 +281,7 @@ router.post("/billing/invoices", authenticateToken, async (req, res) => {
 });
 
 // PUT /api/professional/billing/invoices/:id - Mettre à jour une facture
-router.put("/billing/invoices/:id", authenticateToken, async (req, res) => {
+router.put("/invoices/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { montantHT, tva, description, conditions, status, dateValidite } =
@@ -335,7 +335,7 @@ router.put("/billing/invoices/:id", authenticateToken, async (req, res) => {
 });
 
 // GET /api/professional/billing/invoices/:id/pdf - Télécharger une facture PDF
-router.get("/billing/invoices/:id/pdf", authenticateToken, async (req, res) => {
+router.get("/invoices/:id/pdf", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 

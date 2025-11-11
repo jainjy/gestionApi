@@ -213,7 +213,7 @@ app.use("/api/demandes/immobilier", require("./routes/demandes-immobilier"));
 app.use("/api/demandes", require("./routes/user-demandes"));
 app.use("/api/devis", require("./routes/devis"));
 app.use("/api/demande-devis", require("./routes/demande_devis"));
-app.use("/api/admin", require("./routes/admin-demandes"));
+app.use("/api/admin/demandes", require("./routes/admin-demandes"));
 // routes pour le panier et les commandes
 app.use("/api/cart", require("./routes/cart"));
 app.use("/api/orders", require("./routes/orders"));
@@ -240,7 +240,7 @@ app.use("/api/admin/bookings", require("./routes/admin-bookings"));
 app.use("/api/user/bookings", require("./routes/user-bookings"));
 app.use("/api/payments", require("./routes/payments"));
 //pour les facturations
-app.use("/api/professional", require("./routes/professional-billing"));
+app.use("/api/professional/billing", require("./routes/professional-billing"));
 app.use("/api/stripe", require("./routes/stripeCreate"));
 //pour les notations
 app.use("/api/reviews", require("./routes/reviews"));

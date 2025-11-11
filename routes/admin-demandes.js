@@ -4,231 +4,223 @@ const { authenticateToken, requireRole } = require("../middleware/auth");
 const { prisma } = require("../lib/db");
 
 // GET /api/admin/demandes - Récupérer toutes les demandes pour l'admin
-router.get(
-  "/demandes",
-  authenticateToken,
-  requireRole(["admin"]),
-  async (req, res) => {
-    try {
-      const { status, search, page = 1, limit = 10 } = req.query;
+router.get("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
+  try {
+    const { status, search, page = 1, limit = 10 } = req.query;
 
-      let whereClause = {
-        // Filtrer seulement les demandes avec serviceId OU metierId non null
-        OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
-        propertyId: null, // Exclure les demandes immobilières
-      };
+    let whereClause = {
+      // Filtrer seulement les demandes avec serviceId OU metierId non null
+      OR: [{ serviceId: { not: null } }, { metierId: { not: null } }],
+      propertyId: null, // Exclure les demandes immobilières
+    };
 
-      // Filtre par statut
-      if (status && status !== "Toutes") {
-        switch (status) {
-          case "En attente":
-            whereClause.demandeAcceptee = false;
-            whereClause.artisans = { none: {} };
-            break;
-          case "En cours":
-            whereClause.demandeAcceptee = false;
-            whereClause.artisans = { some: {} };
-            break;
-          case "Validée":
-            whereClause.demandeAcceptee = true;
-            break;
-          case "Refusée":
-            whereClause.demandeAcceptee = false;
-            break;
-        }
+    // Filtre par statut
+    if (status && status !== "Toutes") {
+      switch (status) {
+        case "En attente":
+          whereClause.demandeAcceptee = false;
+          whereClause.artisans = { none: {} };
+          break;
+        case "En cours":
+          whereClause.demandeAcceptee = false;
+          whereClause.artisans = { some: {} };
+          break;
+        case "Validée":
+          whereClause.demandeAcceptee = true;
+          break;
+        case "Refusée":
+          whereClause.demandeAcceptee = false;
+          break;
       }
+    }
 
-      // Recherche
-      if (search) {
-        whereClause.OR = [
-          ...(whereClause.OR || []), // Conserver le filtre existant
-          { description: { contains: search, mode: "insensitive" } },
-          { contactNom: { contains: search, mode: "insensitive" } },
-          { contactPrenom: { contains: search, mode: "insensitive" } },
-          { lieuAdresseVille: { contains: search, mode: "insensitive" } },
-          { service: { libelle: { contains: search, mode: "insensitive" } } },
-          { metier: { libelle: { contains: search, mode: "insensitive" } } },
-        ];
-      }
+    // Recherche
+    if (search) {
+      whereClause.OR = [
+        ...(whereClause.OR || []), // Conserver le filtre existant
+        { description: { contains: search, mode: "insensitive" } },
+        { contactNom: { contains: search, mode: "insensitive" } },
+        { contactPrenom: { contains: search, mode: "insensitive" } },
+        { lieuAdresseVille: { contains: search, mode: "insensitive" } },
+        { service: { libelle: { contains: search, mode: "insensitive" } } },
+        { metier: { libelle: { contains: search, mode: "insensitive" } } },
+      ];
+    }
 
-      const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-      const [demandes, total] = await Promise.all([
-        prisma.demande.findMany({
-          where: whereClause,
-          include: {
-            service: {
-              select: {
-                id: true,
-                libelle: true,
-                description: true,
-                images: true,
-                price: true,
-                duration: true,
-                category: true,
-                metiers: {
-                  include: {
-                    metier: {
-                      select: {
-                        id: true,
-                        libelle: true,
-                      },
+    const [demandes, total] = await Promise.all([
+      prisma.demande.findMany({
+        where: whereClause,
+        include: {
+          service: {
+            select: {
+              id: true,
+              libelle: true,
+              description: true,
+              images: true,
+              price: true,
+              duration: true,
+              category: true,
+              metiers: {
+                include: {
+                  metier: {
+                    select: {
+                      id: true,
+                      libelle: true,
                     },
                   },
                 },
               },
             },
-            metier: {
-              select: {
-                id: true,
-                libelle: true,
-              },
+          },
+          metier: {
+            select: {
+              id: true,
+              libelle: true,
             },
-            artisans: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    companyName: true,
-                    email: true,
-                    phone: true,
-                  },
+          },
+          artisans: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  companyName: true,
+                  email: true,
+                  phone: true,
                 },
               },
             },
-            createdBy: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
-                companyName: true,
-              },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              companyName: true,
             },
           },
-          orderBy: {
-            createdAt: "desc",
-          },
-          skip,
-          take: parseInt(limit),
-        }),
-        prisma.demande.count({ where: whereClause }),
-      ]);
-
-      // Transformer les données pour le frontend admin
-      const transformedDemandes = demandes.map((demande) => {
-        const artisansAcceptes = demande.artisans.filter((a) => a.accepte);
-        const artisansEnAttente = demande.artisans.filter(
-          (a) => a.accepte === null || a.accepte === false
-        );
-
-        // Déterminer le métier selon le type de demande
-        let metierLibelle = "Non spécifié";
-        let titre = "Demande de service";
-
-        if (demande.service) {
-          metierLibelle =
-            demande.service.metiers[0]?.metier?.libelle || "Non spécifié";
-          titre = `Demande ${demande.service.libelle}`;
-        } else if (demande.metier) {
-          metierLibelle = demande.metier.libelle;
-          titre = `Demande ${demande.metier.libelle}`;
-        }
-
-        // // Déterminer le statut
-        // let statut = "En attente";
-        // let urgence = "Moyen";
-
-        // if (demande.demandeAcceptee) {
-        //   statut = "Terminée";
-        // } else if (artisansAcceptes.length > 0) {
-        //   statut = "Validée";
-        // } else if (demande.artisans.length > 0) {
-        //   statut = "En cours";
-        // }
-
-        // Déterminer l'urgence basée sur la date de création
-        const now = new Date();
-        const daysSinceCreation = Math.floor(
-          (now - demande.createdAt) / (1000 * 60 * 60 * 24)
-        );
-
-        if (daysSinceCreation <= 1) {
-          urgence = "Urgent";
-        } else if (daysSinceCreation <= 3) {
-          urgence = "Moyen";
-        } else {
-          urgence = "Faible";
-        }
-
-        // Vérifier si c'est une nouvelle demande (moins de 24h)
-        const isNouvelle = daysSinceCreation <= 1;
-
-        return {
-          id: demande.id,
-          titre: titre,
-          metier: metierLibelle,
-          lieu: `${demande.lieuAdresseCp || ""} ${demande.lieuAdresseVille || ""}`.trim(),
-          statut: demande.statut,
-          urgence: urgence,
-          description: demande.description || "Aucune description fournie",
-          date: demande.createdAt.toLocaleDateString("fr-FR", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          }),
-          client:
-            `${demande.contactPrenom || ""} ${demande.contactNom || ""}`.trim() ||
-            `${demande.createdBy.firstName || ""} ${demande.createdBy.lastName || ""}`.trim(),
-          budget: "Non estimé",
-          nouvelle: isNouvelle,
-          urgent: urgence === "Urgent",
-          type: demande.serviceId ? "service" : "metier",
-          // Données détaillées
-          contactNom: demande.contactNom,
-          contactPrenom: demande.contactPrenom,
-          contactEmail: demande.contactEmail,
-          contactTel: demande.contactTel,
-          lieuAdresse: demande.lieuAdresse,
-          lieuAdresseCp: demande.lieuAdresseCp,
-          lieuAdresseVille: demande.lieuAdresseVille,
-          optionAssurance: demande.optionAssurance,
-          nombreArtisans: demande.nombreArtisans,
-          serviceId: demande.serviceId,
-          metierId: demande.metierId,
-          createdAt: demande.createdAt,
-          artisans: demande.artisans,
-          createdBy: demande.createdBy,
-          service: demande.service,
-          metier: demande.metier,
-        };
-      });
-
-      res.json({
-        demandes: transformedDemandes,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / parseInt(limit)),
         },
-      });
-    } catch (error) {
-      console.error(
-        "Erreur lors de la récupération des demandes admin:",
-        error
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.demande.count({ where: whereClause }),
+    ]);
+
+    // Transformer les données pour le frontend admin
+    const transformedDemandes = demandes.map((demande) => {
+      const artisansAcceptes = demande.artisans.filter((a) => a.accepte);
+      const artisansEnAttente = demande.artisans.filter(
+        (a) => a.accepte === null || a.accepte === false
       );
-      res.status(500).json({ error: "Erreur serveur" });
-    }
+
+      // Déterminer le métier selon le type de demande
+      let metierLibelle = "Non spécifié";
+      let titre = "Demande de service";
+
+      if (demande.service) {
+        metierLibelle =
+          demande.service.metiers[0]?.metier?.libelle || "Non spécifié";
+        titre = `Demande ${demande.service.libelle}`;
+      } else if (demande.metier) {
+        metierLibelle = demande.metier.libelle;
+        titre = `Demande ${demande.metier.libelle}`;
+      }
+
+      // // Déterminer le statut
+      // let statut = "En attente";
+      // let urgence = "Moyen";
+
+      // if (demande.demandeAcceptee) {
+      //   statut = "Terminée";
+      // } else if (artisansAcceptes.length > 0) {
+      //   statut = "Validée";
+      // } else if (demande.artisans.length > 0) {
+      //   statut = "En cours";
+      // }
+
+      // Déterminer l'urgence basée sur la date de création
+      const now = new Date();
+      const daysSinceCreation = Math.floor(
+        (now - demande.createdAt) / (1000 * 60 * 60 * 24)
+      );
+
+      if (daysSinceCreation <= 1) {
+        urgence = "Urgent";
+      } else if (daysSinceCreation <= 3) {
+        urgence = "Moyen";
+      } else {
+        urgence = "Faible";
+      }
+
+      // Vérifier si c'est une nouvelle demande (moins de 24h)
+      const isNouvelle = daysSinceCreation <= 1;
+
+      return {
+        id: demande.id,
+        titre: titre,
+        metier: metierLibelle,
+        lieu: `${demande.lieuAdresseCp || ""} ${demande.lieuAdresseVille || ""}`.trim(),
+        statut: demande.statut,
+        urgence: urgence,
+        description: demande.description || "Aucune description fournie",
+        date: demande.createdAt.toLocaleDateString("fr-FR", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }),
+        client:
+          `${demande.contactPrenom || ""} ${demande.contactNom || ""}`.trim() ||
+          `${demande.createdBy.firstName || ""} ${demande.createdBy.lastName || ""}`.trim(),
+        budget: "Non estimé",
+        nouvelle: isNouvelle,
+        urgent: urgence === "Urgent",
+        type: demande.serviceId ? "service" : "metier",
+        // Données détaillées
+        contactNom: demande.contactNom,
+        contactPrenom: demande.contactPrenom,
+        contactEmail: demande.contactEmail,
+        contactTel: demande.contactTel,
+        lieuAdresse: demande.lieuAdresse,
+        lieuAdresseCp: demande.lieuAdresseCp,
+        lieuAdresseVille: demande.lieuAdresseVille,
+        optionAssurance: demande.optionAssurance,
+        nombreArtisans: demande.nombreArtisans,
+        serviceId: demande.serviceId,
+        metierId: demande.metierId,
+        createdAt: demande.createdAt,
+        artisans: demande.artisans,
+        createdBy: demande.createdBy,
+        service: demande.service,
+        metier: demande.metier,
+      };
+    });
+
+    res.json({
+      demandes: transformedDemandes,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error("Erreur lors de la récupération des demandes admin:", error);
+    res.status(500).json({ error: "Erreur serveur" });
   }
-);
+});
 
 // GET /api/admin/demandes/stats - Statistiques pour l'admin
 router.get(
-  "/demandes/stats",
+  "/stats",
   authenticateToken,
   requireRole(["admin"]),
   async (req, res) => {
@@ -312,7 +304,7 @@ router.get(
 );
 // GET /api/admin/demandes/:id - Récupérer une demande spécifique
 router.get(
-  "/demandes/:id",
+  "/:id",
   authenticateToken,
   requireRole(["admin"]),
   async (req, res) => {
@@ -375,16 +367,19 @@ router.get(
 );
 // PUT /api/admin/demandes/:id/validate - Valider une demande
 router.put(
-  "/demandes/:id/validate",
+  "/:id/validate",
   authenticateToken,
   requireRole(["admin"]),
   async (req, res) => {
     try {
       const { id } = req.params;
-      const {validate}=req.body;
+      const { validate } = req.body;
 
-      if(!validate){
-        return res.status(400).json({error:"Le champ 'validate' est requis et doit être true pour valider la demande"});
+      if (!validate) {
+        return res.status(400).json({
+          error:
+            "Le champ 'validate' est requis et doit être true pour valider la demande",
+        });
       }
 
       const demande = await prisma.demande.update({
@@ -446,22 +441,22 @@ router.put(
           participants: {
             create: [
               { userId: demande.createdById }, // Client
-              ...demande.artisans.map(a => ({ userId: a.user.id })) // Artisans
-            ]
+              ...demande.artisans.map((a) => ({ userId: a.user.id })), // Artisans
+            ],
           },
           messages: {
             create: {
               contenu: "La demande a été validée par l'administrateur.",
               expediteurId: req.user.id,
               type: "SYSTEM",
-              evenementType: "DEMANDE_ENVOYEE"
-            }
-          }
+              evenementType: "DEMANDE_ENVOYEE",
+            },
+          },
         },
         include: {
           participants: true,
-          messages: true
-        }
+          messages: true,
+        },
       });
 
       res.json({
@@ -477,7 +472,7 @@ router.put(
 
 // PUT /api/admin/demandes/:id/assign - Assigner à un artisan
 router.put(
-  "/demandes/:id/assign",
+  "/:id/assign",
   authenticateToken,
   requireRole(["admin"]),
   async (req, res) => {
@@ -589,7 +584,7 @@ router.put(
   }
 );
 
-// GET /api/admin/artisans - Récupérer les artisans pour l'assignation
+// GET /api/admin/demandes/artisans - Récupérer les artisans pour l'assignation
 router.get(
   "/artisans",
   authenticateToken,
