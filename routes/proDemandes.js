@@ -5,7 +5,7 @@ const { prisma } = require("../lib/db");
 
 // GET /api/pro/demandes - Récupérer les demandes pour un professionnel
 router.get(
-  "/demandes",
+  "/",
   authenticateToken,
   requireRole(["professional"]),
   async (req, res) => {
@@ -255,7 +255,7 @@ router.get(
 
 // GET /api/pro/demandes/stats - Statistiques pour le professionnel
 router.get(
-  "/demandes/stats",
+  "/stats",
   authenticateToken,
   requireRole(["professional"]),
   async (req, res) => {
@@ -375,7 +375,7 @@ router.get(
 
 // POST /api/pro/demandes/:id/accept - Accepter une demande
 router.post(
-  "/demandes/:id/accept",
+  "/:id/accept",
   authenticateToken,
   requireRole(["professional"]),
   async (req, res) => {
@@ -531,7 +531,7 @@ router.post(
 
 // POST /api/pro/demandes/:id/decline - Refuser une demande
 router.post(
-  "/demandes/:id/decline",
+  "/:id/decline",
   authenticateToken,
   requireRole(["professional"]),
   async (req, res) => {
@@ -595,7 +595,7 @@ router.post(
 
 // POST /api/pro/demandes/:id/apply - Postuler à une demande
 router.post(
-  "/demandes/:id/apply",
+  "/:id/apply",
   authenticateToken,
   requireRole(["professional"]),
   async (req, res) => {
@@ -740,59 +740,6 @@ router.post(
       });
     } catch (error) {
       console.error("Erreur lors de la postulation:", error);
-      res.status(500).json({ error: "Erreur serveur" });
-    }
-  }
-);
-
-// GET /api/pro/profile - Récupérer le profil du professionnel
-router.get(
-  "/profile",
-  authenticateToken,
-  requireRole(["professional"]),
-  async (req, res) => {
-    try {
-      const userId = req.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          metiers: {
-            include: {
-              metier: {
-                select: {
-                  id: true,
-                  libelle: true,
-                },
-              },
-            },
-          },
-          services: {
-            include: {
-              service: {
-                select: {
-                  id: true,
-                  libelle: true,
-                  description: true,
-                  price: true,
-                  duration: true,
-                  category: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!user) {
-        return res.status(404).json({ error: "Utilisateur non trouvé" });
-      }
-
-      res.json({
-        profile: user,
-      });
-    } catch (error) {
-      console.error("Erreur lors de la récupération du profil:", error);
       res.status(500).json({ error: "Erreur serveur" });
     }
   }

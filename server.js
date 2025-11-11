@@ -273,7 +273,7 @@ app.use("/api/advertisements", require("./routes/advertisements"));
 app.use("/api/conversations", require("./routes/conversations"));
 
 // Routes pour les demandes pro et discussions
-app.use("/api/pro", require("./routes/proDemandes"));
+app.use("/api/pro/demandes", require("./routes/proDemandes"));
 // Route pour l'upload de fichiers dans les messages
 app.post(
   "/api/upload/message-file",
