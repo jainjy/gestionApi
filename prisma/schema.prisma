@@ -95,15 +95,19 @@ model User {
   advertisements           Advertisement[]
 
   //relation pour suggetion intelligente 
-  activities  UserActivity[]
-  preferences UserPreference[]
-  events      UserEvent[]
+  activities     UserActivity[]
+  preferences    UserPreference[]
+  events         UserEvent[]
+  // RELATION POUR PODCAST 
+  podcasts       Podcast[] // Podcasts créés par l'utilisateur
+  videos         Video[] // Vidéos créées par l'utilisateur
+  mediaFavorites UserMediaFavorite[] // Favoris médias de l'utilisateur
+  wellBeingStats WellBeingStats? // Statistiques bien-être
 
   @@index([email])
   @@index([role])
   @@index([status])
 }
-
 
 // ======================
 // 📊 ACTIVITÉS UTILISATEUR
@@ -125,7 +129,7 @@ model UserActivity {
 
   @@index([userId])
   @@index([createdAt])
-  @@index([action]) 
+  @@index([action])
 }
 
 // ======================
@@ -335,9 +339,9 @@ model Product {
   updatedAt      DateTime               @updatedAt
   publishedAt    DateTime?
   userId         String
-  viewCount       Int      @default(0)
-  clickCount      Int      @default(0)
-  purchaseCount   Int      @default(0)
+  viewCount      Int                    @default(0)
+  clickCount     Int                    @default(0)
+  purchaseCount  Int                    @default(0)
   embedding      Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
 
   // CHAMPS POUR ALIMENTATION
@@ -494,27 +498,27 @@ model Demande {
 //DEMANDE DES ARTISAN
 //===================
 model DemandeArtisan {
-  userId          String
-  demandeId       Int
-  accepte         Boolean? 
-  devis           String?
-  devisFileUrl    String? // URL du fichier de devis
-  devisFileName   String? // Nom du fichier de devis
-  devisFileType   String? // Type du fichier de devis
-  rdv             DateTime?
-  rdvNotes        String? // Notes pour le rendez-vous
-  factureFileUrl  String? // URL du fichier de facture
-  factureFileName String? // Nom du fichier de facture
-  factureFileType String? // Type du fichier de facture
-  factureMontant  Float? // Montant de la facture
-  factureStatus   String?   @default("en_attente") // en_attente, validee,confirmer, refusee
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime? @updatedAt
-  travauxTermines Boolean? @default(false) // Nouveau champ pour suivre l'état des travaux
-  factureConfirmee Boolean? @default(false) // Nouveau champ pour confirmation du paiement par le pro
-  recruited       Boolean? //si l'artisan a ete pris pour le demandes de services
-  user    User    @relation("DemandeArtisanUser", fields: [userId], references: [id])
-  demande Demande @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
+  userId           String
+  demandeId        Int
+  accepte          Boolean?
+  devis            String?
+  devisFileUrl     String? // URL du fichier de devis
+  devisFileName    String? // Nom du fichier de devis
+  devisFileType    String? // Type du fichier de devis
+  rdv              DateTime?
+  rdvNotes         String? // Notes pour le rendez-vous
+  factureFileUrl   String? // URL du fichier de facture
+  factureFileName  String? // Nom du fichier de facture
+  factureFileType  String? // Type du fichier de facture
+  factureMontant   Float? // Montant de la facture
+  factureStatus    String?   @default("en_attente") // en_attente, validee,confirmer, refusee
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime? @updatedAt
+  travauxTermines  Boolean?  @default(false) // Nouveau champ pour suivre l'état des travaux
+  factureConfirmee Boolean?  @default(false) // Nouveau champ pour confirmation du paiement par le pro
+  recruited        Boolean? //si l'artisan a ete pris pour le demandes de services
+  user             User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
+  demande          Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
   @@id([userId, demandeId])
   @@index([userId])
@@ -569,7 +573,7 @@ model Review {
   comment   String?
   createdAt DateTime @default(now())
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
 
@@ -895,4 +899,106 @@ model Subscription {
   @@index([userId])
   @@index([planId])
   @@index([status])
+}
+
+// ======================
+// MODÈLES POUR LES MÉDIAS (PODCASTS & VIDÉOS)
+// ======================
+
+// Modèle pour les catégories de médias
+model MediaCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  type        String // "podcast", "video"
+  description String?
+  color       String? // Couleur pour le frontend (blue, green, purple, etc.)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  podcasts Podcast[]
+  videos   Video[]
+
+  @@index([type])
+}
+
+// Modifiez les modèles Podcast et Video :
+
+model Podcast {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  duration    String
+  audioFile   String? // Chemin du fichier audio
+  audioUrl    String? // URL publique pour lecture
+  imageUrl    String
+  categoryId  Int
+  authorId    String?
+  isPremium   Boolean  @default(false)
+  listens     Int      @default(0)
+  isActive    Boolean  @default(true)
+  fileSize    Int? // Taille en bytes
+  mimeType    String? // "audio/mpeg", etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category MediaCategory @relation(fields: [categoryId], references: [id])
+  author   User?         @relation(fields: [authorId], references: [id])
+}
+
+model Video {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  duration     String
+  videoFile    String? // Chemin du fichier vidéo
+  videoUrl     String? // URL publique pour lecture
+  thumbnailUrl String
+  categoryId   Int
+  authorId     String?
+  isPremium    Boolean  @default(false)
+  views        Int      @default(0)
+  isActive     Boolean  @default(true)
+  fileSize     Int? // Taille en bytes
+  mimeType     String? // "video/mp4", etc.
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category MediaCategory @relation(fields: [categoryId], references: [id])
+  author   User?         @relation(fields: [authorId], references: [id])
+}
+
+// Modèle pour les favoris utilisateur
+model UserMediaFavorite {
+  id        String   @id @default(uuid())
+  userId    String
+  mediaId   String
+  mediaType String // "podcast", "video"
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mediaId, mediaType])
+  @@index([userId])
+  @@index([mediaId, mediaType])
+}
+
+// ======================
+// MODÈLE POUR LES STATISTIQUES BIEN-ÊTRE
+// ======================
+model WellBeingStats {
+  id               String    @id @default(uuid())
+  userId           String    @unique
+  totalSessions    Int       @default(0)
+  totalDuration    Int       @default(0) // en minutes
+  favoriteCategory String?
+  lastActivityAt   DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
