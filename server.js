@@ -3,9 +3,7 @@ const path = require("path");
 const express = require("express");
 const cors = require("./middleware/cors");
 const helmet = require("helmet");
-//test
 const bodyParser = require("body-parser");
-
 const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const fs = require("fs");
@@ -14,25 +12,13 @@ const { Server } = require("socket.io");
 const { upload } = require("./middleware/upload");
 const { authenticateToken } = require("./middleware/auth");
 
-// AJOUT: Import Prisma pour vérifier la connexion DB
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
 
-// Fonction de vérification de la connexion DB
-async function checkDatabaseConnection() {
-  try {
-    await prisma.$connect();
-    console.log('✅ Connexion à la base de données réussie');
-    return true;
-  } catch (error) {
-    console.error('❌ Impossible de se connecter à la base de données:', error.message);
-    return false;
-  }
-}
-
+//initialisation des variables necessaires 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const server = http.createServer(app);
+
+// Gestion des connexions Socket.io
 const io = new Server(server, {
   cors: {
     origin: [
@@ -45,7 +31,6 @@ const io = new Server(server, {
   },
 });
 app.set("io", io);
-// Gestion des connexions Socket.io
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
@@ -53,35 +38,30 @@ io.on("connection", (socket) => {
   if (userId) {
     socket.join(`user:${userId}`);
   }
-
   // Rejoindre une conversation
   socket.on("join_conversation", (conversationId) => {
     socket.join(`conversation:${conversationId}`);
     console.log(`User ${userId} joined conversation ${conversationId}`);
   });
-
   // Quitter une conversation
   socket.on("leave_conversation", (conversationId) => {
     socket.leave(`conversation:${conversationId}`);
   });
-
   // Envoyer un message
   socket.on("send_message", (message) => {
     socket
       .to(`conversation:${message.conversationId}`)
       .emit("new_message", message);
-
     // Notifier les participants
     if (message.expediteurId) {
       socket.to(`user:${message.expediteurId}`).emit("message_sent", message);
     }
   });
-
   // Marquer les messages comme lus
   socket.on("mark_messages_read", (data) => {
     socket.to(`conversation:${data.conversationId}`).emit("message_read", data);
   });
-
+  //deconnexion
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
   });
@@ -264,6 +244,7 @@ app.use("/api/suggestion", require("./routes/suggestionIntelligent"));
 
 //oeuvre
 const oeuvre = require("./routes/oeuvre");
+const { prisma } = require("./lib/db");
 app.use("/api/oeuvre", oeuvre);
 
 // NOUVELLE ROUTE POUR LES MÉDIAS (BIEN-ÊTRE)
@@ -308,8 +289,7 @@ app.post(
     }
   }
 );
-
-// 🔥 ROUTE DE TEST POUR LES FICHIERS MÉDIA
+//ROUTE DE TEST POUR LES FICHIERS MÉDIA
 app.get("/media/test/:filename", (req, res) => {
   const { filename } = req.params;
   const filePath = path.join(__dirname, "uploads/videos", filename);
@@ -380,14 +360,4 @@ app.use((error, req, res, next) => {
 server.listen(PORT, async () => {
   console.log(`🚀 Le serveur tourne sur le port: ${PORT}`);
   console.log(`🏥 Voir la santé sur : http://localhost:${PORT}/health`);
-  
-  // Vérifier la connexion à la base de données
-  const dbConnected = await checkDatabaseConnection();
-  
-  if (dbConnected) {
-    console.log('📊 Base de données prête');
-  } else {
-    console.log('🚨 Mode dégradé - Base de données non accessible');
-    console.log('💡 Vérifiez que PostgreSQL est démarré: net start postgresql-x64-17');
-  }
 });
