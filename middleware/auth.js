@@ -1,23 +1,49 @@
-const { prisma } = require('../lib/db')
+const { prisma } = require('../lib/db');
 
 async function authenticateToken(req, res, next) {
-  const authHeader = req.headers.authorization
-  const token = authHeader && authHeader.split(' ')[1]
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ error: 'Token d\'authentification requis' })
+    return res.status(401).json({ 
+      success: false,
+      error: 'Token d\'authentification requis' 
+    });
   }
+
   try {
-    // Extraire l'ID utilisateur du token
-    const userId = token.replace('real-jwt-token-', '')
+    let userId;
     
+    console.log('🔐 Token reçu:', token);
+    
+    // Accepter plusieurs formats de token
+    if (token.startsWith('real-jwt-token-')) {
+      userId = token.replace('real-jwt-token-', '');
+    } else {
+      // Si le token est directement l'ID utilisateur
+      userId = token;
+    }
+    
+    console.log('👤 User ID extrait:', userId);
+    
+    // Validation de l'ID utilisateur
+    if (!userId || userId.length < 1) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'Token invalide' 
+      });
+    }
+
     // Vérifier si l'utilisateur existe
     const user = await prisma.user.findUnique({
       where: { id: userId },
-    })
+    });
 
     if (!user) {
-      return res.status(401).json({ error: 'Token invalide' })
+      return res.status(401).json({ 
+        success: false,
+        error: 'Utilisateur non trouvé' 
+      });
     }
 
     // Ajouter l'utilisateur à la requête
@@ -29,30 +55,40 @@ async function authenticateToken(req, res, next) {
       role: user.role,
       companyName: user.companyName,
       kycStatus: user.status
-    }
+    };
 
-    next()
+    console.log('✅ User authentifié:', req.user.email, 'Role:', req.user.role);
+    next();
   } catch (error) {
-    console.error('Auth middleware error:', error)
-    return res.status(401).json({ error: 'Token invalide' })
+    console.error('Auth middleware error:', error);
+    return res.status(401).json({ 
+      success: false,
+      error: 'Token invalide' 
+    });
   }
 }
 
 function requireRole(roles) {
   return (req, res, next) => {
     if (!req.user) {
-      return res.status(401).json({ error: 'Authentification requise' })
+      return res.status(401).json({ 
+        success: false,
+        error: 'Authentification requise' 
+      });
     }
 
-    const userRole = req.user.role
-    const allowedRoles = Array.isArray(roles) ? roles : [roles]
+    const userRole = req.user.role;
+    const allowedRoles = Array.isArray(roles) ? roles : [roles];
 
     if (userRole === 'admin' || allowedRoles.includes(userRole)) {
-      return next()
+      return next();
     }
 
-    res.status(403).json({ error: 'Accès non autorisés' })
+    res.status(403).json({ 
+      success: false,
+      error: 'Accès non autorisé' 
+    });
   }
 }
 
-module.exports = { authenticateToken, requireRole }
+module.exports = { authenticateToken, requireRole };
