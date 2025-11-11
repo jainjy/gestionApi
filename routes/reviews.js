@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const { authenticateToken } = require("../middleware/auth");
+const { emitNewMessage } = require("../utils/message");
 
 const prisma = new PrismaClient();
 
@@ -81,7 +82,7 @@ router.post("/", authenticateToken, async (req, res) => {
     });
 
     if (conversation) {
-      await prisma.message.create({
+      const message=await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
@@ -90,6 +91,7 @@ router.post("/", authenticateToken, async (req, res) => {
           evenementType: "AVIS_LAISSE",
         },
       });
+      emitNewMessage(req, message);
     }
 
     res.json({

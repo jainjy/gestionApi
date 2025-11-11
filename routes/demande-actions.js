@@ -4,8 +4,9 @@ const { PrismaClient } = require("@prisma/client");
 const { authenticateToken } = require("../middleware/auth");
 const { upload } = require("../middleware/upload");
 const stripe = require("../utils/stripe");
+const { prisma } = require("../lib/db");
+const { emitNewMessage } = require("../utils/message");
 
-const prisma = new PrismaClient();
 
 // POST /api/demande-actions/:demandeId/proposer-rdv - Proposer un rendez-vous
 router.post("/:demandeId/proposer-rdv", authenticateToken, async (req, res) => {
@@ -50,7 +51,7 @@ router.post("/:demandeId/proposer-rdv", authenticateToken, async (req, res) => {
     });
 
     if (conversation) {
-      await prisma.message.create({
+      const message=await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
@@ -59,7 +60,9 @@ router.post("/:demandeId/proposer-rdv", authenticateToken, async (req, res) => {
           evenementType: "PROPOSITION_RENDEZ_VOUS",
         },
       });
+      emitNewMessage(req, message);
     }
+    
 
     res.json({
       success: true,
@@ -129,7 +132,7 @@ router.post("/:demandeId/envoyer-devis", authenticateToken, upload.single("devis
     });
 
     if (conversation) {
-      await prisma.message.create({
+      const message = await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
@@ -141,6 +144,7 @@ router.post("/:demandeId/envoyer-devis", authenticateToken, upload.single("devis
           typeFichier: fileInfo.type,
         },
       });
+      emitNewMessage(req, message);
     }
 
     res.json({
@@ -217,7 +221,7 @@ router.post("/:demandeId/envoyer-facture", authenticateToken, upload.single("fac
     });
 
     if (conversation) {
-      await prisma.message.create({
+      const message = await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
@@ -229,6 +233,7 @@ router.post("/:demandeId/envoyer-facture", authenticateToken, upload.single("fac
           typeFichier: fileInfo.type,
         },
       });
+      emitNewMessage(req, message);
     }
 
     res.json({
@@ -289,7 +294,7 @@ router.put("/:demandeId/valider-facture", authenticateToken, async (req, res) =>
 
     if (conversation) {
       const statutMessage = statut === "validee" ? "validée" : "refusée";
-      await prisma.message.create({
+      const message = await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
@@ -298,6 +303,7 @@ router.put("/:demandeId/valider-facture", authenticateToken, async (req, res) =>
           evenementType: "FACTURE_ENVOYEE",
         },
       });
+      emitNewMessage(req, message);
     }
 
     res.json({
@@ -381,15 +387,16 @@ router.put("/:demandeId/modifier-rdv", authenticateToken, async (req, res) => {
     });
 
     if (conversation) {
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          expediteurId: userId,
-          contenu: `Rendez-vous modifié pour le ${new Date(date).toLocaleDateString('fr-FR')}`,
-          type: "SYSTEM",
-          evenementType: "PROPOSITION_RENDEZ_VOUS",
-        },
-      });
+     const message = await prisma.message.create({
+       data: {
+         conversationId: conversation.id,
+         expediteurId: userId,
+         contenu: `Rendez-vous modifié pour le ${new Date(date).toLocaleDateString("fr-FR")}`,
+         type: "SYSTEM",
+         evenementType: "PROPOSITION_RENDEZ_VOUS",
+       },
+     });
+      emitNewMessage(req, message);
     }
 
     res.json({
@@ -443,15 +450,16 @@ router.put("/:demandeId/modifier-devis", authenticateToken, upload.single("devis
     });
 
     if (conversation) {
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          expediteurId: userId,
-          contenu: `Devis modifié - Nouveau montant: ${montant}€`,
-          type: "SYSTEM",
-          evenementType: "PROPOSITION_DEVIS",
-        },
-      });
+     const message = await prisma.message.create({
+       data: {
+         conversationId: conversation.id,
+         expediteurId: userId,
+         contenu: `Devis modifié - Nouveau montant: ${montant}€`,
+         type: "SYSTEM",
+         evenementType: "PROPOSITION_DEVIS",
+       },
+     });
+      emitNewMessage(req, message);
     }
 
     res.json({
@@ -533,15 +541,17 @@ router.post("/:demandeId/signer-devis", authenticateToken, async (req, res) => {
     });
 
     if (conversation) {
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          expediteurId: userId,
-          contenu: "Devis signé - L'artisan a été sélectionné pour réaliser les travaux",
-          type: "SYSTEM",
-          evenementType: "CLIENT_SIGNE",
-        },
-      });
+     const message = await prisma.message.create({
+       data: {
+         conversationId: conversation.id,
+         expediteurId: userId,
+         contenu:
+           "Devis signé - L'artisan a été sélectionné pour réaliser les travaux",
+         type: "SYSTEM",
+         evenementType: "CLIENT_SIGNE",
+       },
+     });
+      emitNewMessage(req, message);
     }
 
     res.json({
@@ -613,7 +623,7 @@ router.post("/:demandeId/payer-facture", authenticateToken, async (req, res) => 
     });
 
     if (conversation) {
-      await prisma.message.create({
+      const message = await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
@@ -622,6 +632,7 @@ router.post("/:demandeId/payer-facture", authenticateToken, async (req, res) => 
           evenementType: "FACTURE_PAYEE",
         },
       });
+      emitNewMessage(req, message);
     }
 
     res.json({
@@ -693,7 +704,7 @@ router.post("/:demandeId/confirmer-paiement", authenticateToken, async (req, res
         ? "Paiement confirmé par l'artisan" 
         : "Paiement refusé par l'artisan - Merci de contacter le support";
       
-      await prisma.message.create({
+      const messages = await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
@@ -702,6 +713,7 @@ router.post("/:demandeId/confirmer-paiement", authenticateToken, async (req, res
           evenementType: confirmer ? "FACTURE_CONFIRMEE" : "FACTURE_REFUSEE",
         },
       });
+      emitNewMessage(req, messages);
     }
 
     res.json({
@@ -765,15 +777,16 @@ router.post("/:demandeId/terminer-travaux", authenticateToken, async (req, res) 
     });
 
     if (conversation) {
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          expediteurId: userId,
-          contenu: "Travaux marqués comme terminés par l'artisan",
-          type: "SYSTEM",
-          evenementType: "TRAVAUX_TERMINES",
-        },
-      });
+     const message = await prisma.message.create({
+       data: {
+         conversationId: conversation.id,
+         expediteurId: userId,
+         contenu: "Travaux marqués comme terminés par l'artisan",
+         type: "SYSTEM",
+         evenementType: "TRAVAUX_TERMINES",
+       },
+     });
+      emitNewMessage(req, message);
     }
 
     res.json({
@@ -829,15 +842,18 @@ router.post("/:demandeId/confirmer-travaux-termines", authenticateToken, async (
         ? "Travaux confirmés comme terminés par le client" 
         : "Travaux non confirmés - Merci de contacter l'artisan";
       
-      await prisma.message.create({
+      const messages = await prisma.message.create({
         data: {
           conversationId: conversation.id,
           expediteurId: userId,
           contenu: message,
           type: "SYSTEM",
-          evenementType: confirmer ? "TRAVAUX_CONFIRMES" : "TRAVAUX_NON_CONFIRMES",
+          evenementType: confirmer
+            ? "TRAVAUX_CONFIRMES"
+            : "TRAVAUX_NON_CONFIRMES",
         },
       });
+      emitNewMessage(req, messages);
     }
 
     res.json({
