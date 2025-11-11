@@ -204,6 +204,10 @@ app.use(
   "/api/professional/services",
   require("./routes/professional-services")
 );
+// routes pour les   batiments
+app.use("/api/batiment", require("./routes/batiment"));
+
+
 app.use("/api/mail", require("./routes/mail"));
 app.use("/api/demandes/immobilier", require("./routes/demandes-immobilier"));
 app.use("/api/demandes", require("./routes/user-demandes"));
