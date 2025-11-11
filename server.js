@@ -12,8 +12,7 @@ const { Server } = require("socket.io");
 const { upload } = require("./middleware/upload");
 const { authenticateToken } = require("./middleware/auth");
 
-
-//initialisation des variables necessaires 
+//initialisation des variables necessaires
 const app = express();
 const PORT = process.env.PORT || 3001;
 const server = http.createServer(app);
@@ -75,8 +74,8 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // Créer les sous-dossiers pour les médias
-const mediaDirs = ['audio', 'videos', 'thumbnails'];
-mediaDirs.forEach(dir => {
+const mediaDirs = ["audio", "videos", "thumbnails"];
+mediaDirs.forEach((dir) => {
   const dirPath = path.join(__dirname, "uploads", dir);
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -84,7 +83,7 @@ mediaDirs.forEach(dir => {
   }
 });
 
-// Rate limiting pour les limitation de nombres de requetes 
+// Rate limiting pour les limitation de nombres de requetes
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 🔸 Fenêtre de 10 minutes
   max: 300, // 🔸 300 requêtes par IP dans cette période
@@ -121,66 +120,75 @@ app.use(
     },
   })
 );
-app.use("/api",limiter);
+app.use("/api", limiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
 // 🔥 CORRECTION CRITIQUE: Middleware CORS très permissif pour les fichiers média
-app.use('/media', (req, res, next) => {
+app.use("/media", (req, res, next) => {
   // Headers CORS très permissifs pour les fichiers média
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS, POST, PUT');
-  res.header('Access-Control-Allow-Headers', '*');
-  res.header('Access-Control-Expose-Headers', '*');
-  res.header('Access-Control-Max-Age', '86400');
-  
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS, POST, PUT");
+  res.header("Access-Control-Allow-Headers", "*");
+  res.header("Access-Control-Expose-Headers", "*");
+  res.header("Access-Control-Max-Age", "86400");
+
   // Désactiver certaines protections de sécurité pour les fichiers média
-  res.removeHeader('X-Content-Type-Options');
-  res.removeHeader('X-Frame-Options');
-  
+  res.removeHeader("X-Content-Type-Options");
+  res.removeHeader("X-Frame-Options");
+
   // Gérer les requêtes OPTIONS (preflight)
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
-  
+
   next();
 });
 
 // 🔥 MIDDLEWARE POUR DÉSACTIVER HELMET POUR LES MÉDIAS
-app.use('/media', (req, res, next) => {
+app.use("/media", (req, res, next) => {
   // Temporairement désactiver helmet pour les fichiers média
-  res.removeHeader('Content-Security-Policy');
-  res.removeHeader('Cross-Origin-Embedder-Policy');
-  res.removeHeader('Cross-Origin-Opener-Policy');
-  res.removeHeader('Cross-Origin-Resource-Policy');
+  res.removeHeader("Content-Security-Policy");
+  res.removeHeader("Cross-Origin-Embedder-Policy");
+  res.removeHeader("Cross-Origin-Opener-Policy");
+  res.removeHeader("Cross-Origin-Resource-Policy");
   next();
 });
 
 // 🔥 SERVIR LES FICHIERS MÉDIA AVEC LES BONS HEADERS
-app.use("/media/audio", express.static(path.join(__dirname, "uploads/audio"), {
-  setHeaders: (res, filePath) => {
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-  }
-}));
+app.use(
+  "/media/audio",
+  express.static(path.join(__dirname, "uploads/audio"), {
+    setHeaders: (res, filePath) => {
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+    },
+  })
+);
 
-app.use("/media/videos", express.static(path.join(__dirname, "uploads/videos"), {
-  setHeaders: (res, filePath) => {
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    // 🔥 IMPORTANT: Headers pour la lecture cross-origin
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  }
-}));
+app.use(
+  "/media/videos",
+  express.static(path.join(__dirname, "uploads/videos"), {
+    setHeaders: (res, filePath) => {
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      // 🔥 IMPORTANT: Headers pour la lecture cross-origin
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+    },
+  })
+);
 
-app.use("/media/thumbnails", express.static(path.join(__dirname, "uploads/thumbnails"), {
-  setHeaders: (res, filePath) => {
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-  }
-}));
+app.use(
+  "/media/thumbnails",
+  express.static(path.join(__dirname, "uploads/thumbnails"), {
+    setHeaders: (res, filePath) => {
+      res.setHeader("Cache-Control", "public, max-age=3600");
+    },
+  })
+);
 
 // Routes API
 app.use("/api/auth", require("./routes/auth"));
@@ -232,7 +240,11 @@ app.use("/api/professional", require("./routes/professional-billing"));
 app.use("/api/stripe", require("./routes/stripeCreate"));
 //pour les notations
 app.use("/api/reviews", require("./routes/reviews"));
-
+//pour les settings pro
+app.use(
+  "/api/professional/settings",
+  require("./routes/professional-settings")
+);
 //pour les estimations immobilières
 app.use("/api/estimation", require("./routes/estimation"));
 
@@ -293,24 +305,24 @@ app.post(
 app.get("/media/test/:filename", (req, res) => {
   const { filename } = req.params;
   const filePath = path.join(__dirname, "uploads/videos", filename);
-  
+
   if (fs.existsSync(filePath)) {
     const stats = fs.statSync(filePath);
-    console.log('✅ Fichier trouvé:', {
+    console.log("✅ Fichier trouvé:", {
       filename,
       size: stats.size,
-      path: filePath
+      path: filePath,
     });
-    
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.sendFile(filePath);
   } else {
-    console.log('❌ Fichier non trouvé:', filePath);
+    console.log("❌ Fichier non trouvé:", filePath);
     res.status(404).json({
       success: false,
-      message: 'Fichier non trouvé',
-      path: filePath
+      message: "Fichier non trouvé",
+      path: filePath,
     });
   }
 });
@@ -334,7 +346,7 @@ app.get("/health", (req, res) => {
       "admin-demandes",
       "cart",
       "orders",
-      "media"
+      "media",
     ],
   });
 });

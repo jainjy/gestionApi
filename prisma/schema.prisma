@@ -95,14 +95,15 @@ model User {
   advertisements           Advertisement[]
 
   //relation pour suggetion intelligente 
-  activities     UserActivity[]
-  preferences    UserPreference[]
-  events         UserEvent[]
+  activities           UserActivity[]
+  preferences          UserPreference[]
+  events               UserEvent[]
   // RELATION POUR PODCAST 
-  podcasts       Podcast[] // Podcasts créés par l'utilisateur
-  videos         Video[] // Vidéos créées par l'utilisateur
-  mediaFavorites UserMediaFavorite[] // Favoris médias de l'utilisateur
-  wellBeingStats WellBeingStats? // Statistiques bien-être
+  podcasts             Podcast[] // Podcasts créés par l'utilisateur
+  videos               Video[] // Vidéos créées par l'utilisateur
+  mediaFavorites       UserMediaFavorite[] // Favoris médias de l'utilisateur
+  wellBeingStats       WellBeingStats? // Statistiques bien-être
+  ProfessionalSettings ProfessionalSettings?
 
   @@index([email])
   @@index([role])
@@ -110,9 +111,56 @@ model User {
 }
 
 // ======================
+// PARAMÈTRES PROFESSIONNELS
+// ======================
+model ProfessionalSettings {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Horaires d'ouverture
+  horairesLundi    Json? // {ouvert: Boolean, debut: String, fin: String}
+  horairesMardi    Json?
+  horairesMercredi Json?
+  horairesJeudi    Json?
+  horairesVendredi Json?
+  horairesSamedi   Json?
+  horairesDimanche Json?
+
+  // Jours fermés exceptionnels
+  joursFermes Json? // [{date: String, label: String}]
+
+  // Délais de réponse
+  delaiReponseEmail     Int? @default(24) // heures
+  delaiReponseTelephone Int? @default(2) // heures
+  delaiReponseUrgence   Int? @default(4) // heures
+
+  // Politique d'annulation
+  delaiAnnulationGratuit  Int?    @default(48) // heures
+  fraisAnnulationPourcent Int?    @default(15) // pourcentage
+  conditionsAnnulation    String?
+
+  // Seuil de réservation
+  acomptePourcentage Int?    @default(30) // pourcentage
+  montantMinimum     Float?  @default(100) // euros
+  conditionsPaiement String?
+
+  // Informations générales
+  nomEntreprise String?
+  emailContact  String?
+  telephone     String?
+  adresse       String?
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ======================
 // 📊 ACTIVITÉS UTILISATEUR
 // ======================
-
 model UserActivity {
   id          String   @id @default(cuid())
   userId      String
@@ -131,8 +179,6 @@ model UserActivity {
   @@index([createdAt])
   @@index([action])
 }
-
-// ======================
 
 // ======================
 // ❤️ PRÉFÉRENCES UTILISATEUR
