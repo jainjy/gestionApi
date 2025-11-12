@@ -93,7 +93,7 @@ model User {
   subscriptions            Subscription[]
   tourismeBookings         TourismeBooking[]
   advertisements           Advertisement[]
-
+  demandesRecues Demande[] @relation("DemandeArtisanSpecifique")
   //relation pour suggetion intelligente 
   activities           UserActivity[]
   preferences          UserPreference[]
@@ -521,12 +521,14 @@ model Demande {
   propertyId          String? // Référence optionnelle vers Property.id
   statut              String?
   isRead              Boolean   @default(false)
+  artisanId           String?   // NOUVEAU: ID de l'artisan spécifique pour les demandes directes
 
   // Relations
   createdBy     User             @relation("DemandeCreePar", fields: [createdById], references: [id])
   service       Service?         @relation(fields: [serviceId], references: [id])
   metier        Metier?          @relation(fields: [metierId], references: [id])
   property      Property?        @relation(fields: [propertyId], references: [id])
+  artisan       User?            @relation("DemandeArtisanSpecifique", fields: [artisanId], references: [id]) // NOUVELLE RELATION
   artisans      DemandeArtisan[] @relation("DemandeArtisanDemande")
   conversations Conversation[]
   devis         String? // au cas ou il y a des demandes de devis
@@ -538,6 +540,7 @@ model Demande {
   @@index([serviceId])
   @@index([statut])
   @@index([createdAt])
+  @@index([artisanId]) // NOUVEAU INDEX
 }
 
 //===================
