@@ -59,13 +59,19 @@ router.get(
                   in: userMetierIds.length > 0 ? userMetierIds : undefined,
                 },
               },
+
             ].filter(
               (condition) => Object.values(condition)[0].in !== undefined
             ),
+            OR:[
+              {artisanId:null},
+              {artisanId:userId}
+            ]
           },
           {
             propertyId: null, // Exclure les demandes immobilières
           },
+
         ],
       };
 
