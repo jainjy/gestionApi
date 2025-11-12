@@ -284,45 +284,45 @@ model Message {
 model Property {
   id              String                 @id @default(uuid())
   title           String
-  description     String?
-  type            String // "house", "apartment", "villa", "land", "studio"
-  status          String // "draft", "pending", "published", "archived", "sold", "rented"
-  price           Float?
-  surface         Int? // Surface en m²
-  rooms           Int? // Nombre de pièces
-  bedrooms        Int? // Nombre de chambres
-  bathrooms       Int? // Nombre de salles de bain
-  address         String?
+  description     String?                // Nullable
+  type            String                 // "house", "apartment", etc.
+  status          String?                // "draft", "pending", etc.
+  price           Float?                 // Nullable
+  surface         Int?                   // Nullable
+  rooms           Int?                   // Nullable
+  bedrooms        Int?                   // Nullable
+  bathrooms       Int?                   // Nullable
+  address         String?                // Nullable
   city            String
-  zipCode         String?
-  latitude        Float?
-  longitude       Float?
-  features        String[] // ["pool", "garden", "parking", "terrace", "balcony"]
-  images          String[] // URLs des images
-  isFeatured      Boolean                @default(false)
-  isActive        Boolean                @default(true)
-  views           Int                    @default(0)
+  zipCode         String?                // Nullable
+  latitude        Float?                 // Nullable
+  longitude       Float?                 // Nullable
+  features        String[]               // ["pool", "garden", ...]
+  images          String[]               // URLs Supabase
+  isFeatured      Boolean?               @default(false)
+  isActive        Boolean?               @default(true)
+  views           Int?                   @default(0)
   ownerId         String
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  publishedAt     DateTime?
-  energyClass     String? // "A", "B", "C", "D", "E", "F", "G"
-  expiresAt       DateTime? // Date d'expiration de l'annonce
-  floor           Int? // Étage
-  hasBalcony      Boolean                @default(false)
-  hasElevator     Boolean                @default(false)
-  hasGarden       Boolean                @default(false)
-  hasParking      Boolean                @default(false)
-  hasPool         Boolean                @default(false)
-  hasTerrace      Boolean                @default(false)
-  listingType     String                 @default("sale") // "sale", "rent", "both"
-  metaDescription String?
-  metaTitle       String?
+  createdAt       DateTime?              @default(now())
+  updatedAt       DateTime?              @updatedAt
+  publishedAt     DateTime?              // Nullable
+  energyClass     String?                // Nullable
+  expiresAt       DateTime?              // Nullable
+  floor           Int?                   // Nullable
+  hasBalcony      Boolean?               @default(false)
+  hasElevator     Boolean?               @default(false)
+  hasGarden       Boolean?               @default(false)
+  hasParking      Boolean?               @default(false)
+  hasPool         Boolean?               @default(false)
+  hasTerrace      Boolean?               @default(false)
+  listingType     String?                @default("sale")
+  metaDescription String?                // Nullable
+  metaTitle       String?                // Nullable
   slug            String?                @unique
-  totalFloors     Int? // Nombre total d'étages
-  yearBuilt       Int?
-  rentType        String?                @default("longue_duree") // "saisonniere" | "longue_duree"
-  embedding       Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  totalFloors     Int?                   // Nullable
+  yearBuilt       Int?                   // Nullable
+  rentType        String?                @default("longue_duree")
+  embedding       Unsupported("vector")? // Nullable
 
   // Relations
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -338,6 +338,7 @@ model Property {
   @@index([listingType])
   @@index([createdAt])
 }
+
 
 // ======================
 // FAVORIS
@@ -1050,4 +1051,18 @@ model WellBeingStats {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+//---------------------
+//audit--------
+//------------
+model Audit {
+  id          Int      @id @default(autoincrement())
+  titre       String
+  description String?
+  type        String
+  dateAudit   DateTime @default(now())
+  responsable String
+  statut      String   @default("en cours")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

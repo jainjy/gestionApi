@@ -207,7 +207,12 @@ app.use(
 // routes pour les   batiments
 app.use("/api/batiment", require("./routes/batiment"));
 
+//annonce et transaction
+app.use("/api/anonce", require("./routes/anonce"));
 
+
+//audit
+app.use("/api/audit", require("./routes/audit"));
 app.use("/api/mail", require("./routes/mail"));
 app.use("/api/demandes/immobilier", require("./routes/demandes-immobilier"));
 app.use("/api/demandes", require("./routes/user-demandes"));
