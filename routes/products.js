@@ -14,6 +14,7 @@ router.get('/', async (req, res) => {
       userId,
       minPrice,
       maxPrice,
+      productType, // ← Nouveau paramètre
       page = 1,
       limit = 20
     } = req.query
@@ -43,6 +44,11 @@ router.get('/', async (req, res) => {
 
     if (userId) {
       where.userId = userId
+    }
+
+    // ← Nouveau filtre pour productType
+    if (productType) {
+      where.productType = productType
     }
 
     if (minPrice || maxPrice) {
@@ -84,6 +90,7 @@ router.get('/', async (req, res) => {
       description: product.description,
       category: product.category,
       subcategory: product.subcategory,
+      productType: product.productType, // ← Inclure productType dans la réponse
       price: product.price,
       comparePrice: product.comparePrice,
       cost: product.cost,
