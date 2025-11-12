@@ -21,7 +21,8 @@ router.post('/', authenticateToken, async (req, res) => {
       createdById,
       propertyId,
       dateSouhaitee,
-      heureSouhaitee
+      heureSouhaitee,
+      artisanId // NOUVEAU: Récupérer l'artisanId
     } = req.body;
 
     // Validation de base
@@ -50,6 +51,7 @@ router.post('/', authenticateToken, async (req, res) => {
         nombreArtisans: nombreArtisans || 'UNIQUE',
         createdById,
         propertyId,
+        artisanId, // NOUVEAU: Inclure l'artisanId
         dateSouhaitee: dateSouhaitee && heureSouhaitee 
           ? new Date(dateSouhaitee + 'T' + heureSouhaitee + ':00.000Z')
           : dateSouhaitee 
@@ -85,6 +87,17 @@ router.post('/', authenticateToken, async (req, res) => {
                 metier: true
               }
             }
+          }
+        },
+        artisan: { // NOUVEAU: Inclure l'artisan dans la réponse
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            companyName: true,
+            commercialName: true
           }
         }
       }
