@@ -4,7 +4,7 @@ const router = express.Router();
 const { prisma } = require("../lib/db");
 
 // GET - Récupérer le profil d'un professionnel
-router.get("/profile/:id", async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const professionalId = req.params.id;
 

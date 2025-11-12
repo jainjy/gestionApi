@@ -249,7 +249,7 @@ app.use(
   "/api/professional/settings",
   require("./routes/professional-settings")
 );
-app.use("/api/professional", require("./routes/professional-profile"));
+app.use("/api/professional/profile", require("./routes/professional-profile"));
 //pour les estimations immobilières
 app.use("/api/estimation", require("./routes/estimation"));
 
