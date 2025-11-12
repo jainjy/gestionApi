@@ -1,0 +1,186 @@
+// routes/professional-profile.js
+const express = require("express");
+const router = express.Router();
+const { prisma } = require("../lib/db");
+
+// GET - Récupérer le profil d'un professionnel
+router.get("/profile/:id", async (req, res) => {
+  try {
+    const professionalId = req.params.id;
+
+    const professional = await prisma.user.findUnique({
+      where: { 
+        id: professionalId,
+        OR: [
+          { role: "professional" },
+          { userType: { contains: "PRESTATAIRE" } }
+        ]
+      },
+      include: {
+        ProfessionalSettings: true,
+        metiers: {
+          include: {
+            metier: true
+          }
+        },
+        services: {
+          include: {
+            service: {
+              include: {
+                category: true
+              }
+            }
+          }
+        },
+        Review: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                avatar: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 10
+        }
+      }
+    });
+
+    if (!professional) {
+      return res.status(404).json({
+        success: false,
+        error: "Professionnel non trouvé"
+      });
+    }
+
+    res.json({
+      success: true,
+      data: professional
+    });
+  } catch (error) {
+    console.error("Erreur récupération profil professionnel:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération du profil"
+    });
+  }
+});
+
+// GET - Récupérer les statistiques d'un professionnel
+router.get("/stats/:id", async (req, res) => {
+  try {
+    const professionalId = req.params.id;
+
+    const stats = await prisma.$transaction([
+      // Nombre total de demandes
+      prisma.demandeArtisan.count({
+        where: { userId: professionalId }
+      }),
+      // Demandes acceptées
+      prisma.demandeArtisan.count({
+        where: { 
+          userId: professionalId,
+          accepte: true
+        }
+      }),
+      // Nombre total d'avis
+      prisma.review.count({
+        where: { 
+          service: {
+            users: {
+              some: { userId: professionalId }
+            }
+          }
+        }
+      }),
+      // Note moyenne
+      prisma.review.aggregate({
+        where: { 
+          service: {
+            users: {
+              some: { userId: professionalId }
+            }
+          }
+        },
+        _avg: {
+          rating: true
+        }
+      }),
+      // Nombre de services
+      prisma.utilisateurService.count({
+        where: { userId: professionalId }
+      }),
+      // Revenus totaux (approximatif basé sur les factures)
+      prisma.demandeArtisan.aggregate({
+        where: { 
+          userId: professionalId,
+          factureStatus: "validee"
+        },
+        _sum: {
+          factureMontant: true
+        }
+      })
+    ]);
+
+    const [totalDemandes, demandesAcceptees, totalAvis, noteMoyenne, totalServices, revenusTotaux] = stats;
+
+    res.json({
+      success: true,
+      data: {
+        totalDemandes,
+        demandesAcceptees,
+        tauxAcceptation: totalDemandes > 0 ? (demandesAcceptees / totalDemandes * 100).toFixed(1) : 0,
+        totalAvis,
+        noteMoyenne: noteMoyenne._avg.rating || 0,
+        totalServices,
+        revenusTotaux: revenusTotaux._sum.factureMontant || 0
+      }
+    });
+  } catch (error) {
+    console.error("Erreur récupération statistiques:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des statistiques"
+    });
+  }
+});
+
+// GET - Récupérer les services d'un professionnel
+router.get("/services/:id", async (req, res) => {
+  try {
+    const professionalId = req.params.id;
+
+    const services = await prisma.utilisateurService.findMany({
+      where: { userId: professionalId },
+      include: {
+        service: {
+          include: {
+            category: true,
+            metiers: {
+              include: {
+                metier: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: services
+    });
+  } catch (error) {
+    console.error("Erreur récupération services:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des services"
+    });
+  }
+});
+
+module.exports = router;
