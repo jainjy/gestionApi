@@ -1,4 +1,8 @@
-const { prisma } = require('../lib/db');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+const MediaService = require('../services/mediaService');
+const { manualCleanup } = require('../middleware/uploadMedia');
 
 // Récupérer tous les podcasts
 const getAllPodcasts = async (req, res) => {
@@ -123,38 +127,13 @@ const getPodcastById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const podcast = await prisma.podcast.findUnique({
-      where: { id },
-      include: {
-        category: true,
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true
-          }
-        }
-      }
-    });
+    const result = await MediaService.getPodcastById(id);
 
-    if (!podcast) {
-      return res.status(404).json({
-        success: false,
-        message: 'Podcast non trouvé'
-      });
+    if (!result.success) {
+      return res.status(404).json(result);
     }
 
-    // Incrémenter le compteur d'écoutes
-    await prisma.podcast.update({
-      where: { id },
-      data: { listens: { increment: 1 } }
-    });
-
-    res.json({
-      success: true,
-      data: podcast
-    });
+    res.json(result);
   } catch (error) {
     console.error('Erreur lors de la récupération du podcast:', error);
     res.status(500).json({
@@ -169,38 +148,13 @@ const getVideoById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const video = await prisma.video.findUnique({
-      where: { id },
-      include: {
-        category: true,
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true
-          }
-        }
-      }
-    });
+    const result = await MediaService.getVideoById(id);
 
-    if (!video) {
-      return res.status(404).json({
-        success: false,
-        message: 'Vidéo non trouvée'
-      });
+    if (!result.success) {
+      return res.status(404).json(result);
     }
 
-    // Incrémenter le compteur de vues
-    await prisma.video.update({
-      where: { id },
-      data: { views: { increment: 1 } }
-    });
-
-    res.json({
-      success: true,
-      data: video
-    });
+    res.json(result);
   } catch (error) {
     console.error('Erreur lors de la récupération de la vidéo:', error);
     res.status(500).json({
@@ -215,17 +169,13 @@ const getCategories = async (req, res) => {
   try {
     const { type } = req.query;
 
-    const where = type ? { type } : {};
+    const result = await MediaService.getCategories(type);
 
-    const categories = await prisma.mediaCategory.findMany({
-      where,
-      orderBy: { name: 'asc' }
-    });
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
 
-    res.json({
-      success: true,
-      data: categories
-    });
+    res.json(result);
   } catch (error) {
     console.error('Erreur lors de la récupération des catégories:', error);
     res.status(500).json({
@@ -235,7 +185,393 @@ const getCategories = async (req, res) => {
   }
 };
 
-// Ajouter un média aux favoris
+// Créer un podcast (PROFESSIONNEL) - REFONDU POUR SUPABASE
+const createPodcast = async (req, res) => {
+  try {
+    console.log('🎙️  Début création podcast avec Supabase...');
+
+    if (!req.files || !req.files.audio) {
+      return res.status(400).json({
+        success: false,
+        error: 'Fichier audio requis'
+      });
+    }
+
+    // Préparer les données avec l'ID du professionnel
+    const podcastData = {
+      ...req.body,
+      authorId: req.user.id
+    };
+
+    const audioFile = req.files.audio[0];
+    const thumbnailFile = req.files.thumbnail ? req.files.thumbnail[0] : null;
+
+    console.log('📤 Upload vers Supabase...');
+    const result = await MediaService.createPodcast(podcastData, audioFile, thumbnailFile);
+
+    if (!result.success) {
+      // Nettoyer les fichiers temporaires en cas d'erreur
+      manualCleanup(req.files);
+      return res.status(400).json(result);
+    }
+
+    console.log('✅ Podcast créé avec succès via Supabase');
+    res.status(201).json(result);
+
+  } catch (error) {
+    console.error('❌ Erreur création podcast:', error);
+    
+    // Nettoyage d'urgence en cas d'erreur inattendue
+    if (req.files) {
+      manualCleanup(req.files);
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la création du podcast'
+    });
+  }
+};
+
+// Créer une vidéo (PROFESSIONNEL) - REFONDU POUR SUPABASE
+const createVideo = async (req, res) => {
+  try {
+    console.log('🎥 Début création vidéo avec Supabase...');
+
+    if (!req.files || !req.files.video) {
+      return res.status(400).json({
+        success: false,
+        error: 'Fichier vidéo requis'
+      });
+    }
+
+    // Préparer les données avec l'ID du professionnel
+    const videoData = {
+      ...req.body,
+      authorId: req.user.id
+    };
+
+    const videoFile = req.files.video[0];
+    const thumbnailFile = req.files.thumbnail ? req.files.thumbnail[0] : null;
+
+    console.log('📤 Upload vers Supabase...');
+    const result = await MediaService.createVideo(videoData, videoFile, thumbnailFile);
+
+    if (!result.success) {
+      // Nettoyer les fichiers temporaires en cas d'erreur
+      manualCleanup(req.files);
+      return res.status(400).json(result);
+    }
+
+    console.log('✅ Vidéo créée avec succès via Supabase');
+    res.status(201).json(result);
+
+  } catch (error) {
+    console.error('❌ Erreur création vidéo:', error);
+    
+    // Nettoyage d'urgence en cas d'erreur inattendue
+    if (req.files) {
+      manualCleanup(req.files);
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la création de la vidéo'
+    });
+  }
+};
+
+// Créer une catégorie (PROFESSIONNEL)
+const createCategory = async (req, res) => {
+  try {
+    const result = await MediaService.createCategory(req.body);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Erreur création catégorie:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur'
+    });
+  }
+};
+
+// Incrémenter les écoutes d'un podcast
+const incrementPodcastListens = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await MediaService.incrementPodcastListens(id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur incrémentation écoutes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+// Incrémenter les vues d'une vidéo
+const incrementVideoViews = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await MediaService.incrementVideoViews(id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur incrémentation vues:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+// Supprimer un podcast (PROFESSIONNEL) - REFONDU POUR SUPABASE
+const deletePodcast = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Vérifier que le podcast appartient au professionnel
+    const podcast = await prisma.podcast.findFirst({
+      where: {
+        id,
+        authorId: userId
+      }
+    });
+
+    if (!podcast) {
+      return res.status(404).json({
+        success: false,
+        message: 'Podcast non trouvé ou vous n\'êtes pas autorisé à le supprimer'
+      });
+    }
+
+    const result = await MediaService.deletePodcast(id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur suppression podcast:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+// Supprimer une vidéo (PROFESSIONNEL) - REFONDU POUR SUPABASE
+const deleteVideo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Vérifier que la vidéo appartient au professionnel
+    const video = await prisma.video.findFirst({
+      where: {
+        id,
+        authorId: userId
+      }
+    });
+
+    if (!video) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vidéo non trouvée ou vous n\'êtes pas autorisé à la supprimer'
+      });
+    }
+
+    const result = await MediaService.deleteVideo(id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur suppression vidéo:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+// Mettre à jour un podcast (PROFESSIONNEL)
+const updatePodcast = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Vérifier que le podcast appartient au professionnel
+    const podcast = await prisma.podcast.findFirst({
+      where: {
+        id,
+        authorId: userId
+      }
+    });
+
+    if (!podcast) {
+      return res.status(404).json({
+        success: false,
+        message: 'Podcast non trouvé ou vous n\'êtes pas autorisé à le modifier'
+      });
+    }
+
+    const updatedPodcast = await prisma.podcast.update({
+      where: { id },
+      data: req.body,
+      include: {
+        category: true,
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updatedPodcast,
+      message: 'Podcast mis à jour avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur mise à jour podcast:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+// Mettre à jour une vidéo (PROFESSIONNEL)
+const updateVideo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Vérifier que la vidéo appartient au professionnel
+    const video = await prisma.video.findFirst({
+      where: {
+        id,
+        authorId: userId
+      }
+    });
+
+    if (!video) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vidéo non trouvée ou vous n\'êtes pas autorisé à la modifier'
+      });
+    }
+
+    const updatedVideo = await prisma.video.update({
+      where: { id },
+      data: req.body,
+      include: {
+        category: true,
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updatedVideo,
+      message: 'Vidéo mise à jour avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur mise à jour vidéo:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+// Récupérer les médias d'un professionnel
+const getMyMedia = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { type = 'both', page = 1, limit = 10 } = req.query;
+
+    let myPodcasts = [];
+    let myVideos = [];
+
+    if (type === 'podcast' || type === 'both') {
+      myPodcasts = await prisma.podcast.findMany({
+        where: { authorId: userId },
+        include: {
+          category: true
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: parseInt(limit)
+      });
+    }
+
+    if (type === 'video' || type === 'both') {
+      myVideos = await prisma.video.findMany({
+        where: { authorId: userId },
+        include: {
+          category: true
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: parseInt(limit)
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        podcasts: myPodcasts,
+        videos: myVideos
+      },
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit)
+      }
+    });
+  } catch (error) {
+    console.error('Erreur récupération médias professionnel:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+// Les autres fonctions (favoris, statistiques) restent inchangées
 const addToFavorites = async (req, res) => {
   try {
     const { mediaId, mediaType } = req.body;
@@ -299,7 +635,6 @@ const addToFavorites = async (req, res) => {
   }
 };
 
-// Retirer un média des favoris
 const removeFromFavorites = async (req, res) => {
   try {
     const { mediaId, mediaType } = req.body;
@@ -328,7 +663,6 @@ const removeFromFavorites = async (req, res) => {
   }
 };
 
-// Récupérer les favoris de l'utilisateur
 const getUserFavorites = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -373,7 +707,6 @@ const getUserFavorites = async (req, res) => {
   }
 };
 
-// Mettre à jour les statistiques de bien-être
 const updateWellBeingStats = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -409,7 +742,6 @@ const updateWellBeingStats = async (req, res) => {
   }
 };
 
-// Récupérer les statistiques de bien-être
 const getWellBeingStats = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -436,7 +768,6 @@ const getWellBeingStats = async (req, res) => {
   }
 };
 
-// Récupérer les médias populaires
 const getPopularMedia = async (req, res) => {
   try {
     const { type = 'both', limit = 6 } = req.query;
@@ -498,163 +829,6 @@ const getPopularMedia = async (req, res) => {
   }
 };
 
-// 🔥 NOUVELLES FONCTIONS POUR L'ADMIN
-const deletePodcast = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const podcast = await prisma.podcast.findUnique({
-      where: { id }
-    });
-
-    if (!podcast) {
-      return res.status(404).json({
-        success: false,
-        message: 'Podcast non trouvé'
-      });
-    }
-
-    await prisma.podcast.delete({
-      where: { id }
-    });
-
-    res.json({
-      success: true,
-      message: 'Podcast supprimé avec succès'
-    });
-  } catch (error) {
-    console.error('Erreur suppression podcast:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur serveur'
-    });
-  }
-};
-
-const deleteVideo = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const video = await prisma.video.findUnique({
-      where: { id }
-    });
-
-    if (!video) {
-      return res.status(404).json({
-        success: false,
-        message: 'Vidéo non trouvée'
-      });
-    }
-
-    await prisma.video.delete({
-      where: { id }
-    });
-
-    res.json({
-      success: true,
-      message: 'Vidéo supprimée avec succès'
-    });
-  } catch (error) {
-    console.error('Erreur suppression vidéo:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur serveur'
-    });
-  }
-};
-
-const updatePodcast = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
-
-    const podcast = await prisma.podcast.findUnique({
-      where: { id }
-    });
-
-    if (!podcast) {
-      return res.status(404).json({
-        success: false,
-        message: 'Podcast non trouvé'
-      });
-    }
-
-    const updatedPodcast = await prisma.podcast.update({
-      where: { id },
-      data: updateData,
-      include: {
-        category: true,
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true
-          }
-        }
-      }
-    });
-
-    res.json({
-      success: true,
-      data: updatedPodcast,
-      message: 'Podcast mis à jour avec succès'
-    });
-  } catch (error) {
-    console.error('Erreur mise à jour podcast:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur serveur'
-    });
-  }
-};
-
-const updateVideo = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
-
-    const video = await prisma.video.findUnique({
-      where: { id }
-    });
-
-    if (!video) {
-      return res.status(404).json({
-        success: false,
-        message: 'Vidéo non trouvée'
-      });
-    }
-
-    const updatedVideo = await prisma.video.update({
-      where: { id },
-      data: updateData,
-      include: {
-        category: true,
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true
-          }
-        }
-      }
-    });
-
-    res.json({
-      success: true,
-      data: updatedVideo,
-      message: 'Vidéo mise à jour avec succès'
-    });
-  } catch (error) {
-    console.error('Erreur mise à jour vidéo:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur serveur'
-    });
-  }
-};
-
 module.exports = {
   getAllPodcasts,
   getAllVideos,
@@ -667,9 +841,14 @@ module.exports = {
   updateWellBeingStats,
   getWellBeingStats,
   getPopularMedia,
-  // 🔥 AJOUTER CES NOUVELLES FONCTIONS
+  createPodcast,
+  createVideo,
+  createCategory,
+  incrementPodcastListens,
+  incrementVideoViews,
   deletePodcast,
   deleteVideo,
   updatePodcast,
-  updateVideo
+  updateVideo,
+  getMyMedia
 };
