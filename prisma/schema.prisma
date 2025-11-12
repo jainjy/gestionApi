@@ -93,17 +93,17 @@ model User {
   subscriptions            Subscription[]
   tourismeBookings         TourismeBooking[]
   advertisements           Advertisement[]
-  demandesRecues Demande[] @relation("DemandeArtisanSpecifique")
+  demandesRecues           Demande[]                 @relation("DemandeArtisanSpecifique")
   //relation pour suggetion intelligente 
-  activities           UserActivity[]
-  preferences          UserPreference[]
-  events               UserEvent[]
+  activities               UserActivity[]
+  preferences              UserPreference[]
+  events                   UserEvent[]
   // RELATION POUR PODCAST 
-  podcasts             Podcast[] // Podcasts créés par l'utilisateur
-  videos               Video[] // Vidéos créées par l'utilisateur
-  mediaFavorites       UserMediaFavorite[] // Favoris médias de l'utilisateur
-  wellBeingStats       WellBeingStats? // Statistiques bien-être
-  ProfessionalSettings ProfessionalSettings?
+  podcasts                 Podcast[] // Podcasts créés par l'utilisateur
+  videos                   Video[] // Vidéos créées par l'utilisateur
+  mediaFavorites           UserMediaFavorite[] // Favoris médias de l'utilisateur
+  wellBeingStats           WellBeingStats? // Statistiques bien-être
+  ProfessionalSettings     ProfessionalSettings?
 
   @@index([email])
   @@index([role])
@@ -284,31 +284,31 @@ model Message {
 model Property {
   id              String                 @id @default(uuid())
   title           String
-  description     String?                // Nullable
-  type            String                 // "house", "apartment", etc.
-  status          String?                // "draft", "pending", etc.
-  price           Float?                 // Nullable
-  surface         Int?                   // Nullable
-  rooms           Int?                   // Nullable
-  bedrooms        Int?                   // Nullable
-  bathrooms       Int?                   // Nullable
-  address         String?                // Nullable
+  description     String? // Nullable
+  type            String // "house", "apartment", etc.
+  status          String? // "draft", "pending", etc.
+  price           Float? // Nullable
+  surface         Int? // Nullable
+  rooms           Int? // Nullable
+  bedrooms        Int? // Nullable
+  bathrooms       Int? // Nullable
+  address         String? // Nullable
   city            String
-  zipCode         String?                // Nullable
-  latitude        Float?                 // Nullable
-  longitude       Float?                 // Nullable
-  features        String[]               // ["pool", "garden", ...]
-  images          String[]               // URLs Supabase
+  zipCode         String? // Nullable
+  latitude        Float? // Nullable
+  longitude       Float? // Nullable
+  features        String[] // ["pool", "garden", ...]
+  images          String[] // URLs Supabase
   isFeatured      Boolean?               @default(false)
   isActive        Boolean?               @default(true)
   views           Int?                   @default(0)
   ownerId         String
   createdAt       DateTime?              @default(now())
   updatedAt       DateTime?              @updatedAt
-  publishedAt     DateTime?              // Nullable
-  energyClass     String?                // Nullable
-  expiresAt       DateTime?              // Nullable
-  floor           Int?                   // Nullable
+  publishedAt     DateTime? // Nullable
+  energyClass     String? // Nullable
+  expiresAt       DateTime? // Nullable
+  floor           Int? // Nullable
   hasBalcony      Boolean?               @default(false)
   hasElevator     Boolean?               @default(false)
   hasGarden       Boolean?               @default(false)
@@ -316,11 +316,11 @@ model Property {
   hasPool         Boolean?               @default(false)
   hasTerrace      Boolean?               @default(false)
   listingType     String?                @default("sale")
-  metaDescription String?                // Nullable
-  metaTitle       String?                // Nullable
+  metaDescription String? // Nullable
+  metaTitle       String? // Nullable
   slug            String?                @unique
-  totalFloors     Int?                   // Nullable
-  yearBuilt       Int?                   // Nullable
+  totalFloors     Int? // Nullable
+  yearBuilt       Int? // Nullable
   rentType        String?                @default("longue_duree")
   embedding       Unsupported("vector")? // Nullable
 
@@ -338,7 +338,6 @@ model Property {
   @@index([listingType])
   @@index([createdAt])
 }
-
 
 // ======================
 // FAVORIS
@@ -497,7 +496,7 @@ model UtilisateurService {
 //DEMANDE
 //===================
 model Demande {
-  id                  Int       @id @default(autoincrement())
+  id                  Int              @id @default(autoincrement())
   disponibiliteBien   String? // "LIBRE" | "LOUE"
   description         String?
   contactNom          String?
@@ -510,31 +509,30 @@ model Demande {
   lieuAdresse         String?
   lieuAdresseCp       String?
   lieuAdresseVille    String?
-  optionAssurance     Boolean?  @default(false)
-  demandeAcceptee     Boolean?  @default(false)
+  optionAssurance     Boolean?         @default(false)
+  demandeAcceptee     Boolean?         @default(false)
   nombreArtisans      String? // "UNIQUE" | "MULTIPLE"
   createdById         String
   serviceId           Int?
-  createdAt           DateTime  @default(now())
+  createdAt           DateTime         @default(now())
   dateSouhaitee       DateTime?
   heureSouhaitee      String?
   metierId            Int?
   propertyId          String? // Référence optionnelle vers Property.id
   statut              String?
-  isRead              Boolean   @default(false)
-  artisanId           String?   // NOUVEAU: ID de l'artisan spécifique pour les demandes directes
-
+  isRead              Boolean          @default(false)
+  artisanId           String? // NOUVEAU: ID de l'artisan spécifique pour les demandes directes
   // Relations
-  createdBy     User             @relation("DemandeCreePar", fields: [createdById], references: [id])
-  service       Service?         @relation(fields: [serviceId], references: [id])
-  metier        Metier?          @relation(fields: [metierId], references: [id])
-  property      Property?        @relation(fields: [propertyId], references: [id])
-  artisan       User?            @relation("DemandeArtisanSpecifique", fields: [artisanId], references: [id]) // NOUVELLE RELATION
-  artisans      DemandeArtisan[] @relation("DemandeArtisanDemande")
-  conversations Conversation[]
-  devis         String? // au cas ou il y a des demandes de devis
+  createdBy           User             @relation("DemandeCreePar", fields: [createdById], references: [id])
+  service             Service?         @relation(fields: [serviceId], references: [id])
+  metier              Metier?          @relation(fields: [metierId], references: [id])
+  property            Property?        @relation(fields: [propertyId], references: [id])
+  artisan             User?            @relation("DemandeArtisanSpecifique", fields: [artisanId], references: [id]) // NOUVELLE RELATION
+  artisans            DemandeArtisan[] @relation("DemandeArtisanDemande")
+  conversations       Conversation[]
+  devis               String? // au cas ou il y a des demandes de devis
   // NOUVELLE RELATION: Vers les devis
-  devis_demande Devis[]
+  devis_demande       Devis[]
 
   @@index([propertyId])
   @@index([createdById])
@@ -610,6 +608,8 @@ model Transaction {
   updatedAt      DateTime      @updatedAt
   user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([referenceType, referenceId])
 }
 
 // ======================
@@ -984,6 +984,7 @@ model Podcast {
   imageUrl    String
   categoryId  Int
   authorId    String?
+  storagePath String?
   isPremium   Boolean  @default(false)
   listens     Int      @default(0)
   isActive    Boolean  @default(true)
@@ -992,8 +993,9 @@ model Podcast {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category MediaCategory @relation(fields: [categoryId], references: [id])
-  author   User?         @relation(fields: [authorId], references: [id])
+  category          MediaCategory       @relation(fields: [categoryId], references: [id])
+  author            User?               @relation(fields: [authorId], references: [id])
+  UserMediaFavorite UserMediaFavorite[]
 }
 
 model Video {
@@ -1013,9 +1015,11 @@ model Video {
   mimeType     String? // "video/mp4", etc.
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  storagePath  String?
 
-  category MediaCategory @relation(fields: [categoryId], references: [id])
-  author   User?         @relation(fields: [authorId], references: [id])
+  category          MediaCategory       @relation(fields: [categoryId], references: [id])
+  author            User?               @relation(fields: [authorId], references: [id])
+  UserMediaFavorite UserMediaFavorite[]
 }
 
 // Modèle pour les favoris utilisateur
@@ -1027,7 +1031,9 @@ model UserMediaFavorite {
   createdAt DateTime @default(now())
 
   // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  podcast Podcast? @relation(fields: [mediaId], references: [id], onDelete: Cascade, map: "UserMediaFavorite_podcast_fkey")
+  video   Video?   @relation(fields: [mediaId], references: [id], onDelete: Cascade, map: "UserMediaFavorite_video_fkey")
 
   @@unique([userId, mediaId, mediaType])
   @@index([userId])
@@ -1052,6 +1058,7 @@ model WellBeingStats {
 
   @@index([userId])
 }
+
 //---------------------
 //audit--------
 //------------
