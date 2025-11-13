@@ -338,26 +338,44 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
+    let service = null;
+    let metier = null;
+
     // Vérifier que le service existe (si serviceId fourni)
     if (serviceIdInt && !Number.isNaN(serviceIdInt)) {
-      const serviceExists = await prisma.service.findUnique({
+      service = await prisma.service.findUnique({
         where: { id: serviceIdInt },
-        select: { id: true },
+        select: { 
+          id: true,
+          libelle: true,
+          metiers: {
+            include: {
+              metier: {
+                select: {
+                  libelle: true
+                }
+              }
+            }
+          }
+        },
       });
 
-      if (!serviceExists) {
+      if (!service) {
         return res.status(404).json({ error: "Service non trouvé" });
       }
     }
 
     // Vérifier que le métier existe (si metierId fourni)
     if (metierIdInt && !Number.isNaN(metierIdInt)) {
-      const metierExists = await prisma.metier.findUnique({
+      metier = await prisma.metier.findUnique({
         where: { id: metierIdInt },
-        select: { id: true },
+        select: { 
+          id: true,
+          libelle: true 
+        },
       });
 
-      if (!metierExists) {
+      if (!metier) {
         return res.status(404).json({ error: "Métier non trouvé" });
       }
     }
@@ -415,10 +433,86 @@ router.post("/", authenticateToken, async (req, res) => {
       },
     });
 
-    res.status(201).json({
+    // CRÉATION AUTOMATIQUE DE LA CONVERSATION POUR LES DEMANDES DE SERVICES OU MÉTIERS
+    let conversation = null;
+    
+    // Créer une conversation pour toutes les demandes (services ou métiers)
+    // puisque cette route ne gère pas les demandes immobilières
+    if (service || metier) {
+      // Déterminer le titre de la conversation
+      let titreConversation = "Demande de service";
+      if (service) {
+        titreConversation = `Demande ${service.libelle}`;
+      } else if (metier) {
+        titreConversation = `Demande ${metier.libelle}`;
+      }
+
+      // Créer la conversation avec seulement le créateur comme participant initial
+      // Les artisans seront ajoutés plus tard quand ils accepteront la demande
+      conversation = await prisma.conversation.create({
+        data: {
+          titre: titreConversation,
+          demandeId: nouvelleDemande.id,
+          createurId: createdByIdStr,
+          participants: {
+            create: [{ userId: createdByIdStr }] // Seulement le créateur initialement
+          }
+        },
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  companyName: true,
+                  email: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Ajouter un message système pour la création de la demande
+      let messageContenu = `Nouvelle demande créée.`;
+      if (service) {
+        messageContenu = `Nouvelle demande de ${service.libelle} créée.`;
+      } else if (metier) {
+        messageContenu = `Nouvelle demande de ${metier.libelle} créée.`;
+      }
+      
+      if (description) {
+        messageContenu += ` Description : ${description}`;
+      }
+
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: createdByIdStr,
+          contenu: messageContenu,
+          type: 'SYSTEM',
+          evenementType: 'DEMANDE_ENVOYEE'
+        }
+      });
+    }
+
+    const response = {
       message: "Demande créée avec succès",
-      demande: nouvelleDemande,
-    });
+      demande: nouvelleDemande
+    };
+
+    // Ajouter les infos de conversation si créée
+    if (conversation) {
+      response.conversation = {
+        id: conversation.id,
+        titre: conversation.titre,
+        participants: conversation.participants
+      };
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     console.error("Erreur lors de la création de la demande:", error);
 

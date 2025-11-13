@@ -2,6 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 import bcrypt from "bcryptjs";
+
 async function main() {
   try {
     console.log("🌱 Seeding professionals with their trades...");
@@ -10,7 +11,7 @@ async function main() {
     const metiers = await prisma.metier.findMany();
     const metiersMap = new Map(metiers.map(m => [m.libelle, m.id]));
 
-    // Données des professionnels à créer
+    // Données des professionnels à créer ou mettre à jour
     const professionalsData = [
       {
         email: "electricien.paris@example.com",
@@ -193,30 +194,84 @@ async function main() {
         city: "Nice"
       }
     ];
+
     const saltRounds = 12;
 
-    // Création des utilisateurs professionnels
+    // Création ou mise à jour des utilisateurs professionnels
     for (const proData of professionalsData) {
-      console.log(`\n🔄 Création du professionnel: ${proData.companyName}`);
-      const password = await bcrypt.hash("pro123", saltRounds);
-      // Création de l'utilisateur
-      const user = await prisma.user.create({
-        data: {
-          email: proData.email,
-          firstName: proData.firstName,
-          lastName: proData.lastName,
-          companyName: proData.companyName,
-          userType: proData.userType,
-          city: proData.city,
-          role: "user",
-          status: "active",
-          passwordHash: password,
-          createdAt: new Date(),
-          updatedAt: new Date()
+      console.log(`\n🔄 Traitement du professionnel: ${proData.companyName}`);
+      
+      // Vérifier si l'utilisateur existe déjà
+      const existingUser = await prisma.user.findUnique({
+        where: { email: proData.email },
+        include: {
+          metiers: {
+            include: {
+              metier: true
+            }
+          }
         }
       });
 
-      console.log(`✅ Utilisateur créé: ${user.email}`);
+      const password = await bcrypt.hash("pro123", saltRounds);
+      
+      if (existingUser) {
+        // Mise à jour de l'utilisateur existant
+        console.log(`✅ Utilisateur existant trouvé: ${existingUser.email}`);
+        
+        const user = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            firstName: proData.firstName,
+            lastName: proData.lastName,
+            companyName: proData.companyName,
+            userType: proData.userType,
+            city: proData.city,
+            updatedAt: new Date(),
+            role: "professional",
+          },
+        });
+
+        console.log(`✅ Utilisateur mis à jour: ${user.email}`);
+
+        // Supprimer les anciennes liaisons de métiers
+        if (existingUser.metiers.length > 0) {
+          await prisma.utilisateurMetier.deleteMany({
+            where: { userId: existingUser.id }
+          });
+          console.log(`   🗑️ Anciens métiers supprimés`);
+        }
+
+      } else {
+        // Création d'un nouvel utilisateur
+        const user = await prisma.user.create({
+          data: {
+            email: proData.email,
+            firstName: proData.firstName,
+            lastName: proData.lastName,
+            companyName: proData.companyName,
+            userType: proData.userType,
+            city: proData.city,
+            role: "professional",
+            status: "active",
+            passwordHash: password,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+
+        console.log(`✅ Nouvel utilisateur créé: ${user.email}`);
+      }
+
+      // Récupérer l'ID de l'utilisateur (nouveau ou existant)
+      const user = await prisma.user.findUnique({
+        where: { email: proData.email }
+      });
+
+      if (!user) {
+        console.log(`❌ Impossible de trouver l'utilisateur: ${proData.email}`);
+        continue;
+      }
 
       // Liaison avec les métiers
       for (const metierLibelle of proData.metiers) {
@@ -237,9 +292,8 @@ async function main() {
     }
 
     // Mise à jour d'utilisateurs existants (si nécessaire)
-    console.log("\n🔄 Mise à jour des utilisateurs existants...");
+    console.log("\n🔄 Mise à jour des utilisateurs existants supplémentaires...");
     
-    // Exemple: mettre à jour un utilisateur existant pour lui ajouter un métier
     const existingUsers = await prisma.user.findMany({
       where: {
         userType: "PRESTATAIRE",
@@ -274,8 +328,8 @@ async function main() {
       }
     }
 
-    // Création de quelques clients (non professionnels)
-    console.log("\n🔄 Création d'utilisateurs clients...");
+    // Création ou mise à jour de quelques clients (non professionnels)
+    console.log("\n🔄 Traitement des utilisateurs clients...");
     
     const clientsData = [
       {
@@ -309,21 +363,41 @@ async function main() {
     ];
 
     for (const clientData of clientsData) {
-      await prisma.user.create({
-        data: {
-          email: clientData.email,
-          firstName: clientData.firstName,
-          lastName: clientData.lastName,
-          userType: clientData.userType,
-          city: clientData.city,
-          role: "user",
-          status: "active",
-          passwordHash: "$2a$10$dXJ3SW6G7P.XBLBvanJXu.K9Z9dM7tC8lHlBvLvJ/tC9q9Yz7XJkK",
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
+      const existingClient = await prisma.user.findUnique({
+        where: { email: clientData.email }
       });
-      console.log(`✅ Client créé: ${clientData.email}`);
+
+      if (existingClient) {
+        // Mise à jour du client existant
+        await prisma.user.update({
+          where: { email: clientData.email },
+          data: {
+            firstName: clientData.firstName,
+            lastName: clientData.lastName,
+            userType: clientData.userType,
+            city: clientData.city,
+            updatedAt: new Date()
+          }
+        });
+        console.log(`✅ Client mis à jour: ${clientData.email}`);
+      } else {
+        // Création d'un nouveau client
+        await prisma.user.create({
+          data: {
+            email: clientData.email,
+            firstName: clientData.firstName,
+            lastName: clientData.lastName,
+            userType: clientData.userType,
+            city: clientData.city,
+            role: "user",
+            status: "active",
+            passwordHash: "$2a$10$dXJ3SW6G7P.XBLBvanJXu.K9Z9dM7tC8lHlBvLvJ/tC9q9Yz7XJkK",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+        console.log(`✅ Nouveau client créé: ${clientData.email}`);
+      }
     }
 
     console.log("\n🌿 Seeding des professionnels terminé avec succès !");
