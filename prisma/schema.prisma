@@ -626,7 +626,7 @@ model Review {
   rating    Int // 1 à 5
   comment   String?
   createdAt DateTime @default(now())
-
+  metadata  Json?    // NOUVEAU CHAMP pour stocker les réponses et métadonnées
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
