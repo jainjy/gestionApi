@@ -98,6 +98,7 @@ model User {
   activities               UserActivity[]
   preferences              UserPreference[]
   events                   UserEvent[]
+   audits              Audit[]  
   // RELATION POUR PODCAST 
   podcasts                 Podcast[] // Podcasts créés par l'utilisateur
   videos                   Video[] // Vidéos créées par l'utilisateur
@@ -1063,13 +1064,18 @@ model WellBeingStats {
 //audit--------
 //------------
 model Audit {
-  id          Int      @id @default(autoincrement())
-  titre       String
-  description String?
-  type        String
-  dateAudit   DateTime @default(now())
-  responsable String
-  statut      String   @default("en cours")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  titre         String
+  description   String?
+  type          String
+  dateAudit     DateTime @default(now())
+  responsable   String
+  statut        String   @default("en cours")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relation vers User
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
 }
+
