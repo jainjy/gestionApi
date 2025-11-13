@@ -312,6 +312,10 @@ app.post(
     }
   }
 );
+//pour les documents et contrats types
+app.use("/api/documents", require("./routes/documents"));
+app.use("/api/contrats-types", require("./routes/contratsTypes"));
+
 //ROUTE DE TEST POUR LES FICHIERS MÉDIA
 app.get("/media/test/:filename", (req, res) => {
   const { filename } = req.params;

@@ -5,9 +5,9 @@ const path = require('path');
 class SupabaseService {
   // CONFIGURATION FINALE - TOUS LES NOUVEAUX BUCKETS
   static BUCKETS = {
-    PODCASTS: 'podcasts',     // ✅ FONCTIONNE
-    VIDEOS: 'videos',         // ✅ FONCTIONNE
-    THUMBNAILS: 'thumbnails'  // ✅ FONCTIONNE
+    PODCASTS: 'podcasts',     
+    VIDEOS: 'videos',         
+    THUMBNAILS: 'thumbnails'
   };
 
   /**

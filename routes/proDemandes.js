@@ -42,7 +42,32 @@ router.get(
       const userMetierIds = userWithServices.metiers.map((m) => m.metierId);
       const userServiceIds = userWithServices.services.map((s) => s.serviceId);
 
-      // Construire la clause WHERE pour les demandes compatibles
+      // CORRECTION : Récupérer tous les métiers associés aux services du pro
+      const servicesWithMetiers = await prisma.service.findMany({
+        where: {
+          id: { in: userServiceIds },
+        },
+        include: {
+          metiers: {
+            include: {
+              metier: true,
+            },
+          },
+        },
+      });
+
+      // Tous les métiers compatibles avec les services du pro
+      const compatibleMetierIdsFromServices = servicesWithMetiers.flatMap(
+        service => service.metiers.map(m => m.metierId)
+      );
+
+      // Tous les métiers compatibles (métiers directs + métiers via services)
+      const allCompatibleMetierIds = [
+        ...userMetierIds,
+        ...compatibleMetierIdsFromServices
+      ].filter((id, index, array) => array.indexOf(id) === index); // Déduplication
+
+      // CORRECTION : Construire la clause WHERE pour les demandes compatibles
       let whereClause = {
         AND: [
           {
@@ -53,44 +78,47 @@ router.get(
                   in: userServiceIds.length > 0 ? userServiceIds : undefined,
                 },
               },
-              // Demandes avec métier que le professionnel possède
+              // Demandes avec métier que le professionnel possède (directement ou via services)
               {
                 metierId: {
-                  in: userMetierIds.length > 0 ? userMetierIds : undefined,
+                  in: allCompatibleMetierIds.length > 0 ? allCompatibleMetierIds : undefined,
                 },
               },
-
             ].filter(
               (condition) => Object.values(condition)[0].in !== undefined
             ),
-            OR:[
-              {artisanId:null},
-              {artisanId:userId}
+          },
+          {
+            OR: [
+              { artisanId: null },
+              { artisanId: userId }
             ]
           },
           {
             propertyId: null, // Exclure les demandes immobilières
           },
-
         ],
       };
 
       // Filtre par statut - Utiliser directement le statut de la base
       if (status && status !== "Toutes") {
-        whereClause.statut = status;
+        whereClause.AND.push({
+          statut: status
+        });
       }
 
       // Recherche
       if (search) {
-        whereClause.OR = [
-          ...(whereClause.OR || []),
-          { description: { contains: search, mode: "insensitive" } },
-          { contactNom: { contains: search, mode: "insensitive" } },
-          { contactPrenom: { contains: search, mode: "insensitive" } },
-          { lieuAdresseVille: { contains: search, mode: "insensitive" } },
-          { service: { libelle: { contains: search, mode: "insensitive" } } },
-          { metier: { libelle: { contains: search, mode: "insensitive" } } },
-        ];
+        whereClause.AND.push({
+          OR: [
+            { description: { contains: search, mode: "insensitive" } },
+            { contactNom: { contains: search, mode: "insensitive" } },
+            { contactPrenom: { contains: search, mode: "insensitive" } },
+            { lieuAdresseVille: { contains: search, mode: "insensitive" } },
+            { service: { libelle: { contains: search, mode: "insensitive" } } },
+            { metier: { libelle: { contains: search, mode: "insensitive" } } },
+          ]
+        });
       }
 
       const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -163,8 +191,33 @@ router.get(
         prisma.demande.count({ where: whereClause }),
       ]);
 
-      // Transformer les données pour le frontend pro - CONSERVER LE VRAI STATUT
-      const transformedDemandes = demandes.map((demande) => {
+      // CORRECTION : Filtrer les résultats pour une compatibilité précise
+      const filteredDemandes = demandes.filter(demande => {
+        // Si la demande a un service spécifique
+        if (demande.serviceId) {
+          // Vérifier que le pro propose ce service
+          const hasService = userServiceIds.includes(demande.serviceId);
+          
+          // ET vérifier que le pro a le métier correspondant à ce service
+          const serviceMetierIds = demande.service.metiers.map(m => m.metierId);
+          const hasCompatibleMetier = serviceMetierIds.some(metierId => 
+            allCompatibleMetierIds.includes(metierId)
+          );
+          
+          return hasService && hasCompatibleMetier;
+        }
+        
+        // Si la demande a un métier spécifique
+        if (demande.metierId) {
+          // Vérifier que le pro a ce métier (directement ou via services)
+          return allCompatibleMetierIds.includes(demande.metierId);
+        }
+        
+        return false;
+      });
+
+      // Transformer les données pour le frontend pro
+      const transformedDemandes = filteredDemandes.map((demande) => {
         const artisanAssignment = demande.artisans.find(
           (a) => a.userId === userId
         );
@@ -205,7 +258,6 @@ router.get(
           titre: titre,
           metier: metierLibelle,
           lieu: `${demande.lieuAdresseCp || ""} ${demande.lieuAdresseVille || ""}`.trim(),
-          // UTILISER DIRECTEMENT LE STATUT DE LA BASE DE DONNÉES
           statut: demande.statut || "En attente",
           urgence: urgence,
           description: demande.description || "Aucune description fournie",
@@ -248,8 +300,8 @@ router.get(
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / parseInt(limit)),
+          total: filteredDemandes.length,
+          pages: Math.ceil(filteredDemandes.length / parseInt(limit)),
         },
       });
     } catch (error) {

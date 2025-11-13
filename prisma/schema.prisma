@@ -98,13 +98,16 @@ model User {
   activities               UserActivity[]
   preferences              UserPreference[]
   events                   UserEvent[]
-   audits              Audit[]  
+  audits                   Audit[]
   // RELATION POUR PODCAST 
   podcasts                 Podcast[] // Podcasts créés par l'utilisateur
   videos                   Video[] // Vidéos créées par l'utilisateur
   mediaFavorites           UserMediaFavorite[] // Favoris médias de l'utilisateur
   wellBeingStats           WellBeingStats? // Statistiques bien-être
   ProfessionalSettings     ProfessionalSettings?
+  Document                 Document[]
+  ContratType              ContratType[]
+  DocumentArchive          DocumentArchive[]
 
   @@index([email])
   @@index([role])
@@ -1064,18 +1067,84 @@ model WellBeingStats {
 //audit--------
 //------------
 model Audit {
-  id            Int      @id @default(autoincrement())
-  titre         String
-  description   String?
+  id          Int      @id @default(autoincrement())
+  titre       String
+  description String?
+  type        String
+  dateAudit   DateTime @default(now())
+  responsable String
+  statut      String   @default("en cours")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relation vers User
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+// Modèle pour les documents
+model Document {
+  id             String    @id @default(uuid())
+  nom            String
+  type           String // ASSURANCE, DIPLOME, CERTIFICATION, CONTRAT, CGV, ARCHIVE, IMMOBILIER
+  categorie      String? // Pour les documents immobiliers
+  description    String?
+  dateExpiration DateTime?
+  dateUpload     DateTime  @default(now())
+  statut         String    @default("VALIDE") // VALIDE, EXPIRANT, EXPIRE, EN_ATTENTE
+  taille         String
+  format         String
+  url            String
+  cheminFichier  String
+  tags           String[]
+  userId         String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([statut])
+  @@index([categorie])
+  @@index([dateExpiration])
+}
+
+// Modèle pour les contrats types
+model ContratType {
+  id                   String   @id @default(uuid())
+  nom                  String
+  description          String?
+  contenu              String
+  variables            String[]
+  utilise              Int      @default(0)
+  derniereModification DateTime @default(now())
+  userId               String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Modèle pour les archives de documents signés
+model DocumentArchive {
+  id            String   @id @default(uuid())
+  nom           String
   type          String
-  dateAudit     DateTime @default(now())
-  responsable   String
-  statut        String   @default("en cours")
+  dateSignature DateTime
+  parties       String[]
+  bien          String?
+  reference     String   @unique
+  url           String
+  statut        String   @default("SIGNÉ")
+  userId        String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // Relation vers User
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-}
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([dateSignature])
+}
