@@ -102,7 +102,9 @@ async function main() {
     where: {
       OR: [
         { role: "professional" },
-        { email: "pro@servo.mg" },
+        { userType: "PRESTATAIRE" },
+        { userType: "VENDEUR" },
+        { userType: "BIEN_ETRE" },
       ],
     },
     take: 10, // Prendre 10 utilisateurs maximum
