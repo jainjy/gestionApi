@@ -394,6 +394,7 @@ model Service {
   metiers     MetierService[]
   users       UtilisateurService[]
   demandes    Demande[]
+    
   Review      Review[]
   Appointment Appointment[]
 }
