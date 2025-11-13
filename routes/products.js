@@ -3,7 +3,7 @@ const router = express.Router()
 const { prisma } = require('../lib/db')
 const { authenticateToken, requireRole } = require('../middleware/auth')
 
-// GET /api/products - Récupérer tous les produits avec filtres
+// Dans votre route GET /api/products 
 router.get('/', async (req, res) => {
   try {
     const { 
@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
       userId,
       minPrice,
       maxPrice,
-      productType, // ← Nouveau paramètre
+      productType, 
       page = 1,
       limit = 20
     } = req.query
@@ -30,10 +30,12 @@ router.get('/', async (req, res) => {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
-        { category: { contains: search, mode: 'insensitive' } }
+        { category: { contains: search, mode: 'insensitive' } },
+        { subcategory: { contains: search, mode: 'insensitive' } }
       ]
     }
 
+    // ← FILTRE PAR CATÉGORIE (nouveau)
     if (category && category !== 'Toutes') {
       where.category = category
     }
@@ -46,7 +48,6 @@ router.get('/', async (req, res) => {
       where.userId = userId
     }
 
-    // ← Nouveau filtre pour productType
     if (productType) {
       where.productType = productType
     }
@@ -90,7 +91,7 @@ router.get('/', async (req, res) => {
       description: product.description,
       category: product.category,
       subcategory: product.subcategory,
-      productType: product.productType, // ← Inclure productType dans la réponse
+      productType: product.productType,
       price: product.price,
       comparePrice: product.comparePrice,
       cost: product.cost,
