@@ -212,7 +212,7 @@ app.use("/api/anonce", require("./routes/anonce"));
 
 
 //audit
-app.use("/api/audit", require("./routes/audit"));
+app.use("/api/add_audit", require("./routes/audit"));
 
 app.use("/api/mail", require("./routes/mail"));
 app.use("/api/demandes/immobilier", require("./routes/demandes-immobilier"));
