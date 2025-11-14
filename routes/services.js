@@ -2,6 +2,8 @@ const express = require('express')
 const router = express.Router()
 const { authenticateToken } = require('../middleware/auth')
 const { prisma } = require('../lib/db')
+const { createNotification } = require("../services/notificationService");
+
 // GET /api/services - Récupérer tous les services avec leurs catégories
 router.get('/', async (req, res) => {
   try {
@@ -67,7 +69,6 @@ router.get('/', async (req, res) => {
   }
 })
 
-
 // ✅ GET service  select par ID
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
@@ -105,9 +106,6 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 });
-
-
-
 
 // GET /api/services/categories - Récupérer toutes les catégories
 router.get('/categories', authenticateToken, async (req, res) => {
@@ -154,9 +152,10 @@ router.get('/metiers', authenticateToken, async (req, res) => {
 // POST /api/services - Créer un nouveau service
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, description, categoryId, metierIds, images } = req.body
+    const { name, description, categoryId, metierIds, images } = req.body;
+    const io = req.app.get("io"); // WebSocket
 
-    // Créer le service
+    // ➕ Création du service
     const newService = await prisma.service.create({
       data: {
         libelle: name,
@@ -183,8 +182,20 @@ router.post('/', authenticateToken, async (req, res) => {
           }
         }
       }
-    })
+    });
 
+    // 🔔 Notification automatique lors de la création du service
+    await createNotification({
+      userId: req.user.id,
+      type: "success",
+      title: "Nouveau service créé",
+      message: `Le service "${name}" a été créé avec succès.`,
+      relatedEntity: "service",
+      relatedEntityId: String(newService.id),
+      io
+    });
+
+    // Réponse
     res.status(201).json({
       id: newService.id.toString(),
       name: newService.libelle,
@@ -196,12 +207,12 @@ router.post('/', authenticateToken, async (req, res) => {
         libelle: m.metier.libelle
       })),
       status: 'active'
-    })
+    });
   } catch (error) {
-    console.error('Erreur lors de la création du service:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
+    console.error('Erreur lors de la création du service:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
-})
+});
 
 // PUT /api/services/:id - Modifier un service
 router.put('/:id', authenticateToken, async (req, res) => {
@@ -330,6 +341,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
+
 router.get("/without-category", async (req, res) => {
   try {
     const services = await prisma.service.findMany({

@@ -3,6 +3,7 @@ const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db')
 const { authenticateToken } = require('../middleware/auth')
+const { createNotification } = require("../services/notificationService");
 
 // GET /api/properties - Récupérer les propriétés avec filtres avancés
 router.get('/', async (req, res) => {
@@ -64,16 +65,19 @@ router.get('/', async (req, res) => {
 })
 
 // POST /api/properties - Créer une nouvelle propriété
-router.post('/', authenticateToken,async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const data = req.body
-    
-    // Validation des données requises
-    if (!data.title || !data.type || !data.city ) {
-      return res.status(400).json({ error: 'Champs obligatoires manquants' })
-    }
-    const userId=req.user.id
+    const data = req.body;
+    const io = req.app.get("io"); // WebSocket
 
+    // Validation
+    if (!data.title || !data.type || !data.city) {
+      return res.status(400).json({ error: 'Champs obligatoires manquants' });
+    }
+
+    const userId = req.user.id;
+
+    // ➕ Création de la propriété
     const newProperty = await prisma.property.create({
       data: {
         title: data.title,
@@ -94,7 +98,7 @@ router.post('/', authenticateToken,async (req, res) => {
         ownerId: userId,
         publishedAt: data.status === 'published' ? new Date() : null
       },
-      include: { 
+      include: {
         owner: {
           select: {
             id: true,
@@ -102,16 +106,35 @@ router.post('/', authenticateToken,async (req, res) => {
             lastName: true,
             email: true
           }
-        } 
+        }
       }
-    })
+    });
 
-    res.status(201).json(newProperty)
+    // 🔔 Notification automatique
+    await createNotification({
+      userId: userId,
+      type: "success",
+      title: "Nouvelle propriété ajoutée",
+      message: `La propriété "${data.title}" a été créée avec succès.`,
+      relatedEntity: "property",
+      relatedEntityId: String(newProperty.id),
+      io,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Propriété ajoutée et notification envoyée",
+      data: newProperty,
+    });
+
   } catch (error) {
-    console.error('Failed to create property:', error)
-    res.status(500).json({ error: 'Failed to create property' })
+    console.error('Failed to create property:', error);
+    res.status(500).json({
+      error: 'Failed to create property',
+      message: error.message
+    });
   }
-})
+});
 
 // GET /api/properties/stats - Récupérer les statistiques
 router.get('/stats',authenticateToken, async (req, res) => {

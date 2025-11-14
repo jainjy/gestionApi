@@ -175,8 +175,7 @@ router.get('/stats', async (req, res) => {
     });
   }
 });
-
-// POST /api/admin/tourisme - Créer un nouvel hébergement
+ // POST /api/admin/tourisme - Créer un nouvel hébergement
 router.post('/', async (req, res) => {
   try {
     console.log('➕ Requête POST admin reçue pour /api/admin/tourisme', req.body);
@@ -289,31 +288,49 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    // Filtrer uniquement les champs valides pour la mise à jour
+    const validFields = [
+      'title', 'type', 'price', 'city', 'lat', 'lng', 'images', 
+      'amenities', 'maxGuests', 'description', 'bedrooms', 'bathrooms', 
+      'area', 'instantBook', 'cancellationPolicy', 'featured', 
+      'available', 'rating', 'reviewCount'
+    ];
+
+    const filteredData = {};
+    
+    for (const field of validFields) {
+      if (updateData[field] !== undefined) {
+        filteredData[field] = updateData[field];
+      }
+    }
+
     // Conversion des types si nécessaire
-    if (updateData.price) updateData.price = parseFloat(updateData.price);
-    if (updateData.maxGuests) updateData.maxGuests = parseInt(updateData.maxGuests);
-    if (updateData.bedrooms) updateData.bedrooms = parseInt(updateData.bedrooms);
-    if (updateData.bathrooms) updateData.bathrooms = parseInt(updateData.bathrooms);
-    if (updateData.area) updateData.area = parseInt(updateData.area);
-    if (updateData.rating) updateData.rating = parseFloat(updateData.rating);
-    if (updateData.reviewCount) updateData.reviewCount = parseInt(updateData.reviewCount);
+    if (filteredData.price) filteredData.price = parseFloat(filteredData.price);
+    if (filteredData.maxGuests) filteredData.maxGuests = parseInt(filteredData.maxGuests);
+    if (filteredData.bedrooms !== undefined) filteredData.bedrooms = filteredData.bedrooms ? parseInt(filteredData.bedrooms) : null;
+    if (filteredData.bathrooms !== undefined) filteredData.bathrooms = filteredData.bathrooms ? parseInt(filteredData.bathrooms) : null;
+    if (filteredData.area !== undefined) filteredData.area = filteredData.area ? parseInt(filteredData.area) : null;
+    if (filteredData.rating) filteredData.rating = parseFloat(filteredData.rating);
+    if (filteredData.reviewCount) filteredData.reviewCount = parseInt(filteredData.reviewCount);
 
     // Gérer les tableaux
-    if (updateData.images && !Array.isArray(updateData.images)) {
-      updateData.images = [updateData.images];
+    if (filteredData.images && !Array.isArray(filteredData.images)) {
+      filteredData.images = [filteredData.images];
     }
-    if (updateData.amenities && !Array.isArray(updateData.amenities)) {
-      updateData.amenities = [updateData.amenities];
+    if (filteredData.amenities && !Array.isArray(filteredData.amenities)) {
+      filteredData.amenities = [filteredData.amenities];
     }
 
     // Convertir les booléens
-    if (updateData.instantBook !== undefined) updateData.instantBook = Boolean(updateData.instantBook);
-    if (updateData.featured !== undefined) updateData.featured = Boolean(updateData.featured);
-    if (updateData.available !== undefined) updateData.available = Boolean(updateData.available);
+    if (filteredData.instantBook !== undefined) filteredData.instantBook = Boolean(filteredData.instantBook);
+    if (filteredData.featured !== undefined) filteredData.featured = Boolean(filteredData.featured);
+    if (filteredData.available !== undefined) filteredData.available = Boolean(filteredData.available);
+
+    console.log('📝 Données filtrées pour mise à jour:', filteredData);
 
     const updatedListing = await prisma.tourisme.update({
       where: { id },
-      data: updateData,
+      data: filteredData,
       include: {
         bookings: {
           select: {
@@ -351,15 +368,20 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/admin/tourisme/:id - Supprimer un hébergement
+ // DELETE /api/admin/tourisme/:id - Supprimer un hébergement
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`🗑️ Requête DELETE admin reçue pour /api/admin/tourisme/${id}`);
 
     // Vérifier que l'hébergement existe
-    const existingListing = await prisma.tourisme.findUnique({
-      where: { id },
+    const existingListing = await prisma.tourisme.findFirst({
+      where: { 
+        OR: [
+          { id: id },
+          { idUnique: id }
+        ]
+      },
       include: {
         bookings: true
       }
@@ -378,25 +400,28 @@ router.delete('/:id', async (req, res) => {
     );
 
     if (activeBookings.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Impossible de supprimer un hébergement avec des réservations actives'
-      });
-    }
+  return res.status(400).json({
+    success: false,
+    error: "Impossible de supprimer cet hébergement : une ou plusieurs réservations actives sont associées."
+  });
+}
 
+
+    // Supprimer via l'id interne
     await prisma.tourisme.delete({
-      where: { id }
+      where: { id: existingListing.id }
     });
 
-    console.log(`✅ Hébergement ${id} supprimé par admin`);
+    console.log(`✅ Hébergement ${existingListing.id} supprimé`);
 
     res.json({
       success: true,
       message: 'Hébergement supprimé avec succès'
     });
+
   } catch (error) {
     console.error('❌ Erreur suppression admin tourisme:', error);
-    
+
     if (error.code === 'P2025') {
       return res.status(404).json({
         success: false,

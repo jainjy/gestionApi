@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { prisma } = require("../lib/db");
 const { authenticateToken } = require("../middleware/auth");
+const { createNotification } = require("../services/notificationService");
 
 // POST /api/harmonie/new Ajout de nouveau service
 router.post("/new", authenticateToken, async (req, res) => {
@@ -12,24 +13,22 @@ router.post("/new", authenticateToken, async (req, res) => {
       price,
       duration,
       categoryId,
-      metierIds, // Changé de metierId à metierIds
+      metierIds,
       userId,
       images,
     } = req.body;
 
-    console.log("Données reçues du frontend:", req.body);
-
-    // Nettoyage et typage des données
+    const io = req.app.get("io"); // WebSocket
+    
+    // Nettoyage, parsing, et construction du payload (inchangé)
     const parsedPrice = price ? parseFloat(price) : null;
     const parsedDuration = duration ? parseInt(duration) : null;
     const parsedImages = Array.isArray(images) ? images : [];
 
-    // Gestion des metierIds (déjà un tableau depuis le frontend)
-    const parsedMetierIds = Array.isArray(metierIds) 
+    const parsedMetierIds = Array.isArray(metierIds)
       ? metierIds.map((id) => parseInt(id)).filter(id => !isNaN(id))
       : [];
 
-    // Construction dynamique du data pour Prisma
     const data = {
       libelle,
       description,
@@ -38,76 +37,53 @@ router.post("/new", authenticateToken, async (req, res) => {
       images: parsedImages,
     };
 
-    // Relation : catégorie
     if (categoryId) {
       data.category = { connect: { id: parseInt(categoryId) } };
     }
 
-    // Relation : métiers (table de liaison MetierService)
     if (parsedMetierIds.length > 0) {
       data.metiers = {
-        create: parsedMetierIds.map((id) => ({ 
-          metier: { connect: { id } } // Correction ici
+        create: parsedMetierIds.map((id) => ({
+          metier: { connect: { id } }
         })),
       };
     }
 
-    // Relation : utilisateur (table de liaison UtilisateurService)
     if (userId) {
-      // Si userId est un UUID string (pas un number)
-      if (typeof userId === 'string' && isNaN(parseInt(userId))) {
+      if (typeof userId === "string" && isNaN(parseInt(userId))) {
         data.users = {
-          create: [
-            {
-              user: { connect: { id: userId } } // UUID string
-            }
-          ]
+          create: [{ user: { connect: { id: userId } } }],
         };
       } else {
-        // Si c'est un number (ancienne version)
         const parsedUserId = parseInt(userId);
         if (!isNaN(parsedUserId)) {
           data.users = {
-            create: [
-              {
-                user: { connect: { id: parsedUserId } }
-              }
-            ]
+            create: [{ user: { connect: { id: parsedUserId } } }],
           };
         }
       }
     }
 
-    console.log("Payload final envoyé à Prisma:", data);
-
-    // Création du service
     const newService = await prisma.service.create({
       data,
       include: {
         category: true,
-        metiers: { 
-          include: { 
-            metier: true 
-          } 
-        },
-        users: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true
-              }
-            }
-          }
-        },
+        metiers: { include: { metier: true } },
+        users: { include: { user: true } },
       },
     });
 
-    console.log("Service créé avec succès:", newService);
+    // 🔔 NOTIFICATION CRÉATION
+    await createNotification({
+      userId: req.user.id,
+      type: "success",
+      title: "Nouveau service ajouté",
+      message: `Le service "${libelle}" a été créé avec succès.`,
+      relatedEntity: "service",
+      relatedEntityId: String(newService.id),
+      io
+    });
 
-    // Formater la réponse pour correspondre au frontend
     const formattedService = {
       id: newService.id,
       libelle: newService.libelle,
@@ -134,73 +110,52 @@ router.post("/new", authenticateToken, async (req, res) => {
     };
 
     res.status(201).json(formattedService);
+
   } catch (error) {
     console.error("Erreur lors de la création du service:", error);
-
-    // Si c'est une erreur Prisma, afficher meta si dispo
-    if (error.meta) {
-      console.error("Détails de l'erreur Prisma:", error.meta);
-    }
-
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Erreur serveur lors de la création du service",
-      details: error.message 
+      details: error.message,
     });
   }
 });
+
 
 // PUT /api/harmonie/:id Modification d'un service
 router.put("/:id", authenticateToken, async (req, res) => {
   try {
     const serviceId = parseInt(req.params.id);
+    const io = req.app.get("io"); // WebSocket
+
     let {
       libelle,
       description,
       price,
       duration,
       categoryId,
-      metierIds, // ✅ tableau de métiers
+      metierIds,
       userId,
       images,
     } = req.body;
 
-    console.log("📥 Données reçues pour modification:", req.body);
-
     if (isNaN(serviceId)) {
       return res.status(400).json({ error: "ID de service invalide." });
-    }
-
-    // Validation basique
-    if (!libelle || libelle.trim() === "") {
-      return res.status(400).json({ error: "Le libellé est obligatoire." });
     }
 
     const parsedPrice = price ? parseFloat(price) : null;
     const parsedDuration = duration ? parseInt(duration) : null;
     const parsedImages = Array.isArray(images) ? images : [];
 
-    // Nettoyage des IDs de métiers
     const metiersToUpdate = Array.isArray(metierIds)
-      ? metierIds.map((id) => parseInt(id)).filter((id) => !isNaN(id))
+      ? metierIds.map((id) => parseInt(id)).filter(id => !isNaN(id))
       : [];
 
-    console.log("🔄 Métiers à mettre à jour:", metiersToUpdate);
-
-    // Vérifier si le service existe
     const existingService = await prisma.service.findUnique({
       where: { id: serviceId },
       include: {
-        metiers: {
-          include: {
-            metier: true
-          }
-        },
+        metiers: { include: { metier: true } },
         category: true,
-        users: {
-          include: {
-            user: true
-          }
-        },
+        users: { include: { user: true } },
       },
     });
 
@@ -208,12 +163,6 @@ router.put("/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Service introuvable." });
     }
 
-    console.log(
-      "📋 Service existant - Métiers:",
-      existingService.metiers.map((m) => m.metier.id)
-    );
-
-    // Construction des données de mise à jour
     const data = {
       libelle: libelle.trim(),
       description: description ? description.trim() : null,
@@ -222,123 +171,70 @@ router.put("/:id", authenticateToken, async (req, res) => {
       images: parsedImages,
     };
 
-    // ✅ Gestion de la catégorie (conditionnelle)
     if (categoryId !== undefined) {
       if (categoryId && !isNaN(parseInt(categoryId))) {
-        // Vérifier que la catégorie existe
-        const categoryExists = await prisma.category.findUnique({
-          where: { id: parseInt(categoryId) },
-        });
-        if (categoryExists) {
-          data.category = { connect: { id: parseInt(categoryId) } };
-        }
+        data.category = { connect: { id: parseInt(categoryId) } };
       } else {
         data.category = { disconnect: true };
       }
     }
 
-    // ✅ Gestion des métiers (CORRIGÉE pour la structure du frontend)
     if (Array.isArray(metierIds)) {
+      await prisma.metierService.deleteMany({ where: { serviceId } });
+
       if (metiersToUpdate.length > 0) {
-        console.log("🔄 Mise à jour des métiers...");
-
-        // Supprimer les anciennes relations
-        await prisma.metierService.deleteMany({
-          where: { serviceId },
-        });
-
-        // Créer les nouvelles relations avec la structure correcte
         data.metiers = {
-          create: metiersToUpdate.map((id) => ({ 
-            metier: { connect: { id } } // Structure corrigée
+          create: metiersToUpdate.map((id) => ({
+            metier: { connect: { id } }
           })),
         };
-      } else {
-        // Si tableau vide explicite, supprimer tous les métiers
-        console.log("🗑️ Suppression de tous les métiers (tableau vide)");
-        await prisma.metierService.deleteMany({
-          where: { serviceId },
-        });
       }
     }
-    // Si metierIds n'est pas fourni, on ne touche pas aux métiers existants
 
-    // ✅ Gestion de l'utilisateur (ADAPTÉE pour UUID string)
     if (userId !== undefined && userId) {
-      // Si userId est un UUID string (pas un number)
-      if (typeof userId === 'string' && isNaN(parseInt(userId))) {
-        // Vérifier que l'utilisateur existe
-        const userExists = await prisma.user.findUnique({
-          where: { id: userId },
-        });
-        if (userExists) {
-          // Supprimer les anciennes relations utilisateur
-          await prisma.utilisateurService.deleteMany({
-            where: { serviceId },
-          });
-          
-          // Créer la nouvelle relation
-          data.users = {
-            create: [
-              {
-                user: { connect: { id: userId } }
-              }
-            ]
-          };
-        }
+      await prisma.utilisateurService.deleteMany({ where: { serviceId } });
+
+      if (typeof userId === "string" && isNaN(parseInt(userId))) {
+        data.users = {
+          create: [{ user: { connect: { id: userId } } }],
+        };
       } else {
-        // Si c'est un number (ancienne version)
         const parsedUserId = parseInt(userId);
         if (!isNaN(parsedUserId)) {
-          const userExists = await prisma.user.findUnique({
-            where: { id: parsedUserId },
-          });
-          if (userExists) {
-            await prisma.utilisateurService.deleteMany({
-              where: { serviceId },
-            });
-            
-            data.users = {
-              create: [
-                {
-                  user: { connect: { id: parsedUserId } }
-                }
-              ]
-            };
-          }
+          data.users = {
+            create: [{ user: { connect: { id: parsedUserId } } }],
+          };
         }
       }
     }
 
-    console.log("📤 Données envoyées à Prisma:", data);
-
-    // Mise à jour du service
     const updatedService = await prisma.service.update({
       where: { id: serviceId },
       data,
       include: {
         category: true,
-        metiers: {
-          include: {
-            metier: true,
-          },
-        },
+        metiers: { include: { metier: true } },
         users: {
           include: {
             user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true
-              }
-            }
-          }
+              select: { id: true, firstName: true, lastName: true, email: true },
+            },
+          },
         },
       },
     });
 
-    // Formatage de la réponse pour correspondre au frontend
+    // 🔔 NOTIFICATION MODIFICATION
+    await createNotification({
+      userId: req.user.id,
+      type: "info",
+      title: "Service modifié",
+      message: `Le service "${libelle}" a été modifié avec succès.`,
+      relatedEntity: "service",
+      relatedEntityId: String(updatedService.id),
+      io
+    });
+
     const response = {
       id: updatedService.id,
       libelle: updatedService.libelle,
@@ -364,29 +260,17 @@ router.put("/:id", authenticateToken, async (req, res) => {
       status: "active",
     };
 
-    console.log("✅ Service modifié avec succès");
     res.json(response);
+
   } catch (error) {
-    console.error("❌ Erreur lors de la modification du service:", error);
-
-    // Gestion spécifique des erreurs Prisma
-    if (error.code === "P2025") {
-      return res.status(404).json({ error: "Enregistrement introuvable." });
-    }
-    if (error.code === "P2003") {
-      return res.status(400).json({ error: "Référence étrangère invalide." });
-    }
-    if (error.code === "P2002") {
-      return res.status(400).json({ error: "Violation de contrainte unique." });
-    }
-
+    console.error("❌ Erreur lors de la modification:", error);
     res.status(500).json({
       error: "Erreur serveur lors de la modification",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
+      details: error.message
     });
   }
 });
+
 
 // POST /api/harmonie/category - Charger catégories en fonction du métiers
 router.get("/categories", authenticateToken, async (req, res) => {
