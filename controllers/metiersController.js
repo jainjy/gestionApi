@@ -20,6 +20,7 @@ class MetiersController {
                   firstName: true,
                   lastName: true,
                   email: true,
+                  avatar: true,
                 },
               },
             },
