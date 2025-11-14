@@ -2,29 +2,33 @@ const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db')
 const { authenticateToken, requireRole } = require('../middleware/auth')
+const { createNotification } = require("../services/notificationService");
 
 // Dans votre route GET /api/products 
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { 
       search, 
       category, 
       status,
       featured,
-      userId,
       minPrice,
       maxPrice,
       productType, 
       page = 1,
       limit = 20
-    } = req.query
+    } = req.query;
 
     // Construire les filtres
-    const where = {}
+    const where = {};
 
-    if (status && status !== 'Tous') {
-      where.status = status
+    // Filtrage par rôle : seul le professional est restreint à ses produits
+    if (req.user.role === 'professional') {
+      where.userId = req.user.id;
     }
+
+    // Filtres classiques
+    if (status && status !== 'Tous') where.status = status;
 
     if (search) {
       where.OR = [
@@ -32,33 +36,20 @@ router.get('/', async (req, res) => {
         { description: { contains: search, mode: 'insensitive' } },
         { category: { contains: search, mode: 'insensitive' } },
         { subcategory: { contains: search, mode: 'insensitive' } }
-      ]
+      ];
     }
 
-    // ← FILTRE PAR CATÉGORIE (nouveau)
-    if (category && category !== 'Toutes') {
-      where.category = category
-    }
-
-    if (featured !== undefined) {
-      where.featured = featured === 'true'
-    }
-
-    if (userId) {
-      where.userId = userId
-    }
-
-    if (productType) {
-      where.productType = productType
-    }
+    if (category && category !== 'Toutes') where.category = category;
+    if (featured !== undefined) where.featured = featured === 'true';
+    if (productType) where.productType = productType;
 
     if (minPrice || maxPrice) {
-      where.price = {}
-      if (minPrice) where.price.gte = parseFloat(minPrice)
-      if (maxPrice) where.price.lte = parseFloat(maxPrice)
+      where.price = {};
+      if (minPrice) where.price.gte = parseFloat(minPrice);
+      if (maxPrice) where.price.lte = parseFloat(maxPrice);
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit)
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [products, total] = await Promise.all([
       prisma.product.findMany({
@@ -75,16 +66,13 @@ router.get('/', async (req, res) => {
             }
           }
         },
-        orderBy: {
-          createdAt: 'desc'
-        },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: parseInt(limit)
       }),
       prisma.product.count({ where })
-    ])
+    ]);
 
-    // Formater les données pour le frontend
     const formattedProducts = products.map(product => ({
       id: product.id,
       name: product.name,
@@ -116,10 +104,10 @@ router.get('/', async (req, res) => {
         phone: product.User?.phone || null,
         email: product.User?.email || null
       },
-      createdAt: product.createdAt ? product.createdAt.toISOString() : null,
-      updatedAt: product.updatedAt ? product.updatedAt.toISOString() : null,
-      publishedAt: product.publishedAt ? product.publishedAt.toISOString() : null
-    }))
+      createdAt: product.createdAt?.toISOString() || null,
+      updatedAt: product.updatedAt?.toISOString() || null,
+      publishedAt: product.publishedAt?.toISOString() || null
+    }));
 
     res.json({
       products: formattedProducts,
@@ -129,12 +117,101 @@ router.get('/', async (req, res) => {
         total,
         pages: Math.ceil(total / parseInt(limit))
       }
-    })
+    });
   } catch (error) {
-    console.error('Erreur lors de la récupération des produits:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
+    console.error('Erreur lors de la récupération des produits:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
-})
+});
+
+// Route pour les statistiques des produits
+router.get('/stats', authenticateToken, async (req, res) => {
+  try {
+    const where = {};
+
+    // 🚫 Seul le professional est limité à ses produits
+    if (req.user.role === "professional") {
+      where.userId = req.user.id;
+    }
+
+    // 📌 1. Nombre total de produits
+    const totalProducts = await prisma.product.count({ where });
+
+    // 📌 2. Produits par catégorie
+    const productsByCategory = await prisma.product.groupBy({
+      by: ["category"],
+      where,
+      _count: { category: true }
+    });
+
+    // 📌 3. Status (active / draft)
+    const productsByStatus = await prisma.product.groupBy({
+      by: ["status"],
+      where,
+      _count: { status: true }
+    });
+
+    // 📌 4. Somme des vues, clics, achats
+    const counters = await prisma.product.aggregate({
+      where,
+      _sum: {
+        viewCount: true,
+        clickCount: true,
+        purchaseCount: true
+      }
+    });
+
+    // 📌 5. Top 5 produits les plus vus
+    const topViewed = await prisma.product.findMany({
+      where,
+      orderBy: { viewCount: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        name: true,
+        viewCount: true,
+        price: true
+      }
+    });
+
+    // 📌 6. Top 5 produits les plus achetés
+    const topPurchased = await prisma.product.findMany({
+      where,
+      orderBy: { purchaseCount: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        name: true,
+        purchaseCount: true,
+        price: true
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        totalProducts,
+        productsByCategory,
+        productsByStatus,
+        totals: {
+          views: counters._sum.viewCount || 0,
+          clicks: counters._sum.clickCount || 0,
+          purchases: counters._sum.purchaseCount || 0
+        },
+        topViewed,
+        topPurchased
+      }
+    });
+
+  } catch (error) {
+    console.error("Erreur stats produits:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur"
+    });
+  }
+});
+
 
 // GET /api/products/categories - Récupérer toutes les catégories
 router.get('/categories', async (req, res) => {
@@ -240,15 +317,14 @@ router.post('/', authenticateToken, requireRole(['professional', 'admin']), asyn
       visibility,
       seoTitle,
       seoDescription
-    } = req.body
+    } = req.body;
 
-    // Générer un slug à partir du nom
     const slug = name
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)+/g, '')
+      .replace(/(^-|-$)+/g, '');
 
     const product = await prisma.product.create({
       data: {
@@ -258,15 +334,15 @@ router.post('/', authenticateToken, requireRole(['professional', 'admin']), asyn
         description,
         category,
         subcategory,
-        price: price !== undefined && price !== null ? parseFloat(price) : null,
-        comparePrice: comparePrice !== undefined && comparePrice !== null ? parseFloat(comparePrice) : null,
-        cost: cost !== undefined && cost !== null ? parseFloat(cost) : null,
+        price: price != null ? parseFloat(price) : null,
+        comparePrice: comparePrice != null ? parseFloat(comparePrice) : null,
+        cost: cost != null ? parseFloat(cost) : null,
         sku: sku || null,
         barcode: barcode || null,
-        trackQuantity: quantity !== undefined,
-        quantity: quantity !== undefined && quantity !== null ? parseInt(quantity) : 0,
-        lowStock: lowStock !== undefined && lowStock !== null ? parseInt(lowStock) : 5,
-        weight: weight !== undefined && weight !== null ? parseFloat(weight) : null,
+        trackQuantity: quantity != null,
+        quantity: quantity != null ? parseInt(quantity) : 0,
+        lowStock: lowStock != null ? parseInt(lowStock) : 5,
+        weight: weight != null ? parseFloat(weight) : null,
         dimensions: dimensions || null,
         images: Array.isArray(images) ? images : [],
         status: status || 'draft',
@@ -285,19 +361,31 @@ router.post('/', authenticateToken, requireRole(['professional', 'admin']), asyn
           }
         }
       }
-    })
+    });
 
-    res.json(product)
+    // 🔔 Notification création produit
+    const io = req.app.get("io");
+    await createNotification({
+      userId: req.user.id,
+      type: "success",
+      title: "Nouveau produit ajouté",
+      message: `Le produit "${product.name}" a été ajouté avec succès.`,
+      relatedEntity: "product",
+      relatedEntityId: product.id,
+      io
+    });
+
+    res.json({ success: true, data: product, message: "Produit créé et notification envoyée" });
   } catch (error) {
-    console.error('Erreur lors de la création du produit:', error)
+    console.error('Erreur lors de la création du produit:', error);
     
     if (error.code === 'P2002') {
-      return res.status(400).json({ error: 'Un produit avec ce nom ou slug existe déjà' })
+      return res.status(400).json({ error: 'Un produit avec ce nom ou slug existe déjà' });
     }
-    
-    res.status(500).json({ error: 'Erreur serveur' })
+
+    res.status(500).json({ error: 'Erreur serveur', details: error.message });
   }
-})
+});
 
 // PUT /api/products/:id - Mettre à jour un produit
 router.put('/:id', authenticateToken, requireRole(['professional', 'admin']), async (req, res) => {
@@ -397,32 +485,37 @@ router.put('/:id', authenticateToken, requireRole(['professional', 'admin']), as
 // DELETE /api/products/:id - Supprimer un produit
 router.delete('/:id', authenticateToken, requireRole(['professional', 'admin']), async (req, res) => {
   try {
-    const { id } = req.params
+    const { id } = req.params;
 
-    // Vérifier que le produit existe et que l'utilisateur a les droits
-    const existingProduct = await prisma.product.findUnique({
-      where: { id }
-    })
-
+    const existingProduct = await prisma.product.findUnique({ where: { id } });
     if (!existingProduct) {
-      return res.status(404).json({ error: 'Produit non trouvé' })
+      return res.status(404).json({ error: 'Produit non trouvé' });
     }
 
-    // Vérifier les permissions
     if (req.user.role === 'professional' && existingProduct.userId !== req.user.id) {
-      return res.status(403).json({ error: 'Accès non autorisé à ce produit' })
+      return res.status(403).json({ error: 'Accès non autorisé à ce produit' });
     }
 
-    await prisma.product.delete({
-      where: { id }
-    })
+    await prisma.product.delete({ where: { id } });
 
-    res.json({ success: true, message: 'Produit supprimé avec succès' })
+    // 🔔 Notification suppression produit
+    const io = req.app.get("io");
+    await createNotification({
+      userId: req.user.id,
+      type: "info",
+      title: "Produit supprimé",
+      message: `Le produit "${existingProduct.name}" a été supprimé.`,
+      relatedEntity: "product",
+      relatedEntityId: existingProduct.id,
+      io
+    });
+
+    res.json({ success: true, message: 'Produit supprimé avec succès et notification envoyée' });
   } catch (error) {
-    console.error('Erreur lors de la suppression du produit:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
+    console.error('Erreur lors de la suppression du produit:', error);
+    res.status(500).json({ error: 'Erreur serveur', details: error.message });
   }
-})
+});
 
 
 module.exports = router

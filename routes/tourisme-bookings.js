@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 //const { v4: uuidv4 } = require('uuid');
-
 const prisma = new PrismaClient();
+const { createNotification } = require("../services/notificationService");
 
 // Middleware CORS
 router.use((req, res, next) => {
@@ -42,7 +42,6 @@ router.post('/', async (req, res) => {
       paymentMethod
     } = req.body;
 
-    // Validation des données requises
     if (!listingId || !checkIn || !checkOut || !guests) {
       return res.status(400).json({
         success: false,
@@ -50,28 +49,17 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Vérifier que l'hébergement existe
-    const listing = await prisma.tourisme.findUnique({
-      where: { id: listingId }
-    });
-
+    const listing = await prisma.tourisme.findUnique({ where: { id: listingId } });
     if (!listing) {
-      return res.status(404).json({
-        success: false,
-        error: 'Hébergement non trouvé'
-      });
+      return res.status(404).json({ success: false, error: 'Hébergement non trouvé' });
     }
 
-    // Vérifier la disponibilité (dates)
     const existingBooking = await prisma.tourismeBooking.findFirst({
       where: {
         listingId,
         status: { in: ['pending', 'confirmed'] },
         OR: [
-          {
-            checkIn: { lte: new Date(checkOut) },
-            checkOut: { gte: new Date(checkIn) }
-          }
+          { checkIn: { lte: new Date(checkOut) }, checkOut: { gte: new Date(checkIn) } }
         ]
       }
     });
@@ -83,7 +71,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Calculer le nombre de nuits
     const checkInDate = new Date(checkIn);
     const checkOutDate = new Date(checkOut);
     const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
@@ -95,12 +82,10 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Calculer le montant total
     const baseAmount = listing.price * nights;
-    const serviceFee = 15.00; // Frais de service fixes
+    const serviceFee = 15.00;
     const totalAmount = baseAmount + serviceFee;
 
-    // Créer la réservation
     const booking = await prisma.tourismeBooking.create({
       data: {
         listingId,
@@ -135,10 +120,22 @@ router.post('/', async (req, res) => {
 
     console.log(`✅ Réservation créée: ${booking.confirmationNumber}`);
 
+    // 🔔 Création automatique d'une notification
+    const io = req.app.get("io"); // Assure-toi que le serveur a "io"
+    await createNotification({
+      userId: booking.userId,
+      type: "info",
+      title: "Nouvelle réservation",
+      message: `Votre réservation pour "${listing.title}" du ${checkIn} au ${checkOut} a été créée.`,
+      relatedEntity: "tourismeBooking",
+      relatedEntityId: String(booking.id),
+      io,
+    });
+
     res.status(201).json({
       success: true,
       data: booking,
-      message: 'Réservation créée avec succès'
+      message: 'Réservation créée avec succès et notification envoyée'
     });
 
   } catch (error) {
@@ -158,6 +155,7 @@ router.post('/', async (req, res) => {
     });
   }
 });
+
 
 // GET /api/tourisme-bookings - Récupérer les réservations avec filtres
 router.get('/', async (req, res) => {
@@ -383,11 +381,42 @@ router.put('/:id/status', async (req, res) => {
 
     console.log(`✅ Statut réservation ${id} mis à jour: ${status}`);
 
+    // 🔔 Notification selon le nouveau statut
+    const io = req.app.get("io");
+    if (updatedBooking.user) {
+      let notificationMessage = '';
+      let notificationTitle = '';
+
+      if (status === 'cancelled') {
+        notificationTitle = "Réservation annulée";
+        notificationMessage = `Votre réservation pour "${updatedBooking.listing.title}" a été annulée.`;
+      } else if (status === 'confirmed') {
+        notificationTitle = "Réservation confirmée";
+        notificationMessage = `Votre réservation pour "${updatedBooking.listing.title}" a été confirmée.`;
+      } else if (status === 'pending') {
+        notificationTitle = "Réservation en attente";
+        notificationMessage = `Votre réservation pour "${updatedBooking.listing.title}" est en attente.`;
+      }
+
+      if (notificationMessage) {
+        await createNotification({
+          userId: updatedBooking.user.id,
+          type: status === 'cancelled' ? 'warning' : 'info',
+          title: notificationTitle,
+          message: notificationMessage,
+          relatedEntity: "tourismeBooking",
+          relatedEntityId: String(updatedBooking.id),
+          io,
+        });
+      }
+    }
+
     res.json({
       success: true,
       data: updatedBooking,
-      message: 'Statut de réservation mis à jour avec succès'
+      message: 'Statut de réservation mis à jour avec succès et notification envoyée'
     });
+
   } catch (error) {
     console.error('❌ Erreur mise à jour statut réservation:', error);
     
@@ -405,6 +434,7 @@ router.put('/:id/status', async (req, res) => {
     });
   }
 });
+
 
 // GET /api/tourisme-bookings/listing/:listingId/availability - Vérifier la disponibilité
 router.get('/listing/:listingId/availability', async (req, res) => {
@@ -473,15 +503,33 @@ router.delete('/:id', async (req, res) => {
       data: {
         status: 'cancelled',
         cancelledAt: new Date()
+      },
+      include: {
+        user: true,
+        listing: true
       }
     });
 
     console.log(`✅ Réservation ${id} annulée`);
 
+    // 🔔 Création de la notification d'annulation
+    const io = req.app.get("io"); // Assure-toi que le serveur a "io"
+    if (cancelledBooking.user) {
+      await createNotification({
+        userId: cancelledBooking.user.id,
+        type: "warning",
+        title: "Réservation annulée",
+        message: `Votre réservation pour "${cancelledBooking.listing.title}" a été annulée.`,
+        relatedEntity: "tourismeBooking",
+        relatedEntityId: String(cancelledBooking.id),
+        io,
+      });
+    }
+
     res.json({
       success: true,
       data: cancelledBooking,
-      message: 'Réservation annulée avec succès'
+      message: 'Réservation annulée avec succès et notification envoyée'
     });
   } catch (error) {
     console.error('❌ Erreur annulation réservation:', error);
@@ -500,5 +548,6 @@ router.delete('/:id', async (req, res) => {
     });
   }
 });
+
 
 module.exports = router;

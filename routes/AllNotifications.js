@@ -6,6 +6,7 @@ const { authenticateToken, requireRole } = require("../middleware/auth");
 // ======================================================
 // 🔹 Récupérer les notifications
 // ======================================================
+
 router.get("/", authenticateToken, async (req, res) => {
   try {
     // Vérifie que req.user existe bien
@@ -19,13 +20,8 @@ router.get("/", authenticateToken, async (req, res) => {
 
     console.log("👤 Récupération des notifications pour :", req.user.email);
 
-    // Pour un utilisateur normal, on filtre par userId
-    // Pour un admin, on peut voir toutes les notifications
-    const whereClause =
-      req.user.role === "admin" ? {} : { userId: req.user.id };
-
+    // Tous les utilisateurs voient toutes les notifications
     const notifications = await prisma.notification.findMany({
-      where: whereClause,
       orderBy: { createdAt: "desc" },
     });
 
