@@ -2,17 +2,17 @@ const express = require("express");
 const router = express.Router();
 const { prisma, pool } = require("../lib/db");
 const { authenticateToken } = require("../middleware/auth");
+const { createNotification } = require("../services/notificationService");
 
 /**
   POST /api/audit/add
  Ajouter un nouvel audit
 */
-
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const { titre, description, type, responsable, statut } = req.body;
+    const io = req.app.get("io");
 
-    // Vérification des champs obligatoires
     if (!titre || !type || !responsable) {
       return res.status(400).json({
         success: false,
@@ -20,7 +20,7 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    // Insertion dans la table Audit
+    // Insertion de l'audit
     const newAudit = await prisma.audit.create({
       data: {
         titre,
@@ -28,27 +28,29 @@ router.post("/", authenticateToken, async (req, res) => {
         type,
         responsable,
         statut: statut || "en cours",
-        userId: req.user.id, // 🔗 utilisateur authentifié
+        userId: req.user.id,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
+      include: { user: true },
+    });
+
+    // 🔔 Création automatique d'une notification pour l'utilisateur
+    await createNotification({
+      userId: req.user.id,
+      type: "info",
+      title: "Nouvel audit ajouté",
+      message: `L’audit "${titre}" a été ajouté avec succès.`,
+      relatedEntity: "audit",
+      relatedEntityId: String(newAudit.id),
+      io,
     });
 
     res.status(201).json({
       success: true,
-      message: "Audit ajouté avec succès",
+      message: "Audit ajouté et notification envoyée",
       data: newAudit,
     });
   } catch (error) {
-    console.error("❌ Erreur lors de l'insertion de l'audit:", error);
+    console.error("Erreur lors de l'insertion de l'audit:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur",
@@ -97,7 +99,7 @@ router.get("/all", authenticateToken, async (req, res) => {
 /**
  *  DELETE /api/audit/:id
  */
-router.delete("/delete:id", authenticateToken, async (req, res) => {
+router.delete("/delete/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -140,6 +142,7 @@ router.delete("/delete:id", authenticateToken, async (req, res) => {
     });
   }
 });
+
 
 
 module.exports = router;

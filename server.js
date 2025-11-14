@@ -227,6 +227,10 @@ app.use("/api/categories", require("./routes/categories"));
 app.use("/api/admin/payments", require("./routes/admin-payments"));
 app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 app.use("/api/notifications", require("./routes/notifications"));
+
+//notifications admin
+app.use("/api/notificationadmin", require("./routes/AllNotifications"));
+
 app.use("/api/demandes-history", require("./routes/demandes-history"));
 app.use("/api/cookies", require("./routes/cookies"));
 // routes pour le service harmonie pro

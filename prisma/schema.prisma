@@ -98,7 +98,9 @@ model User {
   activities               UserActivity[]
   preferences              UserPreference[]
   events                   UserEvent[]
-  audits                   Audit[]
+   audits              Audit[]  
+   notifications        Notification[]
+
   // RELATION POUR PODCAST 
   podcasts                 Podcast[] // Podcasts créés par l'utilisateur
   videos                   Video[] // Vidéos créées par l'utilisateur
@@ -1147,4 +1149,26 @@ model DocumentArchive {
 
   @@index([userId])
   @@index([dateSignature])
+}
+
+//notification 
+
+model Notification {
+  id              Int      @id @default(autoincrement())
+  type            String   // 'info', 'warning', 'success', 'error'
+  title           String
+  message         String
+  relatedEntity   String?  // 'audit', 'user', 'listing', 'service', 'booking', 'financement', 'devis', etc.
+  relatedEntityId String?
+  read            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  
+  // Relation vers User
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([read])
+  @@index([relatedEntity])
 }
