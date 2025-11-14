@@ -38,7 +38,7 @@ router.get('/bien-etre/email', async (req, res) => {
     }
 
     // Vérifier si l'utilisateur a le userType "bien-être"
-    if (serviceWithUser.user.userType !== 'BIEN ETRE') {
+    if (serviceWithUser.user.userType !== 'BIEN_ETRE') {
       return res.status(404).json({ 
         error: 'Cet utilisateur n\'est pas un professionnel du bien-être',
         userType: serviceWithUser.user.userType
@@ -62,7 +62,7 @@ router.get('/bien-etre/emails', async (req, res) => {
   try {
     const bienEtreUsers = await prisma.user.findMany({
       where: {
-        userType: 'BIEN ETRE',
+        userType: 'BIEN_ETRE',
         status: 'active' // Optionnel: seulement les utilisateurs actifs
       },
       select: {

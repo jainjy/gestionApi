@@ -84,7 +84,7 @@ async function main() {
         "Outils de communication",
       ],
       planType: "wellness",
-      userTypes: ["PRESTATAIRE"],
+      userTypes: ["BIEN_ETRE"],
       popular: false,
       color: "pink",
       isActive: true,

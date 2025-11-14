@@ -116,7 +116,7 @@ router.post("/signup", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Déterminer le userType selon le rôle
-    const finalUserType = role === "professional" ? userType : "CLIENT";
+    const finalUserType = role == "professional" ? userType : "CLIENT";
 
     // Créer l'utilisateur avec TOUS les champs
     const user = await prisma.user.create({
