@@ -24,7 +24,7 @@ async function main() {
         "Mise en avant des annonces",
       ],
       planType: "real_estate",
-      userTypes: ["VENDEUR", "LOUEUR"],
+      userTypes: ["VENDEUR", "LOUEUR", "PRESTATAIRE"],
       popular: true,
       color: "blue",
       isActive: true,
