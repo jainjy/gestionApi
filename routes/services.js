@@ -67,6 +67,48 @@ router.get('/', async (req, res) => {
   }
 })
 
+
+// ✅ GET service  select par ID
+router.get("/:id", async (req, res) => {
+  const { id } = req.params;
+  
+  console.log("=== DEBUG API CALL ===");
+  console.log("URL:", req.url);
+  console.log("Method:", req.method);
+  console.log("ID reçu:", id, "Type:", typeof id);
+  
+  const serviceId = parseInt(id, 10);
+  console.log("ID converti:", serviceId);
+  
+  if (isNaN(serviceId)) {
+    console.log("❌ ID invalide");
+    return res.status(400).json({ message: "ID invalide" });
+  }
+  
+  try {
+    console.log("🔍 Recherche du service en base...");
+    const service = await prisma.service.findUnique({ 
+      where: { id: serviceId } 
+    });
+    
+    console.log("📦 Résultat Prisma:", service);
+    
+    if (!service) {
+      console.log("❌ Service non trouvé en base");
+      return res.status(404).json({ message: "Service introuvable" });
+    }
+    
+    console.log("✅ Service trouvé, envoi réponse");
+    res.json(service);
+  } catch (error) {
+    console.error("💥 Erreur Prisma:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+
+
+
 // GET /api/services/categories - Récupérer toutes les catégories
 router.get('/categories', authenticateToken, async (req, res) => {
   try {
@@ -334,6 +376,11 @@ router.post("/bulk-assign-category", async (req, res) => {
         .status(400)
         .json({ error: "La liste des services est requise" });
     }
+
+
+
+
+
 
     // Vérifier que la catégorie existe
     const category = await prisma.category.findUnique({
