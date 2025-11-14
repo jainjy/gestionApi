@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "MediaCategory" (
+CREATE TABLE IF NOT EXISTS "MediaCategory" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
     "type" TEXT NOT NULL,
@@ -7,12 +7,11 @@ CREATE TABLE "MediaCategory" (
     "color" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-
     CONSTRAINT "MediaCategory_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Podcast" (
+CREATE TABLE IF NOT EXISTS "Podcast" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL,
@@ -29,12 +28,11 @@ CREATE TABLE "Podcast" (
     "mimeType" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-
     CONSTRAINT "Podcast_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Video" (
+CREATE TABLE IF NOT EXISTS "Video" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL,
@@ -51,23 +49,21 @@ CREATE TABLE "Video" (
     "mimeType" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-
     CONSTRAINT "Video_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "UserMediaFavorite" (
+CREATE TABLE IF NOT EXISTS "UserMediaFavorite" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "mediaId" TEXT NOT NULL,
     "mediaType" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "UserMediaFavorite_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "WellBeingStats" (
+CREATE TABLE IF NOT EXISTS "WellBeingStats" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "totalSessions" INTEGER NOT NULL DEFAULT 0,
@@ -76,27 +72,26 @@ CREATE TABLE "WellBeingStats" (
     "lastActivityAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-
     CONSTRAINT "WellBeingStats_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "MediaCategory_name_key" ON "MediaCategory"("name");
+CREATE UNIQUE INDEX IF NOT EXISTS "MediaCategory_name_key" ON "MediaCategory"("name");
 
 -- CreateIndex
-CREATE INDEX "MediaCategory_type_idx" ON "MediaCategory"("type");
+CREATE INDEX IF NOT EXISTS "MediaCategory_type_idx" ON "MediaCategory"("type");
 
 -- CreateIndex
-CREATE INDEX "UserMediaFavorite_userId_idx" ON "UserMediaFavorite"("userId");
+CREATE INDEX IF NOT EXISTS "UserMediaFavorite_userId_idx" ON "UserMediaFavorite"("userId");
 
 -- CreateIndex
-CREATE INDEX "UserMediaFavorite_mediaId_mediaType_idx" ON "UserMediaFavorite"("mediaId", "mediaType");
+CREATE INDEX IF NOT EXISTS "UserMediaFavorite_mediaId_mediaType_idx" ON "UserMediaFavorite"("mediaId", "mediaType");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "UserMediaFavorite_userId_mediaId_mediaType_key" ON "UserMediaFavorite"("userId", "mediaId", "mediaType");
+CREATE UNIQUE INDEX IF NOT EXISTS "UserMediaFavorite_userId_mediaId_mediaType_key" ON "UserMediaFavorite"("userId", "mediaId", "mediaType");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "WellBeingStats_userId_key" ON "WellBeingStats"("userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "WellBeingStats_userId_key" ON "WellBeingStats"("userId");
 
 -- CreateIndex
-CREATE INDEX "WellBeingStats_userId_idx" ON "WellBeingStats"("userId");
+CREATE INDEX IF NOT EXISTS "WellBeingStats_userId_idx" ON "WellBeingStats"("userId");
