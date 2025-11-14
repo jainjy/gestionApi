@@ -36,7 +36,7 @@ router.get("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
       email: user.email,
       phone: user.phone,
       role: user.role,
-      avatar:user.avatar,
+      avatar: user.avatar,
       status: user.status,
       companyName: user.companyName,
       demandType: user.demandType,
@@ -158,6 +158,7 @@ router.post(
         longitude,
         metiers,
         services,
+        userType, // Nouveau champ pour le type d'utilisateur
       } = req.body;
 
       // Vérifier si l'email existe déjà
@@ -174,6 +175,16 @@ router.post(
       // Hasher le mot de passe
       const passwordHash = await bcrypt.hash(password, 12);
 
+      // Déterminer le userType en fonction du rôle
+      let finalUserType = userType;
+      if (!finalUserType) {
+        if (role === "professional") {
+          finalUserType = "PRESTATAIRE"; // Valeur par défaut pour les pros
+        } else if (role === "user") {
+          finalUserType = "CLIENT"; // Valeur par défaut pour les utilisateurs
+        }
+      }
+
       // Créer l'utilisateur
       const user = await prisma.user.create({
         data: {
@@ -184,6 +195,7 @@ router.post(
           passwordHash,
           role,
           status,
+          userType: finalUserType, // Ajout du userType
           companyName: role === "professional" ? companyName : null,
           demandType: role === "user" ? demandType : null,
           address,
@@ -229,6 +241,9 @@ router.post(
         });
       }
 
+      // CRÉATION AUTOMATIQUE DE L'ABONNEMENT DE 2 MOIS
+      await createSubscriptionForUser(user.id, finalUserType, role);
+
       // Récupérer l'utilisateur complet avec les relations
       const completeUser = await prisma.user.findUnique({
         where: { id: user.id },
@@ -241,6 +256,11 @@ router.post(
           services: {
             include: {
               service: true,
+            },
+          },
+          subscriptions: {
+            include: {
+              plan: true,
             },
           },
         },
@@ -547,7 +567,7 @@ router.put("/update/change-password", authenticateToken, async (req, res) => {
 });
 
 // PUT /api/users/update/profile - Mettre à jour le profil de l'utilisateur connecté
-router.put("/update/profile",authenticateToken, async (req, res) => {
+router.put("/update/profile", authenticateToken, async (req, res) => {
   try {
     const {
       firstName,
@@ -599,5 +619,71 @@ router.put("/update/profile",authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
+// Fonction pour créer un abonnement de 2 mois selon le userType
+async function createSubscriptionForUser(userId, userType, role) {
+  try {
+    // Déterminer le plan d'abonnement selon le userType
+    let planType;
 
+    switch (userType) {
+      case "VENDEUR":
+        planType = "furniture";
+        break;
+      case "AGENCE":
+        planType = "real_estate";
+        break;
+      case "PRESTATAIRE":
+        planType = "services";
+        break;
+      case "BIEN_ETRE":
+        planType = "wellness";
+        break;
+      case "CLIENT":
+      default:
+        planType = "services";
+        break;
+    }
+
+    // Trouver le plan correspondant
+    const plan = await prisma.subscriptionPlan.findFirst({
+      where: {
+        planType: planType,
+        isActive: true,
+      },
+    });
+
+    if (!plan) {
+      console.warn(`Aucun plan trouvé pour le type: ${planType}`);
+      return null;
+    }
+
+    // Calculer les dates (2 mois)
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 2);
+
+    // Créer l'abonnement
+    const subscription = await prisma.subscription.create({
+      data: {
+        userId: userId,
+        planId: plan.id,
+        startDate: startDate,
+        endDate: endDate,
+        status: "active",
+        autoRenew: false, // Ne pas renouveler automatiquement
+      },
+      include: {
+        plan: true,
+      },
+    });
+
+    console.log(
+      `✅ Abonnement créé pour l'utilisateur ${userId}: ${plan.name} (2 mois)`
+    );
+    return subscription;
+  } catch (error) {
+    console.error("Erreur lors de la création de l'abonnement:", error);
+    return null;
+  }
+}
 module.exports = router;
