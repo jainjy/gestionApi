@@ -6,6 +6,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { authenticateToken } = require("../middleware/auth");
+const { createNotification } = require("../services/notificationService");
 
 // === Dossier upload ===
 const uploadDir = path.join(__dirname, "../uploads");
@@ -25,13 +26,14 @@ const upload = multer({ storage });
 // === POST /api/oeuvre ===
 router.post("/new", authenticateToken, async (req, res) => {
   try {
-    const { libelle, description, price, duration, categoryId, images } =
-      req.body;
+    const { libelle, description, price, duration, categoryId, images } = req.body;
+    const io = req.app.get("io"); // WebSocket
 
     if (!libelle || !categoryId) {
       return res.status(400).json({ error: "Libellé et catégorie requis." });
     }
 
+    // ➕ Création de l'œuvre (service)
     const newOeuvre = await prisma.service.create({
       data: {
         libelle,
@@ -43,6 +45,18 @@ router.post("/new", authenticateToken, async (req, res) => {
       },
     });
 
+    // 🔔 Création automatique d’une notification
+    await createNotification({
+      userId: req.user.id,
+      type: "success",
+      title: "Nouvelle œuvre ajoutée",
+      message: `L’œuvre "${libelle}" a été ajoutée avec succès.`,
+      relatedEntity: "service",
+      relatedEntityId: String(newOeuvre.id),
+      io
+    });
+
+    // Réponse API
     res.status(201).json({
       id: newOeuvre.id.toString(),
       libelle: newOeuvre.libelle,
@@ -53,6 +67,7 @@ router.post("/new", authenticateToken, async (req, res) => {
       images: newOeuvre.images,
       status: "active",
     });
+
   } catch (error) {
     console.error("Erreur lors de la création de l'œuvre :", error);
     res.status(500).json({ error: "Erreur serveur" });
@@ -149,21 +164,19 @@ router.get("/categories", async (req, res) => {
   }
 });
 
-
-
-
-
 //modification
 // === PUT /api/oeuvre/:id ===
 router.put("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { libelle, description, price, duration, categoryId, images } = req.body;
+    const io = req.app.get("io"); // WebSocket
 
     if (!libelle || !categoryId) {
       return res.status(400).json({ error: "Libellé et catégorie requis." });
     }
 
+    // ➕ Modification de l'œuvre
     const updatedOeuvre = await prisma.service.update({
       where: { id: parseInt(id) },
       data: {
@@ -176,7 +189,19 @@ router.put("/:id", authenticateToken, async (req, res) => {
       },
     });
 
+    // 🔔 Notification automatique de modification
+    await createNotification({
+      userId: req.user.id,
+      type: "info",
+      title: "Modification d’une œuvre",
+      message: `L’œuvre "${libelle}" a été modifiée avec succès.`,
+      relatedEntity: "service",
+      relatedEntityId: String(updatedOeuvre.id),
+      io
+    });
+
     res.json(updatedOeuvre);
+
   } catch (error) {
     console.error("Erreur lors de la modification :", error);
     res.status(500).json({ error: "Erreur serveur" });
