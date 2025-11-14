@@ -3,90 +3,152 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 const podcastEpisodes = [
+  // Podcasts Audio
   {
-    title: "Les nouvelles réglementations thermiques 2024",
-    description: "Tout comprendre sur la RE2020 et son impact sur les constructions neuves. Conseils pour s'adapter aux nouvelles normes.",
-    duration: "00:38:25",
+    title: "Gestion de chantier : méthodes et bonnes pratiques",
+    description: "Organisation, planification et suivi de chantier pour respecter les délais et le budget.",
+    duration: "00:44:30",
     category: "Bâtiment & Construction",
-    listens: 890,
+    listens: 3120,
     isActive: true,
-    fileSize: 36789123, // 36.8 MB
+    fileSize: 48901234,
     mimeType: "audio/mpeg"
   },
   {
-    title: "Matériaux écologiques : tendances et innovations",
-    description: "Découverte des nouveaux matériaux durables pour la construction. Retours d'expérience sur le béton bas carbone et le bois local.",
-    duration: "00:42:15",
+    title: "Réglementation thermique RE2020 : ce qui change",
+    description: "Nouveaux standards environnementaux et implications pour la construction neuve.",
+    duration: "00:38:15",
     category: "Bâtiment & Construction",
-    listens: 670,
+    listens: 2780,
     isActive: true,
-    fileSize: 41234567, // 41.2 MB
+    fileSize: 44567890,
     mimeType: "audio/mpeg"
   },
   {
-    title: "Gestion de chantier : optimiser les délais et coûts",
-    description: "Méthodes et outils pour une gestion de chantier efficace. Prévention des retards et maîtrise des budgets.",
-    duration: "00:35:40",
+    title: "Matériaux écologiques : choix et mise en œuvre",
+    description: "Comparatif des matériaux biosourcés et leur application dans la construction moderne.",
+    duration: "00:41:20",
     category: "Bâtiment & Construction",
-    listens: 1120,
+    listens: 2340,
     isActive: true,
-    fileSize: 34567890, // 34.6 MB
+    fileSize: 46789012,
     mimeType: "audio/mpeg"
   },
   {
-    title: "Rénovation énergétique : subventions et aides 2024",
-    description: "Guide complet des aides disponibles pour la rénovation. MaPrimeRénov', CEE, éco-prêt à taux zéro...",
-    duration: "00:31:55",
+    title: "Sécurité sur chantier : obligations et formations",
+    description: "Protocoles de sécurité, équipements de protection et formations obligatoires.",
+    duration: "00:36:45",
     category: "Bâtiment & Construction",
-    listens: 1540,
+    listens: 2890,
     isActive: true,
-    fileSize: 31234567, // 31.2 MB
+    fileSize: 42345678,
     mimeType: "audio/mpeg"
   },
   {
-    title: "Sécurité sur les chantiers : obligations et bonnes pratiques",
-    description: "Rappel des obligations légales et mise en place d'une culture sécurité. Protection des travailleurs et prévention des risques.",
-    duration: "00:29:30",
+    title: "Rénovation énergétique : solutions techniques",
+    description: "Isolation, ventilation et systèmes de chauffage pour améliorer la performance énergétique.",
+    duration: "00:39:50",
     category: "Bâtiment & Construction",
-    listens: 780,
+    listens: 3560,
     isActive: true,
-    fileSize: 29876543, // 29.9 MB
+    fileSize: 49876543,
     mimeType: "audio/mpeg"
   },
   {
-    title: "BIM et maquette numérique : révolution dans le BTP",
-    description: "Comment le BIM transforme la conception et la gestion des projets de construction. Retour d'expérience d'un bureau d'études.",
-    duration: "00:45:20",
+    title: "Calcul de structure : bases et outils",
+    description: "Principes fondamentaux du calcul de structure et logiciels spécialisés.",
+    duration: "00:42:10",
     category: "Bâtiment & Construction",
-    listens: 560,
+    listens: 2670,
     isActive: true,
-    fileSize: 45678901, // 45.7 MB
+    fileSize: 51234567,
     mimeType: "audio/mpeg"
   },
+  // Vidéos
   {
-    title: "Construction bois : avantages et défis techniques",
-    description: "Tout sur la construction bois : performances, durabilité, aspects réglementaires. Interview d'un charpentier expert.",
-    duration: "00:39:45",
+    title: "Pose de charpente traditionnelle : démonstration complète",
+    description: "Étapes de fabrication et pose d'une charpente en bois avec techniques ancestrales.",
+    duration: "00:32:25",
     category: "Bâtiment & Construction",
-    listens: 920,
+    listens: 4230,
     isActive: true,
-    fileSize: 39876543, // 39.9 MB
-    mimeType: "audio/mpeg"
+    fileSize: 245678901,
+    mimeType: "video/mp4"
   },
   {
-    title: "Digitalisation des métiers du bâtiment",
-    description: "Les outils numériques qui transforment les métiers du BTP. Drones, réalité augmentée, gestion de projet en cloud.",
-    duration: "00:36:10",
+    title: "Coulage de dalle béton : préparation et réalisation",
+    description: "Préparation du sol, ferraillage et coulage d'une dalle béton avec conseils experts.",
+    duration: "00:28:40",
     category: "Bâtiment & Construction",
-    listens: 640,
+    listens: 3780,
     isActive: true,
-    fileSize: 36789012, // 36.8 MB
-    mimeType: "audio/mpeg"
+    fileSize: 234567890,
+    mimeType: "video/mp4"
+  },
+  {
+    title: "Isolation extérieure : pose d'ITE pas à pas",
+    description: "Technique d'isolation thermique par l'extérieur avec matériaux modernes.",
+    duration: "00:35:15",
+    category: "Bâtiment & Construction",
+    listens: 3120,
+    isActive: true,
+    fileSize: 267890123,
+    mimeType: "video/mp4"
+  },
+  {
+    title: "Installation électrique neuve : normes et réalisation",
+    description: "Tableau électrique, circuit et protections selon la norme NFC 15-100.",
+    duration: "00:26:50",
+    category: "Bâtiment & Construction",
+    listens: 2890,
+    isActive: true,
+    fileSize: 198765432,
+    mimeType: "video/mp4"
+  },
+  {
+    title: "Pose de carrelage grand format : techniques professionnelles",
+    description: "Préparation du support, collage et jointoiement pour un résultat parfait.",
+    duration: "00:24:30",
+    category: "Bâtiment & Construction",
+    listens: 3340,
+    isActive: true,
+    fileSize: 187654321,
+    mimeType: "video/mp4"
+  },
+  {
+    title: "Chantier ERP : accessibilité et normes",
+    description: "Application des normes d'accessibilité dans les établissements recevant du public.",
+    duration: "00:31:20",
+    category: "Bâtiment & Construction",
+    listens: 2450,
+    isActive: true,
+    fileSize: 223456789,
+    mimeType: "video/mp4"
+  },
+  {
+    title: "Plomberie sanitaire : installation complète",
+    description: "Réseau d'eau chaude et froide, évacuations et raccordements sanitaires.",
+    duration: "00:29:45",
+    category: "Bâtiment & Construction",
+    listens: 2980,
+    isActive: true,
+    fileSize: 212345678,
+    mimeType: "video/mp4"
+  },
+  {
+    title: "Construction ossature bois : montage d'un mur",
+    description: "Fabrication et levage d'un mur en ossature bois avec isolation intégrée.",
+    duration: "00:27:10",
+    category: "Bâtiment & Construction",
+    listens: 3560,
+    isActive: true,
+    fileSize: 198765432,
+    mimeType: "video/mp4"
   }
 ];
 
 async function main() {
-  console.log ('🏗️  Début du seeding des podcasts Bâtiment & Construction...');
+  console.log('🏗️ Début du seeding des podcasts Bâtiment & Construction...');
 
   // Vérifier si des podcasts de cette catégorie existent déjà
   const existingPodcasts = await prisma.podcast.count({
@@ -102,15 +164,18 @@ async function main() {
 
   // Créer les podcasts
   for (const podcastData of podcastEpisodes) {
+    const isVideo = podcastData.mimeType === "video/mp4";
     const podcast = await prisma.podcast.create({
       data: {
         ...podcastData,
-        audioUrl: `https://example.com/podcasts/batiment/${podcastData.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.mp3`,
-        thumbnailUrl: `https://images.unsplash.com/photo-1541888946425-d81bb19240f5?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80`,
-        storagePath: `podcasts/batiment/${Date.now()}-${podcastData.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.mp3`
+        audioUrl: `https://example.com/podcasts/batiment/${podcastData.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.${isVideo ? 'mp4' : 'mp3'}`,
+        thumbnailUrl: isVideo 
+          ? `https://images.unsplash.com/photo-1541888946425-d81bb19240f5?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80`
+          : `https://images.unsplash.com/photo-1504307651254-35680f356dfd?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80`,
+        storagePath: `podcasts/batiment/${Date.now()}-${podcastData.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.${isVideo ? 'mp4' : 'mp3'}`
       }
     });
-    console.log(`✅ Podcast créé: ${podcast.title}`);
+    console.log(`✅ ${isVideo ? '📹 Vidéo' : '🎧 Audio'} créé: ${podcast.title}`);
   }
 
   console.log('🎉 Seeding des podcasts Bâtiment & Construction terminé !');
