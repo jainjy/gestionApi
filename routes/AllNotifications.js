@@ -7,6 +7,34 @@ const { authenticateToken, requireRole } = require("../middleware/auth");
 // 🔹 Récupérer les notifications
 // ======================================================
 
+// router.get("/", authenticateToken, async (req, res) => {
+//   try {
+//     // Vérifie que req.user existe bien
+//     if (!req.user || !req.user.id) {
+//       console.warn("❌ Aucun utilisateur détecté dans req.user");
+//       return res.status(401).json({
+//         success: false,
+//         message: "Utilisateur non authentifié",
+//       });
+//     }
+
+//     console.log("👤 Récupération des notifications pour :", req.user.email);
+
+//     // Tous les utilisateurs voient toutes les notifications
+//     const notifications = await prisma.notification.findMany({
+//       orderBy: { createdAt: "desc" },
+//     });
+
+//     res.json({ success: true, data: notifications });
+//   } catch (err) {
+//     console.error("❌ Erreur récupération notifications:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Erreur interne du serveur",
+//       error: err.message,
+//     });
+//   }
+// });
 router.get("/", authenticateToken, async (req, res) => {
   try {
     // Vérifie que req.user existe bien
@@ -18,10 +46,11 @@ router.get("/", authenticateToken, async (req, res) => {
       });
     }
 
-    console.log("👤 Récupération des notifications pour :", req.user.email);
+    console.log("👤 Récupération des notifications pour l'utilisateur ID :", req.user.id);
 
-    // Tous les utilisateurs voient toutes les notifications
+    // Affiche uniquement les notifications du user
     const notifications = await prisma.notification.findMany({
+      where: { userId: req.user.id },   // 👈 IMPORTANT
       orderBy: { createdAt: "desc" },
     });
 
@@ -35,7 +64,7 @@ router.get("/", authenticateToken, async (req, res) => {
     });
   }
 });
-
+ 
 // ======================================================
 // 🔹 Marquer une notification comme lue
 // ======================================================
@@ -125,6 +154,42 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Erreur suppression notification:", err);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur",
+      error: err.message,
+    });
+  }
+});
+
+// ======================================================
+// DELETE /api/notifications/all
+// ======================================================
+
+router.delete("/all", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id; // ID de l'utilisateur connecté
+
+    // Si admin → il peut supprimer toutes les notifications du système
+    if (req.user.role === "admin") {
+      await prisma.notification.deleteMany();
+      return res.json({
+        success: true,
+        message: "Toutes les notifications ont été supprimées (admin).",
+      });
+    }
+
+    // Sinon → ne supprime que les notifications du user
+    await prisma.notification.deleteMany({
+      where: { userId },
+    });
+
+    res.json({
+      success: true,
+      message: "Toutes vos notifications ont été supprimées.",
+    });
+  } catch (err) {
+    console.error("❌ Erreur suppression notifications:", err);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur",

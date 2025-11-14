@@ -48,6 +48,70 @@ const getNotificationsForUser = async (req, res) => {
     }
 };
 
+// const getNotificationsForUser = async (req, res) => {
+//     try {
+//         // L'utilisateur connecté
+//         const userId = req.user.id;
+
+//         if (!userId) {
+//             return res.status(401).json({ error: "Utilisateur non authentifié" });
+//         }
+
+//         console.log("🔔 Récupération des notifications pour :", userId);
+
+//         // Récupération des demandes concernant cet utilisateur
+//         const demandes = await prisma.demande.findMany({
+//             where: {
+//                 createdById: userId,
+//                 statut: {
+//                     in: ["validée", "refusée", "validee"]
+//                 },
+//                 propertyId: {
+//                     not: null
+//                 }
+//             },
+//             include: {
+//                 property: true
+//             },
+//             orderBy: {
+//                 createdAt: "desc"
+//             }
+//         });
+
+//         // Transformer les demandes en notifications
+//         const notifications = demandes.map(demande => {
+//             const statusText =
+//                 demande.statut === "refusée" ? "refusée" : "validée";
+            
+//             const propertyTitle =
+//                 demande.property?.title || "Bien immobilier";
+
+//             return {
+//                 id: demande.id,
+//                 titre: `Demande ${statusText} pour: ${propertyTitle}`,
+//                 statut: demande.statut,
+//                 propertyId: demande.propertyId,
+//                 createdAt: demande.createdAt,
+//                 isRead: demande.isRead,
+//                 type: "demande_immobilier",
+//                 userId: userId  // 🔥 Ajout important pour cohérence
+//             };
+//         });
+
+//         // Nombre non lues
+//         const unreadCount = notifications.filter(n => !n.isRead).length;
+
+//         res.json({
+//             success: true,
+//             notifications,
+//             unreadCount
+//         });
+//     } catch (error) {
+//         console.error("❌ Erreur lors de la récupération des notifications:", error);
+//         res.status(500).json({ error: "Erreur serveur" });
+//     }
+// };
+
 const markAsRead = async (req, res) => {
     try {
         const { userId, notificationId } = req.params;
