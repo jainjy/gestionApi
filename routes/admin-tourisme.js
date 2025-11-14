@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-
 const prisma = new PrismaClient();
+const { createNotification } = require("../services/notificationService");
+const { authenticateToken } = require("../middleware/auth");
 
 // Middleware CORS
 router.use((req, res, next) => {
@@ -176,7 +177,9 @@ router.get('/stats', async (req, res) => {
   }
 });
  // POST /api/admin/tourisme - Créer un nouvel hébergement
-router.post('/', async (req, res) => {
+
+// POST /api/admin/tourisme - Ajouter un hébergement
+router.post('/', authenticateToken, async (req, res) => {
   try {
     console.log('➕ Requête POST admin reçue pour /api/admin/tourisme', req.body);
     
@@ -202,7 +205,6 @@ router.post('/', async (req, res) => {
       reviewCount = 0
     } = req.body;
 
-    // Validation des données requises
     if (!title || !type || !price || !city || !maxGuests) {
       return res.status(400).json({
         success: false,
@@ -210,7 +212,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Générer des IDs uniques
     const idUnique = `T${Date.now()}`;
     const idPrestataire = `P${Date.now()}`;
 
@@ -245,11 +246,24 @@ router.post('/', async (req, res) => {
 
     console.log(`✅ Hébergement créé par admin: ${newListing.id}`);
 
+    // 🔔 Création de la notification pour l’utilisateur connecté
+    const io = req.app.get("io");
+    await createNotification({
+      userId: req.user.id,
+      type: "success",
+      title: "Nouvel hébergement ajouté",
+      message: `L’hébergement "${title}" a été ajouté avec succès.`,
+      relatedEntity: "tourisme",
+      relatedEntityId: newListing.id,
+      io
+    });
+
     res.status(201).json({
       success: true,
       data: newListing,
-      message: 'Hébergement créé avec succès'
+      message: 'Hébergement créé avec succès et notification envoyée'
     });
+
   } catch (error) {
     console.error('❌ Erreur création admin tourisme:', error);
     
@@ -269,18 +283,14 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/admin/tourisme/:id - Mettre à jour un hébergement
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
     
     console.log(`✏️ Requête PUT admin reçue pour /api/admin/tourisme/${id}`, updateData);
 
-    // Vérifier que l'hébergement existe
-    const existingListing = await prisma.tourisme.findUnique({
-      where: { id }
-    });
-
+    const existingListing = await prisma.tourisme.findUnique({ where: { id } });
     if (!existingListing) {
       return res.status(404).json({
         success: false,
@@ -288,7 +298,6 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    // Filtrer uniquement les champs valides pour la mise à jour
     const validFields = [
       'title', 'type', 'price', 'city', 'lat', 'lng', 'images', 
       'amenities', 'maxGuests', 'description', 'bedrooms', 'bathrooms', 
@@ -297,14 +306,11 @@ router.put('/:id', async (req, res) => {
     ];
 
     const filteredData = {};
-    
     for (const field of validFields) {
-      if (updateData[field] !== undefined) {
-        filteredData[field] = updateData[field];
-      }
+      if (updateData[field] !== undefined) filteredData[field] = updateData[field];
     }
 
-    // Conversion des types si nécessaire
+    // Conversion des types
     if (filteredData.price) filteredData.price = parseFloat(filteredData.price);
     if (filteredData.maxGuests) filteredData.maxGuests = parseInt(filteredData.maxGuests);
     if (filteredData.bedrooms !== undefined) filteredData.bedrooms = filteredData.bedrooms ? parseInt(filteredData.bedrooms) : null;
@@ -312,44 +318,42 @@ router.put('/:id', async (req, res) => {
     if (filteredData.area !== undefined) filteredData.area = filteredData.area ? parseInt(filteredData.area) : null;
     if (filteredData.rating) filteredData.rating = parseFloat(filteredData.rating);
     if (filteredData.reviewCount) filteredData.reviewCount = parseInt(filteredData.reviewCount);
-
-    // Gérer les tableaux
-    if (filteredData.images && !Array.isArray(filteredData.images)) {
-      filteredData.images = [filteredData.images];
-    }
-    if (filteredData.amenities && !Array.isArray(filteredData.amenities)) {
-      filteredData.amenities = [filteredData.amenities];
-    }
-
-    // Convertir les booléens
+    if (filteredData.images && !Array.isArray(filteredData.images)) filteredData.images = [filteredData.images];
+    if (filteredData.amenities && !Array.isArray(filteredData.amenities)) filteredData.amenities = [filteredData.amenities];
     if (filteredData.instantBook !== undefined) filteredData.instantBook = Boolean(filteredData.instantBook);
     if (filteredData.featured !== undefined) filteredData.featured = Boolean(filteredData.featured);
     if (filteredData.available !== undefined) filteredData.available = Boolean(filteredData.available);
-
-    console.log('📝 Données filtrées pour mise à jour:', filteredData);
 
     const updatedListing = await prisma.tourisme.update({
       where: { id },
       data: filteredData,
       include: {
         bookings: {
-          select: {
-            id: true,
-            status: true,
-            checkIn: true,
-            checkOut: true
-          }
+          select: { id: true, status: true, checkIn: true, checkOut: true }
         }
       }
     });
 
     console.log(`✅ Hébergement ${id} mis à jour par admin`);
 
+    // 🔔 Notification mise à jour
+    const io = req.app.get("io");
+    await createNotification({
+      userId: req.user.id,
+      type: "info",
+      title: "Hébergement mis à jour",
+      message: `L’hébergement "${updatedListing.title}" a été mis à jour avec succès.`,
+      relatedEntity: "tourisme",
+      relatedEntityId: updatedListing.id,
+      io
+    });
+
     res.json({
       success: true,
       data: updatedListing,
-      message: 'Hébergement mis à jour avec succès'
+      message: 'Hébergement mis à jour avec succès et notification envoyée'
     });
+
   } catch (error) {
     console.error('❌ Erreur mise à jour admin tourisme:', error);
     
