@@ -230,6 +230,11 @@ async function main() {
       { libelle: "Monteur et Installeur de Hammam" },
       { libelle: "Association" },
       { libelle: "Laveur Auto/voiture à domicile" },
+      { libelle: "Masseur" },
+      { libelle: "Formateur" },
+      { libelle: "BoutiqueNaturels" },
+      { libelle: "Podcasteur" },
+      { libelle: "Thérapeute" },
     ];
 
     console.log(`🛠️  Création de ${metiersData.length} métiers...`);
