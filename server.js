@@ -282,6 +282,7 @@ app.use("/api/advertisements", require("./routes/advertisements"));
 
 // Ajouter ces routes après les autres routes
 app.use("/api/conversations", require("./routes/conversations"));
+app.use("/api/admin/media", require("./routes/admin-media"));
 
 
 
