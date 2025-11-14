@@ -30,7 +30,7 @@ model BlogArticle {
   likes       Int                    @default(0)
   readTime    String?
   views       Int                    @default(0)
-  embedding   Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding   Unsupported("vector")?
 
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
@@ -53,21 +53,20 @@ model User {
   resetTokenExpiry    DateTime?
   status              String               @default("inactive")
   companyName         String?
-  address             String? // Adresse postale
-  addressComplement   String? // Complément d'adresse
-  city                String? // Ville
-  commercialName      String? // Nom commercial
-  demandType          String? // agence immobilier,particulier ou syndicat
+  address             String?
+  addressComplement   String?
+  city                String?
+  commercialName      String?
+  demandType          String?
   latitude            Float?
   longitude           Float?
-  siret               String? // Numéro SIRET
-  zipCode             String? // Code postal
-  avatar              String? // Logo ou avatar de l'utilisateur
-  userType            String? // PRESTATAIRE | TOURISME | BIEN ETRE | AGENCE | ADMIN |VENDEUR 
-  providerId          String? // ex: "117349..."
-  providerName        String? // ex: "google"
+  siret               String?
+  zipCode             String?
+  avatar              String?
+  userType            String?
+  providerId          String?
+  providerName        String?
   stripeCustomerId    String?
-  // NOUVELLES COLONNES: Relations pour les devis
   DevisClientToUser   String?              @map("_DevisClientToUser")
   DevisProviderToUser String?              @map("_DevisProviderToUser")
   demandesFinancement FinancementDemande[]
@@ -94,16 +93,14 @@ model User {
   tourismeBookings         TourismeBooking[]
   advertisements           Advertisement[]
   demandesRecues           Demande[]                 @relation("DemandeArtisanSpecifique")
-  //relation pour suggetion intelligente 
   activities               UserActivity[]
   preferences              UserPreference[]
   events                   UserEvent[]
   audits                   Audit[]
-  // RELATION POUR PODCAST 
-  podcasts                 Podcast[] // Podcasts créés par l'utilisateur
-  videos                   Video[] // Vidéos créées par l'utilisateur
-  mediaFavorites           UserMediaFavorite[] // Favoris médias de l'utilisateur
-  wellBeingStats           WellBeingStats? // Statistiques bien-être
+  podcasts                 Podcast[]
+  videos                   Video[]
+  mediaFavorites           UserMediaFavorite[]
+  wellBeingStats           WellBeingStats?
   ProfessionalSettings     ProfessionalSettings?
   Document                 Document[]
   ContratType              ContratType[]
@@ -123,40 +120,28 @@ model ProfessionalSettings {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Horaires d'ouverture
-  horairesLundi    Json? // {ouvert: Boolean, debut: String, fin: String}
+  horairesLundi    Json?
   horairesMardi    Json?
   horairesMercredi Json?
   horairesJeudi    Json?
   horairesVendredi Json?
   horairesSamedi   Json?
   horairesDimanche Json?
-
-  // Jours fermés exceptionnels
-  joursFermes Json? // [{date: String, label: String}]
-
-  // Délais de réponse
-  delaiReponseEmail     Int? @default(24) // heures
-  delaiReponseTelephone Int? @default(2) // heures
-  delaiReponseUrgence   Int? @default(4) // heures
-
-  // Politique d'annulation
-  delaiAnnulationGratuit  Int?    @default(48) // heures
-  fraisAnnulationPourcent Int?    @default(15) // pourcentage
+  joursFermes      Json?
+  delaiReponseEmail     Int? @default(24)
+  delaiReponseTelephone Int? @default(2)
+  delaiReponseUrgence   Int? @default(4)
+  delaiAnnulationGratuit  Int?    @default(48)
+  fraisAnnulationPourcent Int?    @default(15)
   conditionsAnnulation    String?
-
-  // Seuil de réservation
-  acomptePourcentage Int?    @default(30) // pourcentage
-  montantMinimum     Float?  @default(100) // euros
+  acomptePourcentage Int?    @default(30)
+  montantMinimum     Float?  @default(100)
   conditionsPaiement String?
-
-  // Informations générales
   nomEntreprise String?
   emailContact  String?
   telephone     String?
   adresse       String?
 
-  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -168,15 +153,14 @@ model ProfessionalSettings {
 model UserActivity {
   id          String   @id @default(cuid())
   userId      String
-  entityType  String // "product", "service", "job", etc.
+  entityType  String
   entityId    String
-  action      String // "view", "click", "purchase", "search", "long_view"
-  duration    Int? // Durée en secondes pour les vues longues
-  searchQuery String? // Pour les recherches
+  action      String
+  duration    Int?
+  searchQuery String?
   metadata    Json?
   createdAt   DateTime @default(now())
 
-  // 🔗 Relation vers User
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -190,8 +174,8 @@ model UserActivity {
 model UserPreference {
   id            String   @id @default(cuid())
   userId        String
-  category      String? // ex: "électroménager", "tourisme", "mode", etc.
-  interestScore Float    @default(0.5) // Score entre 0 et 1
+  category      String?
+  interestScore Float    @default(0.5)
   lastUpdated   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -206,8 +190,8 @@ model UserPreference {
 model UserEvent {
   id        String   @id @default(uuid())
   userId    String
-  eventType String // "search" | "filter" | "scroll" | "hover" | "share"
-  eventData Json? // {query: "machine à laver", duration: 12}
+  eventType String
+  eventData Json?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -226,7 +210,6 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   createurId   String
   createur     User                      @relation("ConversationCreateur", fields: [createurId], references: [id], onDelete: Cascade)
   demande      Demande?                  @relation(fields: [demandeId], references: [id], onDelete: Cascade)
@@ -272,7 +255,6 @@ model Message {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   expediteur   User         @relation("MessageExpediteur", fields: [expediteurId], references: [id], onDelete: Cascade)
 
@@ -288,31 +270,31 @@ model Message {
 model Property {
   id              String                 @id @default(uuid())
   title           String
-  description     String? // Nullable
-  type            String // "house", "apartment", etc.
-  status          String? // "draft", "pending", etc.
-  price           Float? // Nullable
-  surface         Int? // Nullable
-  rooms           Int? // Nullable
-  bedrooms        Int? // Nullable
-  bathrooms       Int? // Nullable
-  address         String? // Nullable
+  description     String?
+  type            String
+  status          String?
+  price           Float?
+  surface         Int?
+  rooms           Int?
+  bedrooms        Int?
+  bathrooms       Int?
+  address         String?
   city            String
-  zipCode         String? // Nullable
-  latitude        Float? // Nullable
-  longitude       Float? // Nullable
-  features        String[] // ["pool", "garden", ...]
-  images          String[] // URLs Supabase
+  zipCode         String?
+  latitude        Float?
+  longitude       Float?
+  features        String[]
+  images          String[]
   isFeatured      Boolean?               @default(false)
   isActive        Boolean?               @default(true)
   views           Int?                   @default(0)
   ownerId         String
   createdAt       DateTime?              @default(now())
   updatedAt       DateTime?              @updatedAt
-  publishedAt     DateTime? // Nullable
-  energyClass     String? // Nullable
-  expiresAt       DateTime? // Nullable
-  floor           Int? // Nullable
+  publishedAt     DateTime?
+  energyClass     String?
+  expiresAt       DateTime?
+  floor           Int?
   hasBalcony      Boolean?               @default(false)
   hasElevator     Boolean?               @default(false)
   hasGarden       Boolean?               @default(false)
@@ -320,15 +302,14 @@ model Property {
   hasPool         Boolean?               @default(false)
   hasTerrace      Boolean?               @default(false)
   listingType     String?                @default("sale")
-  metaDescription String? // Nullable
-  metaTitle       String? // Nullable
+  metaDescription String?
+  metaTitle       String?
   slug            String?                @unique
-  totalFloors     Int? // Nullable
-  yearBuilt       Int? // Nullable
+  totalFloors     Int?
+  yearBuilt       Int?
   rentType        String?                @default("longue_duree")
-  embedding       Unsupported("vector")? // Nullable
+  embedding       Unsupported("vector")?
 
-  // Relations
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   favorites Favorite[]
   demandes  Demande[]
@@ -392,22 +373,20 @@ model Product {
   viewCount      Int                    @default(0)
   clickCount     Int                    @default(0)
   purchaseCount  Int                    @default(0)
-  embedding      Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding      Unsupported("vector")?
 
-  // CHAMPS POUR ALIMENTATION
-  allergens       String[] // ["gluten", "lactose", "nuts", ...]
+  allergens       String[]
   brand           String?
   expiryDate      DateTime?
-  foodCategory    String? // "fruits", "legumes", "produits-laitiers", etc.
+  foodCategory    String?
   isOrganic       Boolean?  @default(false)
   isPerishable    Boolean?  @default(false)
-  nutritionalInfo Json? // {calories, proteins, carbs, fats, etc.}
-  origin          String? // Pays/région d'origine
-  productType     String?   @default("general") // "general" | "food"
+  nutritionalInfo Json?
+  origin          String?
+  productType     String?   @default("general")
   storageTips     String?
-  unit            String? // "kg", "pièce", "litre", "barquette"
+  unit            String?
 
-  // Relations
   User User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -425,7 +404,7 @@ model Product {
 model Metier {
   id        Int                    @id @default(autoincrement())
   libelle   String
-  embedding Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  embedding Unsupported("vector")?
   services  MetierService[]
   users     UtilisateurMetier[]
   demandes  Demande[]
@@ -449,9 +428,9 @@ model Service {
   categoryId  Int?
   description String?
   images      String[]
-  duration    Int? // durée en minutes (facultatif)
-  price       Float? // prix du service
-  embedding   Unsupported("vector")? // CHANGEMENT: vector sans dimension spécifiée
+  duration    Int?
+  price       Float?
+  embedding   Unsupported("vector")?
   category    Category?              @relation(fields: [categoryId], references: [id])
   metiers     MetierService[]
   users       UtilisateurService[]
@@ -501,7 +480,7 @@ model UtilisateurService {
 //===================
 model Demande {
   id                  Int              @id @default(autoincrement())
-  disponibiliteBien   String? // "LIBRE" | "LOUE"
+  disponibiliteBien   String?
   description         String?
   contactNom          String?
   contactPrenom       String?
@@ -515,27 +494,26 @@ model Demande {
   lieuAdresseVille    String?
   optionAssurance     Boolean?         @default(false)
   demandeAcceptee     Boolean?         @default(false)
-  nombreArtisans      String? // "UNIQUE" | "MULTIPLE"
+  nombreArtisans      String?
   createdById         String
   serviceId           Int?
   createdAt           DateTime         @default(now())
   dateSouhaitee       DateTime?
   heureSouhaitee      String?
   metierId            Int?
-  propertyId          String? // Référence optionnelle vers Property.id
+  propertyId          String?
   statut              String?
   isRead              Boolean          @default(false)
-  artisanId           String? // NOUVEAU: ID de l'artisan spécifique pour les demandes directes
-  // Relations
+  artisanId           String?
+
   createdBy           User             @relation("DemandeCreePar", fields: [createdById], references: [id])
   service             Service?         @relation(fields: [serviceId], references: [id])
   metier              Metier?          @relation(fields: [metierId], references: [id])
   property            Property?        @relation(fields: [propertyId], references: [id])
-  artisan             User?            @relation("DemandeArtisanSpecifique", fields: [artisanId], references: [id]) // NOUVELLE RELATION
+  artisan             User?            @relation("DemandeArtisanSpecifique", fields: [artisanId], references: [id])
   artisans            DemandeArtisan[] @relation("DemandeArtisanDemande")
   conversations       Conversation[]
-  devis               String? // au cas ou il y a des demandes de devis
-  // NOUVELLE RELATION: Vers les devis
+  devis               String?
   devis_demande       Devis[]
 
   @@index([propertyId])
@@ -543,7 +521,7 @@ model Demande {
   @@index([serviceId])
   @@index([statut])
   @@index([createdAt])
-  @@index([artisanId]) // NOUVEAU INDEX
+  @@index([artisanId])
 }
 
 //===================
@@ -554,21 +532,21 @@ model DemandeArtisan {
   demandeId        Int
   accepte          Boolean?
   devis            String?
-  devisFileUrl     String? // URL du fichier de devis
-  devisFileName    String? // Nom du fichier de devis
-  devisFileType    String? // Type du fichier de devis
+  devisFileUrl     String?
+  devisFileName    String?
+  devisFileType    String?
   rdv              DateTime?
-  rdvNotes         String? // Notes pour le rendez-vous
-  factureFileUrl   String? // URL du fichier de facture
-  factureFileName  String? // Nom du fichier de facture
-  factureFileType  String? // Type du fichier de facture
-  factureMontant   Float? // Montant de la facture
-  factureStatus    String?   @default("en_attente") // en_attente, validee,confirmer, refusee
+  rdvNotes         String?
+  factureFileUrl   String?
+  factureFileName  String?
+  factureFileType  String?
+  factureMontant   Float?
+  factureStatus    String?   @default("en_attente")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime? @updatedAt
-  travauxTermines  Boolean?  @default(false) // Nouveau champ pour suivre l'état des travaux
-  factureConfirmee Boolean?  @default(false) // Nouveau champ pour confirmation du paiement par le pro
-  recruited        Boolean? //si l'artisan a ete pris pour le demandes de services
+  travauxTermines  Boolean?  @default(false)
+  factureConfirmee Boolean?  @default(false)
+  recruited        Boolean?
   user             User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
   demande          Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
@@ -579,7 +557,7 @@ model DemandeArtisan {
 }
 
 // ======================
-// Historique des demandes (snapshot lors d'actions comme annulation/suppression)
+// Historique des demandes
 // ======================
 model DemandeHistory {
   id        Int      @id @default(autoincrement())
@@ -597,17 +575,17 @@ model DemandeHistory {
 // ======================
 model Transaction {
   id             String        @id @default(uuid())
-  userId         String? // l'utilisateur qui paie
-  subscriptionId String? // <- nullable si certaines transactions ne concernent pas d’abonnement
-  provider       String // "stripe" | "paypal"
-  providerId     String? // ID du paiement Stripe ou PayPal
-  amount         Float // Montant payé
-  currency       String // "usd", "eur", ...
-  status         String // "created", "succeeded", "failed", "refunded", ...
-  description    String? // description du paiement
-  referenceType  String? // "product" | "demande"
-  referenceId    String? // id du produit ou de la demande
-  metadata       Json? // données additionnelles (cart, items, etc.)
+  userId         String?
+  subscriptionId String?
+  provider       String
+  providerId     String?
+  amount         Float
+  currency       String
+  status         String
+  description    String?
+  referenceType  String?
+  referenceId    String?
+  metadata       Json?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -623,7 +601,7 @@ model Review {
   id        String   @id @default(uuid())
   userId    String
   serviceId Int?
-  rating    Int // 1 à 5
+  rating    Int
   comment   String?
   createdAt DateTime @default(now())
 
@@ -636,12 +614,12 @@ model Review {
 // ======================
 model Appointment {
   id        String   @id @default(uuid())
-  userId    String // client
+  userId    String
   serviceId Int
   date      DateTime
   time      String
   message   String?
-  status    String   @default("pending") // pending, confirmed, cancelled
+  status    String   @default("pending")
   createdAt DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -655,16 +633,15 @@ model Order {
   id              String   @id @default(uuid())
   orderNumber     String   @unique
   userId          String
-  items           Json // Tableau d'items de la commande
+  items           Json
   totalAmount     Float
-  status          String   @default("pending") // pending, confirmed, processing, shipped, delivered, cancelled
-  shippingAddress Json? // Adresse de livraison
-  paymentMethod   String // card, paypal, bank_transfer
-  paymentStatus   String   @default("pending") // pending, paid, failed, refunded
+  status          String   @default("pending")
+  shippingAddress Json?
+  paymentMethod   String
+  paymentStatus   String   @default("pending")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -681,7 +658,7 @@ model Tourisme {
   idUnique           String   @unique
   idPrestataire      String   @unique
   title              String
-  type               String // Remplacé TourismeType
+  type               String
   price              Float
   city               String
   lat                Float
@@ -692,13 +669,13 @@ model Tourisme {
   amenities          String[]
   maxGuests          Int
   available          Boolean  @default(true)
-  provider           String   @default("direct") // Remplacé ProviderType
+  provider           String   @default("direct")
   description        String?
   bedrooms           Int?
   bathrooms          Int?
   area               Int?
   instantBook        Boolean  @default(false)
-  cancellationPolicy String   @default("moderate") // Remplacé CancellationPolicy
+  cancellationPolicy String   @default("moderate")
   featured           Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -726,7 +703,6 @@ model Devis {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // Relations
   client      User     @relation("DevisClient", fields: [clientId], references: [id], onDelete: Cascade)
   prestataire User     @relation("DevisPrestataire", fields: [prestataireId], references: [id], onDelete: Cascade)
   demande     Demande? @relation(fields: [demandeId], references: [id])
@@ -748,13 +724,13 @@ model FinancementDemande {
   email        String
   telephone    String
   message      String
-  type         String // "simulation", "assurance", "partenaire", "contact"
+  type         String
   montant      Float?
   duree        Int?
   estimation   Float?
   partenaireId Int?
   assuranceId  Int?
-  status       String   @default("pending") // pending, contacted, completed
+  status       String   @default("pending")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -806,7 +782,7 @@ model FinancementPartenaire {
   nom         String
   description String
   rating      Float
-  type        String // "banque", "courtier", "expert"
+  type        String
   avantages   String[]
   icon        String
   isActive    Boolean              @default(true)
@@ -855,15 +831,14 @@ model TourismeBooking {
   serviceFee          Float     @default(15.00)
   specialRequests     String?
   paymentMethod       String    @default("card")
-  status              String    @default("pending") // pending, confirmed, cancelled, completed
-  paymentStatus       String    @default("pending") // pending, paid, failed, refunded
+  status              String    @default("pending")
+  paymentStatus       String    @default("pending")
   stripePaymentIntent String?
   confirmationNumber  String    @unique
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   cancelledAt         DateTime?
 
-  // Relations
   listing Tourisme @relation(fields: [listingId], references: [id], onDelete: Cascade)
   user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -884,9 +859,9 @@ model Advertisement {
   description String?
   imageUrl    String
   targetUrl   String?
-  position    String // "header", "sidebar", "homepage", "footer"
-  type        String    @default("banner") // "banner", "popup", "video"
-  status      String    @default("active") // "active", "inactive", "scheduled"
+  position    String
+  type        String    @default("banner")
+  status      String    @default("active")
   startDate   DateTime?
   endDate     DateTime?
   priority    Int       @default(1)
@@ -896,7 +871,6 @@ model Advertisement {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  // Relations
   createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([position])
@@ -911,23 +885,21 @@ model Advertisement {
 // ======================
 model SubscriptionPlan {
   id          Int      @id @default(autoincrement())
-  name        String // "Pro Immobilier Complet", "Prestataires de Services", etc.
+  name        String
   description String?
-  price       Float // 139, 39, 49, 19
+  price       Float
   interval    String   @default("month")
-  features    String[] // Liste des fonctionnalités
+  features    String[]
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // NOUVEAUX CHAMPS POUR CORRESPONDRE AU FRONTEND
-  planType  String // "real_estate", "services", "furniture", "wellness"
-  userTypes String[] // ["VENDEUR", "LOUEUR"], ["PRESTATAIRE"], etc.
+  planType  String
+  userTypes String[]
   popular   Boolean  @default(false)
-  color     String? // "blue", "emerald", "purple", "pink"
-  icon      String? // Nom de l'icône ou emoji
+  color     String?
+  icon      String?
 
-  // Relations
   subscriptions Subscription[]
 }
 
@@ -940,12 +912,11 @@ model Subscription {
   planId    Int?
   startDate DateTime  @default(now())
   endDate   DateTime?
-  status    String    @default("active") // "active", "canceled", "expired", "pending"
+  status    String    @default("active")
   autoRenew Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  // Relations
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan         SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
   transactions Transaction[]
@@ -956,92 +927,84 @@ model Subscription {
 }
 
 // ======================
-// MODÈLES POUR LES MÉDIAS (PODCASTS & VIDÉOS)
+// PODCASTS
 // ======================
-
-// Modèle pour les catégories de médias
-model MediaCategory {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  type        String // "podcast", "video"
-  description String?
-  color       String? // Couleur pour le frontend (blue, green, purple, etc.)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  podcasts Podcast[]
-  videos   Video[]
-
-  @@index([type])
-}
-
-// Modifiez les modèles Podcast et Video :
-
 model Podcast {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  duration    String
-  audioFile   String? // Chemin du fichier audio
-  audioUrl    String? // URL publique pour lecture
-  imageUrl    String
-  categoryId  Int
-  authorId    String?
-  storagePath String?
-  isPremium   Boolean  @default(false)
-  listens     Int      @default(0)
-  isActive    Boolean  @default(true)
-  fileSize    Int? // Taille en bytes
-  mimeType    String? // "audio/mpeg", etc.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  audioUrl     String?
+  thumbnailUrl String?
+  category     String?
+  isActive     Boolean  @default(true)
+  listens      Int      @default(0)
+  duration     String
+  fileSize     Int?
+  mimeType     String?
+  storagePath  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  category          MediaCategory       @relation(fields: [categoryId], references: [id])
   author            User?               @relation(fields: [authorId], references: [id])
+  authorId          String?
   UserMediaFavorite UserMediaFavorite[]
+
+  @@index([authorId])
+  @@index([category])
+  @@index([isActive])
 }
 
+// ======================
+// VIDÉOS
+// ======================
 model Video {
   id           String   @id @default(uuid())
   title        String
   description  String
   duration     String
-  videoFile    String? // Chemin du fichier vidéo
-  videoUrl     String? // URL publique pour lecture
-  thumbnailUrl String
-  categoryId   Int
+  videoFile    String?
+  videoUrl     String?
+  thumbnailUrl String?
+  category     String?
   authorId     String?
   isPremium    Boolean  @default(false)
   views        Int      @default(0)
   isActive     Boolean  @default(true)
-  fileSize     Int? // Taille en bytes
-  mimeType     String? // "video/mp4", etc.
+  fileSize     Int?
+  mimeType     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   storagePath  String?
 
-  category          MediaCategory       @relation(fields: [categoryId], references: [id])
   author            User?               @relation(fields: [authorId], references: [id])
   UserMediaFavorite UserMediaFavorite[]
+
+  @@index([authorId])
+  @@index([category])
+  @@index([isActive])
 }
 
-// Modèle pour les favoris utilisateur
+// ======================
+// FAVORIS MÉDIAS UTILISATEUR (VERSION CORRIGÉE)
+// ======================
 model UserMediaFavorite {
   id        String   @id @default(uuid())
   userId    String
-  mediaId   String
-  mediaType String // "podcast", "video"
+  podcastId String?
+  videoId   String?
+  mediaType String
   createdAt DateTime @default(now())
 
-  // Relations
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  podcast Podcast? @relation(fields: [mediaId], references: [id], onDelete: Cascade, map: "UserMediaFavorite_podcast_fkey")
-  video   Video?   @relation(fields: [mediaId], references: [id], onDelete: Cascade, map: "UserMediaFavorite_video_fkey")
+  podcast Podcast? @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  video   Video?   @relation(fields: [videoId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, mediaId, mediaType])
+  @@unique([userId, podcastId, mediaType])
+  @@unique([userId, videoId, mediaType])
   @@index([userId])
-  @@index([mediaId, mediaType])
+  @@index([podcastId])
+  @@index([videoId])
+  @@index([mediaType])
 }
 
 // ======================
@@ -1051,13 +1014,12 @@ model WellBeingStats {
   id               String    @id @default(uuid())
   userId           String    @unique
   totalSessions    Int       @default(0)
-  totalDuration    Int       @default(0) // en minutes
+  totalDuration    Int       @default(0)
   favoriteCategory String?
   lastActivityAt   DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -1077,7 +1039,6 @@ model Audit {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relation vers User
   userId String
   user   User   @relation(fields: [userId], references: [id])
 }
@@ -1086,12 +1047,12 @@ model Audit {
 model Document {
   id             String    @id @default(uuid())
   nom            String
-  type           String // ASSURANCE, DIPLOME, CERTIFICATION, CONTRAT, CGV, ARCHIVE, IMMOBILIER
-  categorie      String? // Pour les documents immobiliers
+  type           String
+  categorie      String?
   description    String?
   dateExpiration DateTime?
   dateUpload     DateTime  @default(now())
-  statut         String    @default("VALIDE") // VALIDE, EXPIRANT, EXPIRE, EN_ATTENTE
+  statut         String    @default("VALIDE")
   taille         String
   format         String
   url            String
