@@ -626,7 +626,6 @@ model Appointment {
   message   String?
   status    String   @default("pending")
   createdAt DateTime @default(now())
-
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
@@ -1116,7 +1115,6 @@ model DocumentArchive {
 }
 
 //notification 
-
 model Notification {
   id               Int       @id @default(autoincrement())
   type             String
@@ -1141,5 +1139,3 @@ model Notification {
   @@index([read])
   @@index([relatedEntity])
 }
-
-
