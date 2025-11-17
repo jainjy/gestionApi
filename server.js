@@ -11,6 +11,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { upload } = require("./middleware/upload");
 const { authenticateToken } = require("./middleware/auth");
+require("./cron/subscriptionCron.js");
 
 //initialisation des variables necessaires
 const app = express();
