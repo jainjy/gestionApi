@@ -98,6 +98,7 @@ model User {
   events                   UserEvent[]
    audits              Audit[]  
    notifications        Notification[]
+  notificationsProprietaire Notification[] @relation("UserProprietaireRelation")
 
   // RELATION POUR PODCAST 
   podcasts                 Podcast[] // Podcasts créés par l'utilisateur
@@ -1117,21 +1118,28 @@ model DocumentArchive {
 //notification 
 
 model Notification {
-  id              Int      @id @default(autoincrement())
-  type            String   // 'info', 'warning', 'success', 'error'
-  title           String
-  message         String
-  relatedEntity   String?  // 'audit', 'user', 'listing', 'service', 'booking', 'financement', 'devis', etc.
-  relatedEntityId String?
-  read            Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  
-  // Relation vers User
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               Int       @id @default(autoincrement())
+  type             String
+  title            String
+  message          String
+  relatedEntity    String?
+  relatedEntityId  String?
+  read             Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+
+  // Utilisateur qui reçoit la notification
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Propriétaire (nullable)
+  userProprietaireId String?
+  userProprietaire    User?  @relation("UserProprietaireRelation", fields: [userProprietaireId], references: [id])
 
   @@index([userId])
+  @@index([userProprietaireId])
   @@index([createdAt])
   @@index([read])
   @@index([relatedEntity])
 }
+
+
