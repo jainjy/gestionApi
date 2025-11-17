@@ -1,5 +1,5 @@
-import cron from "node-cron";
-import { prisma } from "../lib/db";
+const cron = require("node-cron");
+const { prisma } = require("../lib/db");
 
 cron.schedule("0 0 * * *", async () => {
   console.log("⏳ [CRON] Vérification des abonnements expirés...");

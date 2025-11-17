@@ -194,6 +194,7 @@ router.post("/signup-pro", async (req, res) => {
     const {
       utilisateur,
       amount,
+      planId,
       currency = "eur",
       description = "Inscription professionnelle",
       referenceType = "subscription",
@@ -301,6 +302,11 @@ router.post("/signup-pro", async (req, res) => {
               connect: { id: metierId },
             },
           })),
+        },
+        subscriptions: {
+          create: {
+            planId: planId,
+          },
         },
       },
       include: {
