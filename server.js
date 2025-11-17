@@ -264,6 +264,9 @@ app.use("/api/professional/profile", require("./routes/professional-profile"));
 //pour les estimations immobilières
 app.use("/api/estimation", require("./routes/estimation"));
 
+
+//planning pro
+app.use("/api/planning", require("./routes/PlanningPro"));
 //bienetre
 app.use("/api/bienetre", require("./routes/bienetre"));
 
