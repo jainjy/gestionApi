@@ -3,7 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 //const { v4: uuidv4 } = require('uuid');
 const prisma = new PrismaClient();
-const { createNotification } = require("../services/notificationService");
+const { createNotification ,createNotificationTourisme } = require("../services/notificationService");
 
 // Middleware CORS
 router.use((req, res, next) => {
@@ -87,51 +87,61 @@ router.post('/', async (req, res) => {
     const totalAmount = baseAmount + serviceFee;
 
     const booking = await prisma.tourismeBooking.create({
-      data: {
-        listingId,
-        userId: userId || null,
-        checkIn: checkInDate,
-        checkOut: checkOutDate,
-        guests: parseInt(guests),
-        adults: parseInt(adults) || parseInt(guests),
-        children: parseInt(children) || 0,
-        infants: parseInt(infants) || 0,
-        totalAmount,
-        serviceFee,
-        specialRequests: specialRequests || '',
-        paymentMethod: paymentMethod || 'card',
-        confirmationNumber: generateConfirmationNumber(),
-        status: 'pending',
-        paymentStatus: 'pending'
-      },
-      include: {
-        listing: true,
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true
-          }
-        }
+  data: {
+    listingId,
+    userId: userId || null,
+    checkIn: checkInDate,
+    checkOut: checkOutDate,
+    guests: parseInt(guests),
+    adults: parseInt(adults) || parseInt(guests),
+    children: parseInt(children) || 0,
+    infants: parseInt(infants) || 0,
+    totalAmount,
+    serviceFee,
+    specialRequests: specialRequests || '',
+    paymentMethod: paymentMethod || 'card',
+    confirmationNumber: generateConfirmationNumber(),
+    status: 'pending',
+    paymentStatus: 'pending'
+  },
+  include: {
+    listing: true,
+    user: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true
       }
-    });
+    }
+  }
+});
+
 
     console.log(`✅ Réservation créée: ${booking.confirmationNumber}`);
 
     // 🔔 Création automatique d'une notification
     const io = req.app.get("io"); // Assure-toi que le serveur a "io"
-    await createNotification({
-      userId: booking.userId,
-      type: "info",
-      title: "Nouvelle réservation",
-      message: `Votre réservation pour "${listing.title}" du ${checkIn} au ${checkOut} a été créée.`,
-      relatedEntity: "tourismeBooking",
-      relatedEntityId: String(booking.id),
-      io,
-    });
-
+    // await createNotification({
+    //   userId: booking.userId,
+    //   type: "info",
+    //   title: "Nouvelle réservation",
+    //   message: `Votre réservation pour "${listing.title}" du ${checkIn} au ${checkOut} a été créée.`,
+    //   relatedEntity: "tourismeBooking",
+    //   relatedEntityId: String(booking.id),
+    //   io,
+    // });
+      await createNotificationTourisme({
+        userId: listing.idPrestataire,               // 👉 ID du propriétaire
+        userProprietaireId: listing.idPrestataire,   // 👉 Stocker dans la colonne userProprietaireId
+        type: "info",
+        title: "Nouvelle réservation reçue",
+        message: `Vous avez reçu une nouvelle réservation pour "${listing.title}" du ${checkIn} au ${checkOut}.`,
+        relatedEntity: "tourismeBooking",
+        relatedEntityId: String(booking.id),
+        io,
+      });
     res.status(201).json({
       success: true,
       data: booking,
