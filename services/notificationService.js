@@ -38,4 +38,40 @@ async function createNotification({
   }
 }
 
-module.exports = { createNotification };
+async function createNotificationTourisme({
+  userId,
+  userProprietaireId = null,  // 🔥 ajout important
+  type,
+  title,
+  message,
+  relatedEntity = null,
+  relatedEntityId = null,
+  io = null,
+}) {
+  try {
+    // Enregistrer la notification dans la base
+    const notification = await prisma.notification.create({
+      data: {
+        userId,
+        userProprietaireId,  // 🔥 on l’enregistre
+        type,
+        title,
+        message,
+        relatedEntity,
+        relatedEntityId,
+      },
+    });
+
+    // Envoi WebSocket temps réel
+    if (io) {
+      io.emit("new_notification", notification);
+    }
+
+    return notification;
+  } catch (error) {
+    console.error("Erreur lors de la création de la notification :", error);
+    throw error;
+  }
+}
+
+module.exports = { createNotification ,createNotificationTourisme};

@@ -7,34 +7,6 @@ const { authenticateToken, requireRole } = require("../middleware/auth");
 // 🔹 Récupérer les notifications
 // ======================================================
 
-// router.get("/", authenticateToken, async (req, res) => {
-//   try {
-//     // Vérifie que req.user existe bien
-//     if (!req.user || !req.user.id) {
-//       console.warn("❌ Aucun utilisateur détecté dans req.user");
-//       return res.status(401).json({
-//         success: false,
-//         message: "Utilisateur non authentifié",
-//       });
-//     }
-
-//     console.log("👤 Récupération des notifications pour :", req.user.email);
-
-//     // Tous les utilisateurs voient toutes les notifications
-//     const notifications = await prisma.notification.findMany({
-//       orderBy: { createdAt: "desc" },
-//     });
-
-//     res.json({ success: true, data: notifications });
-//   } catch (err) {
-//     console.error("❌ Erreur récupération notifications:", err);
-//     res.status(500).json({
-//       success: false,
-//       message: "Erreur interne du serveur",
-//       error: err.message,
-//     });
-//   }
-// });
 router.get("/", authenticateToken, async (req, res) => {
   try {
     // Vérifie que req.user existe bien
@@ -46,11 +18,10 @@ router.get("/", authenticateToken, async (req, res) => {
       });
     }
 
-    console.log("👤 Récupération des notifications pour l'utilisateur ID :", req.user.id);
+    console.log("👤 Récupération des notifications pour :", req.user.email);
 
-    // Affiche uniquement les notifications du user
+    // Tous les utilisateurs voient toutes les notifications
     const notifications = await prisma.notification.findMany({
-      where: { userId: req.user.id },   // 👈 IMPORTANT
       orderBy: { createdAt: "desc" },
     });
 
@@ -64,10 +35,41 @@ router.get("/", authenticateToken, async (req, res) => {
     });
   }
 });
+
+// router.get("/", authenticateToken, async (req, res) => {
+//   try {
+//     // Vérifie que req.user existe bien
+//     if (!req.user || !req.user.id) {
+//       console.warn("❌ Aucun utilisateur détecté dans req.user");
+//       return res.status(401).json({
+//         success: false,
+//         message: "Utilisateur non authentifié",
+//       });
+//     }
+
+//     console.log("👤 Récupération des notifications pour l'utilisateur ID :", req.user.id);
+
+//     // Affiche uniquement les notifications du user
+//     const notifications = await prisma.notification.findMany({
+//       where: { userId: req.user.id },   // 👈 IMPORTANT
+//       orderBy: { createdAt: "desc" },
+//     });
+
+//     res.json({ success: true, data: notifications });
+//   } catch (err) {
+//     console.error("❌ Erreur récupération notifications:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Erreur interne du serveur",
+//       error: err.message,
+//     });
+//   }
+// });
  
 // ======================================================
 // 🔹 Marquer une notification comme lue
 // ======================================================
+
 router.patch("/:id/read", authenticateToken, async (req, res) => {
   try {
     const notifId = Number(req.params.id);

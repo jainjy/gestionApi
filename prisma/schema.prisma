@@ -1128,8 +1128,8 @@ model Notification {
   createdAt        DateTime  @default(now())
 
   // Utilisateur qui reçoit la notification
-  userId           String
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Propriétaire (nullable)
   userProprietaireId String?
