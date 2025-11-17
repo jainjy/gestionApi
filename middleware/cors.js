@@ -4,18 +4,10 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Autoriser toutes les origines en développement
     const allowedOrigins = [
-      "http://localhost:8080", //  PORT FRONTEND
-      "http://127.0.0.1:8080", //  PORT FRONTEND
-      "http://192.168.1.98:8080", //  RÉSEAU LOCAL
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-      "http://localhost:3001",
       process.env.FRONTEND_URL,
       process.env.FRONTEND_URL2,
       process.env.FRONTEND_URL_LOCAL,
     ];
-
-    // En développement, on autorise tout
     if (
       !origin ||
       allowedOrigins.indexOf(origin) !== -1 ||
