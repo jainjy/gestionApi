@@ -205,6 +205,7 @@ app.use(
   "/api/professional/services",
   require("./routes/professional-services")
 );
+app.use("/api/agenda", require("./routes/agenda"));
 // routes pour les   batiments
 app.use("/api/batiment", require("./routes/batiment"));
 
