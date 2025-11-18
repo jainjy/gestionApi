@@ -1,5 +1,53 @@
 const { prisma } = require('../lib/db');
 
+// const getNotificationsForUser = async (req, res) => {
+//     try {
+//         const { userId } = req.params;
+        
+//         // Récupérer les demandes de l'utilisateur avec statut validé ou refusé
+//         const demandes = await prisma.demande.findMany({
+//             where: {
+//                 createdById: userId,
+//                 statut: {
+//                     in: ['validée', 'refusée', 'validee']
+//                 },
+//                 propertyId: {
+//                     not: null
+//                 }
+//             },
+//             include: {
+//                 property: true
+//             },
+//             orderBy: {
+//                 createdAt: 'desc'
+//             }
+//         });
+
+//         // Transformer les demandes en notifications
+//         const notifications = demandes.map(demande => {
+//             const statusText = demande.statut === 'refusée' ? 'refusée' : 'validée';
+//             const propertyTitle = demande.property?.title || 'Bien immobilier';
+            
+//             return {
+//                 id: demande.id,
+//                 titre: `Demande ${statusText} pour: ${propertyTitle}`,
+//                 statut: demande.statut,
+//                 propertyId: demande.propertyId,
+//                 createdAt: demande.createdAt,
+//                 isRead: demande.isRead,
+//                 type: 'demande_immobilier'
+//             };
+//         });
+
+//         const unreadCount = notifications.filter(n => !n.isRead).length;
+
+//         res.json({ notifications, unreadCount });
+//     } catch (error) {
+//         console.error('Erreur lors de la récupération des notifications:', error);
+//         res.status(500).json({ error: 'Erreur serveur' });
+//     }
+// };
+
 const getNotificationsForUser = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -23,94 +71,201 @@ const getNotificationsForUser = async (req, res) => {
             }
         });
 
+        // Récupérer les notifications de la table Notification
+        const notificationsFromTable = await prisma.notification.findMany({
+            where: {
+                OR: [
+                    { userProprietaireId: userId },
+                    { userId: userId }
+                ]
+            },
+            include: {
+                userProprietaire: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                    }
+                }
+                // Supprimer property et demande si ces relations n'existent pas
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
         // Transformer les demandes en notifications
-        const notifications = demandes.map(demande => {
+        const demandeNotifications = demandes.map(demande => {
             const statusText = demande.statut === 'refusée' ? 'refusée' : 'validée';
             const propertyTitle = demande.property?.title || 'Bien immobilier';
             
             return {
-                id: demande.id,
+                id: `demande_${demande.id}`,
                 titre: `Demande ${statusText} pour: ${propertyTitle}`,
                 statut: demande.statut,
                 propertyId: demande.propertyId,
                 createdAt: demande.createdAt,
                 isRead: demande.isRead,
-                type: 'demande_immobilier'
+                type: 'demande_immobilier',
+                source: 'demande'
             };
         });
 
-        const unreadCount = notifications.filter(n => !n.isRead).length;
+        // Transformer les notifications de la table Notification
+        const tableNotifications = notificationsFromTable.map(notif => {
+            return {
+                id: `notification_${notif.id}`,
+                titre: notif.titre || 'Nouvelle notification',
+                message: notif.message,
+                statut: notif.statut,
+                // Ces champs peuvent ne pas exister dans votre modèle Notification
+                // propertyId: notif.propertyId,
+                // demandeId: notif.demandeId,
+                createdAt: notif.createdAt,
+                isRead: notif.isRead,
+                type: notif.type || 'general',
+                source: 'notification_table',
+                userProprietaire: notif.userProprietaire
+            };
+        });
 
-        res.json({ notifications, unreadCount });
+        // Fusionner les deux types de notifications
+        const allNotifications = [...tableNotifications, ...demandeNotifications]
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        const unreadCount = allNotifications.filter(n => !n.isRead).length;
+
+        res.json({ 
+            notifications: allNotifications, 
+            unreadCount,
+            counts: {
+                total: allNotifications.length,
+                fromTable: tableNotifications.length,
+                fromDemandes: demandeNotifications.length,
+                unread: unreadCount
+            }
+        });
     } catch (error) {
         console.error('Erreur lors de la récupération des notifications:', error);
         res.status(500).json({ error: 'Erreur serveur' });
     }
 };
 
-// const getNotificationsForUser = async (req, res) => {
-//     try {
-//         // L'utilisateur connecté
-//         const userId = req.user.id;
+const markNotificationAsRead = async (req, res) => {
+    try {
+        const { userId, notificationId } = req.params;
 
-//         if (!userId) {
-//             return res.status(401).json({ error: "Utilisateur non authentifié" });
-//         }
-
-//         console.log("🔔 Récupération des notifications pour :", userId);
-
-//         // Récupération des demandes concernant cet utilisateur
-//         const demandes = await prisma.demande.findMany({
-//             where: {
-//                 createdById: userId,
-//                 statut: {
-//                     in: ["validée", "refusée", "validee"]
-//                 },
-//                 propertyId: {
-//                     not: null
-//                 }
-//             },
-//             include: {
-//                 property: true
-//             },
-//             orderBy: {
-//                 createdAt: "desc"
-//             }
-//         });
-
-//         // Transformer les demandes en notifications
-//         const notifications = demandes.map(demande => {
-//             const statusText =
-//                 demande.statut === "refusée" ? "refusée" : "validée";
+        // Vérifier si c'est une notification de la table ou une demande
+        if (notificationId.startsWith('notification_')) {
+            const realId = notificationId.replace('notification_', '');
             
-//             const propertyTitle =
-//                 demande.property?.title || "Bien immobilier";
+            await prisma.notification.updateMany({
+                where: {
+                    id: realId,
+                    OR: [
+                        { userProprietaireId: userId },
+                        { userId: userId }
+                    ]
+                },
+                data: {
+                    isRead: true
+                }
+            });
+        } else if (notificationId.startsWith('demande_')) {
+            const realId = notificationId.replace('demande_', '');
+            
+            await prisma.demande.updateMany({
+                where: {
+                    id: realId,
+                    createdById: userId
+                },
+                data: {
+                    isRead: true
+                }
+            });
+        }
 
-//             return {
-//                 id: demande.id,
-//                 titre: `Demande ${statusText} pour: ${propertyTitle}`,
-//                 statut: demande.statut,
-//                 propertyId: demande.propertyId,
-//                 createdAt: demande.createdAt,
-//                 isRead: demande.isRead,
-//                 type: "demande_immobilier",
-//                 userId: userId  // 🔥 Ajout important pour cohérence
-//             };
-//         });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Erreur lors du marquage comme lu:', error);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+};
 
-//         // Nombre non lues
-//         const unreadCount = notifications.filter(n => !n.isRead).length;
+const markNotificationAsUnread = async (req, res) => {
+    try {
+        const { userId, notificationId } = req.params;
 
-//         res.json({
-//             success: true,
-//             notifications,
-//             unreadCount
-//         });
-//     } catch (error) {
-//         console.error("❌ Erreur lors de la récupération des notifications:", error);
-//         res.status(500).json({ error: "Erreur serveur" });
-//     }
-// };
+        if (notificationId.startsWith('notification_')) {
+            const realId = notificationId.replace('notification_', '');
+            
+            await prisma.notification.updateMany({
+                where: {
+                    id: realId,
+                    OR: [
+                        { userProprietaireId: userId },
+                        { userId: userId }
+                    ]
+                },
+                data: {
+                    isRead: false
+                }
+            });
+        } else if (notificationId.startsWith('demande_')) {
+            const realId = notificationId.replace('demande_', '');
+            
+            await prisma.demande.updateMany({
+                where: {
+                    id: realId,
+                    createdById: userId
+                },
+                data: {
+                    isRead: false
+                }
+            });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Erreur lors du marquage comme non lu:', error);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+};
+
+const clearAllNotifications = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Marquer toutes les notifications de la table comme lues
+        await prisma.notification.updateMany({
+            where: {
+                OR: [
+                    { userProprietaireId: userId },
+                    { userId: userId }
+                ]
+            },
+            data: {
+                isRead: true
+            }
+        });
+
+        // Marquer toutes les demandes comme lues
+        await prisma.demande.updateMany({
+            where: {
+                createdById: userId
+            },
+            data: {
+                isRead: true
+            }
+        });
+
+        res.json({ success: true, message: 'Toutes les notifications ont été marquées comme lues' });
+    } catch (error) {
+        console.error('Erreur lors de la suppression des notifications:', error);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+}; 
 
 const markAsRead = async (req, res) => {
     try {
@@ -191,28 +346,28 @@ const markAllAsRead = async (req, res) => {
     }
 };
 
-const clearAllNotifications = async (req, res) => {
-    try {
-        const { userId } = req.params;
+// const clearAllNotifications = async (req, res) => {
+//     try {
+//         const { userId } = req.params;
         
-        await prisma.demande.updateMany({
-            where: {
-                createdById: userId,
-                statut: {
-                    in: ['validée', 'refusée', 'validee']
-                }
-            },
-            data: { 
-                statut: 'archivee'  // On marque comme archivée au lieu de supprimer
-            }
-        });
+//         await prisma.demande.updateMany({
+//             where: {
+//                 createdById: userId,
+//                 statut: {
+//                     in: ['validée', 'refusée', 'validee']
+//                 }
+//             },
+//             data: { 
+//                 statut: 'archivee'  // On marque comme archivée au lieu de supprimer
+//             }
+//         });
 
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Erreur lors de la suppression des notifications:', error);
-        res.status(500).json({ error: 'Erreur serveur' });
-    }
-};
+//         res.json({ success: true });
+//     } catch (error) {
+//         console.error('Erreur lors de la suppression des notifications:', error);
+//         res.status(500).json({ error: 'Erreur serveur' });
+//     }
+// };
 
 module.exports = {
     getNotificationsForUser,

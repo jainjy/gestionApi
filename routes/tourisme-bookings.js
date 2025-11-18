@@ -24,14 +24,15 @@ function generateConfirmationNumber() {
   return `TRV-${timestamp}-${random}`.toUpperCase();
 }
 
-// POST /api/tourisme-bookings - Créer une réservation
-router.post('/', async (req, res) => {
+router.post('/:userId', async (req, res) => {
   try {
-    console.log('➕ Requête POST reçue pour /api/tourisme-bookings', req.body);
-    
+    console.log("➕ POST /api/tourisme-bookings/:userId", req.params, req.body);
+
+    // ✔ ID de l'utilisateur qui réserve (dans l'URL) - CELUI QUI ENVOIE LA NOTIFICATION
+    const userIdFromUrl = req.params.userId;
+
     const {
       listingId,
-      userId,
       checkIn,
       checkOut,
       guests,
@@ -39,135 +40,71 @@ router.post('/', async (req, res) => {
       children,
       infants,
       specialRequests,
-      paymentMethod
+      paymentMethod,
     } = req.body;
 
-    if (!listingId || !checkIn || !checkOut || !guests) {
-      return res.status(400).json({
-        success: false,
-        error: 'Champs obligatoires manquants: listingId, checkIn, checkOut, guests'
-      });
-    }
+    // Récupérer la fiche
+    const listing = await prisma.tourisme.findUnique({
+      where: { id: listingId },
+    });
 
-    const listing = await prisma.tourisme.findUnique({ where: { id: listingId } });
     if (!listing) {
-      return res.status(404).json({ success: false, error: 'Hébergement non trouvé' });
+      return res.status(404).json({ error: "Hébergement non trouvé" });
     }
 
-    const existingBooking = await prisma.tourismeBooking.findFirst({
-      where: {
+    // Déterminer propriétaire du service - CELUI QUI REÇOIT LA NOTIFICATION
+    const proprietaireId = listing.idPrestataire;
+
+    // Création réservation
+    const booking = await prisma.tourismeBooking.create({
+      data: {
         listingId,
-        status: { in: ['pending', 'confirmed'] },
-        OR: [
-          { checkIn: { lte: new Date(checkOut) }, checkOut: { gte: new Date(checkIn) } }
-        ]
+        userId: userIdFromUrl,       // ✔ celui qui réserve
+        checkIn: new Date(checkIn),
+        checkOut: new Date(checkOut),
+        guests: Number(guests),
+        adults: Number(adults),
+        children: Number(children),
+        infants: Number(infants),
+        specialRequests,
+        paymentMethod,
+        totalAmount: listing.price,
+        serviceFee: 15,
+        status: "pending",
+        paymentStatus: "pending",
+        confirmationNumber: generateConfirmationNumber(),
       }
     });
 
-    if (existingBooking) {
-      return res.status(409).json({
-        success: false,
-        error: 'L\'hébergement n\'est pas disponible pour ces dates'
-      });
-    }
-
-    const checkInDate = new Date(checkIn);
-    const checkOutDate = new Date(checkOut);
-    const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
-    
-    if (nights <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'La date de départ doit être après la date d\'arrivée'
-      });
-    }
-
-    const baseAmount = listing.price * nights;
-    const serviceFee = 15.00;
-    const totalAmount = baseAmount + serviceFee;
-
-    const booking = await prisma.tourismeBooking.create({
-  data: {
-    listingId,
-    userId: userId || null,
-    checkIn: checkInDate,
-    checkOut: checkOutDate,
-    guests: parseInt(guests),
-    adults: parseInt(adults) || parseInt(guests),
-    children: parseInt(children) || 0,
-    infants: parseInt(infants) || 0,
-    totalAmount,
-    serviceFee,
-    specialRequests: specialRequests || '',
-    paymentMethod: paymentMethod || 'card',
-    confirmationNumber: generateConfirmationNumber(),
-    status: 'pending',
-    paymentStatus: 'pending'
-  },
-  include: {
-    listing: true,
-    user: {
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true
-      }
-    }
-  }
-});
-
-
-    console.log(`✅ Réservation créée: ${booking.confirmationNumber}`);
-
-    // 🔔 Création automatique d'une notification
-    const io = req.app.get("io"); // Assure-toi que le serveur a "io"
-    // await createNotification({
-    //   userId: booking.userId,
-    //   type: "info",
-    //   title: "Nouvelle réservation",
-    //   message: `Votre réservation pour "${listing.title}" du ${checkIn} au ${checkOut} a été créée.`,
-    //   relatedEntity: "tourismeBooking",
-    //   relatedEntityId: String(booking.id),
-    //   io,
-    // });
-      await createNotificationTourisme({
-        userId: listing.idPrestataire,               // 👉 ID du propriétaire
-        userProprietaireId: listing.idPrestataire,   // 👉 Stocker dans la colonne userProprietaireId
+    // CORRECTION: Création notification avec les bons IDs
+    await prisma.notification.create({
+      data: {
+        userId: proprietaireId,              // ✔ propriétaire REÇOIT la notif
+        userProprietaireId: userIdFromUrl,   // ✔ celui qui réserve (envoie la notif)
         type: "info",
-        title: "Nouvelle réservation reçue",
-        message: `Vous avez reçu une nouvelle réservation pour "${listing.title}" du ${checkIn} au ${checkOut}.`,
+        title: "Nouvelle réservation",
+        message: `Nouvelle réservation pour votre hébergement "${listing.title}"`,
         relatedEntity: "tourismeBooking",
-        relatedEntityId: String(booking.id),
-        io,
-      });
+        relatedEntityId: booking.id,
+      }
+    });
+
     res.status(201).json({
       success: true,
       data: booking,
-      message: 'Réservation créée avec succès et notification envoyée'
     });
 
   } catch (error) {
-    console.error('❌ Erreur création réservation:', error);
-    
-    if (error.code === 'P2002') {
-      return res.status(400).json({
-        success: false,
-        error: 'Numéro de confirmation déjà utilisé'
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la création de la réservation',
-      details: error.message
-    });
+    console.error("❌ Erreur création réservation :", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Fonction pour générer le numéro de confirmation (à ajouter si elle n'existe pas)
+function generateConfirmationNumber() {
+  return 'CONF-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+}
 
-// GET /api/tourisme-bookings - Récupérer les réservations avec filtres
 router.get('/', async (req, res) => {
   try {
     console.log('📦 Requête reçue pour /api/tourisme-bookings', req.query);
