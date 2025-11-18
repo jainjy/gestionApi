@@ -8,6 +8,8 @@ const router = express.Router();
 // GET /api/admin/media/stats - Statistiques des médias
 router.get("/stats", async (req, res) => {
   try {
+    console.log('📊 [STATS] Début récupération statistiques médias');
+    
     const [podcasts, videos] = await Promise.all([
       prisma.podcast.findMany({
         where: { isActive: true },
@@ -45,9 +47,10 @@ router.get("/stats", async (req, res) => {
       totalCategories: allCategories.length
     };
 
+    console.log('✅ [STATS] Statistiques récupérées avec succès:', stats);
     res.json(stats);
   } catch (error) {
-    console.error("Erreur lors du calcul des statistiques:", error);
+    console.error("❌ [STATS] Erreur lors du calcul des statistiques:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -57,6 +60,8 @@ router.get("/podcasts", async (req, res) => {
   try {
     const { page = 1, limit = 50, category, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    console.log('🎧 [PODCASTS] Récupération podcasts - Page:', page, 'Limit:', limit, 'Catégorie:', category, 'Recherche:', search);
 
     const where = { isActive: true };
     
@@ -86,7 +91,7 @@ router.get("/podcasts", async (req, res) => {
         fileSize: true,
         mimeType: true,
         storagePath: true,
-        category: true, // ← Maintenant un simple string
+        category: true,
         createdAt: true,
         updatedAt: true
       },
@@ -95,17 +100,21 @@ router.get("/podcasts", async (req, res) => {
       take: parseInt(limit),
     });
 
+    const total = await prisma.podcast.count({ where });
+
+    console.log('✅ [PODCASTS]', podcasts.length, 'podcasts récupérés sur', total);
+
     res.json({
       success: true,
       data: podcasts,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: await prisma.podcast.count({ where })
+        total
       }
     });
   } catch (error) {
-    console.error("Erreur lors de la récupération des podcasts:", error);
+    console.error("❌ [PODCASTS] Erreur lors de la récupération des podcasts:", error);
     res.status(500).json({ 
       success: false,
       error: "Erreur serveur" 
@@ -118,6 +127,8 @@ router.get("/videos", async (req, res) => {
   try {
     const { page = 1, limit = 50, category, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    console.log('🎬 [VIDEOS] Récupération vidéos - Page:', page, 'Limit:', limit, 'Catégorie:', category, 'Recherche:', search);
 
     const where = { isActive: true };
     
@@ -148,7 +159,7 @@ router.get("/videos", async (req, res) => {
         fileSize: true,
         mimeType: true,
         storagePath: true,
-        category: true, // ← Maintenant un simple string
+        category: true,
         createdAt: true,
         updatedAt: true
       },
@@ -157,17 +168,21 @@ router.get("/videos", async (req, res) => {
       take: parseInt(limit),
     });
 
+    const total = await prisma.video.count({ where });
+
+    console.log('✅ [VIDEOS]', videos.length, 'vidéos récupérées sur', total);
+
     res.json({
       success: true,
       data: videos,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: await prisma.video.count({ where })
+        total
       }
     });
   } catch (error) {
-    console.error("Erreur lors de la récupération des vidéos:", error);
+    console.error("❌ [VIDEOS] Erreur lors de la récupération des vidéos:", error);
     res.status(500).json({ 
       success: false,
       error: "Erreur serveur" 
@@ -178,6 +193,8 @@ router.get("/videos", async (req, res) => {
 // GET /api/admin/media/categories - Liste des catégories existantes
 router.get("/categories", async (req, res) => {
   try {
+    console.log('📂 [CATEGORIES] Récupération des catégories');
+
     // Récupérer toutes les catégories uniques des podcasts et vidéos
     const [podcastCategories, videoCategories] = await Promise.all([
       prisma.podcast.findMany({
@@ -195,12 +212,14 @@ router.get("/categories", async (req, res) => {
       .filter((category, index, self) => category && self.indexOf(category) === index)
       .sort();
 
+    console.log('✅ [CATEGORIES]', allCategories.length, 'catégories récupérées:', allCategories);
+
     res.json({
       success: true,
       data: allCategories
     });
   } catch (error) {
-    console.error("Erreur lors de la récupération des catégories:", error);
+    console.error("❌ [CATEGORIES] Erreur lors de la récupération des catégories:", error);
     res.status(500).json({ 
       success: false,
       error: "Erreur serveur" 
@@ -213,7 +232,10 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
   try {
     const { title, description, category, isActive = true, duration } = req.body;
     
+    console.log('🎧 [CREATE PODCAST] Données reçues:', { title, description, category, isActive, duration });
+
     if (!title) {
+      console.log('❌ [CREATE PODCAST] Titre manquant');
       manualCleanup(req.files);
       return res.status(400).json({
         success: false,
@@ -231,11 +253,11 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
     let mimeType = null;
     let storagePath = null;
 
-    console.log('📁 Début upload podcast vers Supabase...');
+    console.log('📁 [CREATE PODCAST] Début upload vers Supabase...');
 
     // Upload audio avec BUFFER
     if (audioFile) {
-      console.log('📤 Upload audio:', audioFile.originalname, `(${(audioFile.size / (1024 * 1024)).toFixed(2)} MB)`);
+      console.log('📤 [CREATE PODCAST] Upload audio:', audioFile.originalname, `(${(audioFile.size / (1024 * 1024)).toFixed(2)} MB)`);
       
       const audioBuffer = fs.readFileSync(audioFile.path);
       const fileName = `podcasts/audio/${Date.now()}-${audioFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -248,7 +270,7 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
         });
 
       if (audioError) {
-        console.error('❌ Erreur upload audio:', audioError);
+        console.error('❌ [CREATE PODCAST] Erreur upload audio:', audioError);
         manualCleanup(req.files);
         return res.status(500).json({
           success: false,
@@ -256,18 +278,18 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
         });
       }
 
-      console.log('✅ Audio uploadé avec succès:', audioData.path);
+      console.log('✅ [CREATE PODCAST] Audio uploadé avec succès:', audioData.path);
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(audioData.path);
       audioUrl = urlData.publicUrl;
       fileSize = audioFile.size;
       mimeType = audioFile.mimetype;
       storagePath = audioData.path;
-      console.log('🔗 URL audio:', audioUrl);
+      console.log('🔗 [CREATE PODCAST] URL audio:', audioUrl);
     }
 
     // Upload thumbnail avec BUFFER
     if (thumbnailFile) {
-      console.log('📤 Upload thumbnail:', thumbnailFile.originalname);
+      console.log('📤 [CREATE PODCAST] Upload thumbnail:', thumbnailFile.originalname);
       
       const thumbnailBuffer = fs.readFileSync(thumbnailFile.path);
       const thumbnailName = `podcasts/thumbnails/${Date.now()}-${thumbnailFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -280,7 +302,7 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
         });
 
       if (thumbnailError) {
-        console.error('❌ Erreur upload thumbnail:', thumbnailError);
+        console.error('❌ [CREATE PODCAST] Erreur upload thumbnail:', thumbnailError);
         manualCleanup(req.files);
         return res.status(500).json({
           success: false,
@@ -288,21 +310,21 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
         });
       }
 
-      console.log('✅ Thumbnail uploadé avec succès:', thumbnailData.path);
+      console.log('✅ [CREATE PODCAST] Thumbnail uploadé avec succès:', thumbnailData.path);
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(thumbnailData.path);
       thumbnailUrl = urlData.publicUrl;
-      console.log('🔗 URL thumbnail:', thumbnailUrl);
+      console.log('🔗 [CREATE PODCAST] URL thumbnail:', thumbnailUrl);
     }
 
     // Créer le podcast dans la base de données
-    console.log('💾 Création en base de données...');
+    console.log('💾 [CREATE PODCAST] Création en base de données...');
     const podcast = await prisma.podcast.create({
       data: {
         title,
         description,
         audioUrl,
         thumbnailUrl,
-        category: category || null, // ← Simple string
+        category: category || null,
         isActive: isActive === 'true',
         listens: 0,
         duration: duration || "00:00:00",
@@ -322,7 +344,7 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
         fileSize: true,
         mimeType: true,
         storagePath: true,
-        category: true, // ← Simple string
+        category: true,
         createdAt: true,
         updatedAt: true
       }
@@ -331,7 +353,7 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
     // Nettoyer les fichiers temporaires
     manualCleanup(req.files);
 
-    console.log('✅ Podcast créé avec succès:', podcast.id);
+    console.log('✅ [CREATE PODCAST] Podcast créé avec succès:', podcast.id);
 
     res.json({
       success: true,
@@ -340,7 +362,7 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Erreur lors de la création du podcast:", error);
+    console.error("❌ [CREATE PODCAST] Erreur lors de la création du podcast:", error);
     manualCleanup(req.files);
     res.status(500).json({
       success: false,
@@ -361,7 +383,10 @@ router.post("/videos", uploadVideo, async (req, res) => {
   try {
     const { title, description, category, isActive = true, duration } = req.body;
     
+    console.log('🎬 [CREATE VIDEO] Données reçues:', { title, description, category, isActive, duration });
+
     if (!title) {
+      console.log('❌ [CREATE VIDEO] Titre manquant');
       manualCleanup(req.files);
       return res.status(400).json({
         success: false,
@@ -373,11 +398,11 @@ router.post("/videos", uploadVideo, async (req, res) => {
     const videoFile = req.files.video[0];
     const thumbnailFile = req.files.thumbnail ? req.files.thumbnail[0] : null;
 
-    console.log('📁 Début upload vidéo vers Supabase...');
+    console.log('📁 [CREATE VIDEO] Début upload vers Supabase...');
 
     // Upload vidéo avec BUFFER
     if (videoFile) {
-      console.log('📤 Upload vidéo:', videoFile.originalname, `(${(videoFile.size / (1024 * 1024)).toFixed(2)} MB)`);
+      console.log('📤 [CREATE VIDEO] Upload vidéo:', videoFile.originalname, `(${(videoFile.size / (1024 * 1024)).toFixed(2)} MB)`);
       
       const videoBuffer = fs.readFileSync(videoFile.path);
       const fileName = `videos/${Date.now()}-${videoFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -390,7 +415,7 @@ router.post("/videos", uploadVideo, async (req, res) => {
         });
 
       if (videoError) {
-        console.error('❌ Erreur upload vidéo:', videoError);
+        console.error('❌ [CREATE VIDEO] Erreur upload vidéo:', videoError);
         manualCleanup(req.files);
         return res.status(500).json({
           success: false,
@@ -398,19 +423,19 @@ router.post("/videos", uploadVideo, async (req, res) => {
         });
       }
 
-      console.log('✅ Vidéo uploadée avec succès:', videoData.path);
+      console.log('✅ [CREATE VIDEO] Vidéo uploadée avec succès:', videoData.path);
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(videoData.path);
       videoUrl = urlData.publicUrl;
       fileSize = videoFile.size;
       mimeType = videoFile.mimetype;
       storagePath = videoData.path;
       uploadedFiles.push({ type: 'video', path: videoData.path, url: videoUrl });
-      console.log('🔗 URL vidéo:', videoUrl);
+      console.log('🔗 [CREATE VIDEO] URL vidéo:', videoUrl);
     }
 
     // Upload thumbnail avec BUFFER
     if (thumbnailFile) {
-      console.log('📤 Upload thumbnail:', thumbnailFile.originalname);
+      console.log('📤 [CREATE VIDEO] Upload thumbnail:', thumbnailFile.originalname);
       
       try {
         const thumbnailBuffer = fs.readFileSync(thumbnailFile.path);
@@ -424,28 +449,28 @@ router.post("/videos", uploadVideo, async (req, res) => {
           });
 
         if (thumbnailError) {
-          console.warn('⚠️ Erreur upload thumbnail:', thumbnailError.message);
+          console.warn('⚠️ [CREATE VIDEO] Erreur upload thumbnail:', thumbnailError.message);
         } else {
-          console.log('✅ Thumbnail uploadé avec succès:', thumbnailData.path);
+          console.log('✅ [CREATE VIDEO] Thumbnail uploadé avec succès:', thumbnailData.path);
           const { data: urlData } = supabase.storage.from('media').getPublicUrl(thumbnailData.path);
           thumbnailUrl = urlData.publicUrl;
           uploadedFiles.push({ type: 'thumbnail', path: thumbnailData.path, url: thumbnailUrl });
-          console.log('🔗 URL thumbnail:', thumbnailUrl);
+          console.log('🔗 [CREATE VIDEO] URL thumbnail:', thumbnailUrl);
         }
       } catch (thumbnailError) {
-        console.warn('⚠️ Erreur lors de l\'upload du thumbnail:', thumbnailError.message);
+        console.warn('⚠️ [CREATE VIDEO] Erreur lors de l\'upload du thumbnail:', thumbnailError.message);
       }
     }
 
     // Créer la vidéo dans la base de données
-    console.log('💾 Création en base de données...');
+    console.log('💾 [CREATE VIDEO] Création en base de données...');
     const video = await prisma.video.create({
       data: {
         title,
         description,
         videoUrl,
         thumbnailUrl,
-        category: category || null, // ← Simple string
+        category: category || null,
         isActive: isActive === 'true',
         views: 0,
         duration: duration || "00:00:00",
@@ -466,7 +491,7 @@ router.post("/videos", uploadVideo, async (req, res) => {
         fileSize: true,
         mimeType: true,
         storagePath: true,
-        category: true, // ← Simple string
+        category: true,
         createdAt: true,
         updatedAt: true
       }
@@ -475,7 +500,7 @@ router.post("/videos", uploadVideo, async (req, res) => {
     // Nettoyer les fichiers temporaires
     manualCleanup(req.files);
 
-    console.log('✅ Vidéo créée avec succès:', video.id);
+    console.log('✅ [CREATE VIDEO] Vidéo créée avec succès:', video.id);
 
     let message = "Vidéo créée avec succès";
     if (!thumbnailUrl) {
@@ -489,11 +514,11 @@ router.post("/videos", uploadVideo, async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Erreur lors de la création de la vidéo:", error);
+    console.error("❌ [CREATE VIDEO] Erreur lors de la création de la vidéo:", error);
     
     // Nettoyer les fichiers uploadés en cas d'erreur
     if (uploadedFiles.length > 0) {
-      console.log('🧹 Nettoyage des fichiers partiellement uploadés...');
+      console.log('🧹 [CREATE VIDEO] Nettoyage des fichiers partiellement uploadés...');
       const pathsToDelete = uploadedFiles.map(file => file.path);
       await supabase.storage.from('media').remove(pathsToDelete);
     }
@@ -513,13 +538,34 @@ router.put("/podcasts/:id", async (req, res) => {
     const { id } = req.params;
     const { title, description, category, isActive, duration } = req.body;
 
+    console.log('🎧 [UPDATE PODCAST] Requête reçue - ID:', id);
+    console.log('📦 [UPDATE PODCAST] Données reçues:', { title, description, category, isActive, duration });
+
+    // Vérifier si le podcast existe
+    const existingPodcast = await prisma.podcast.findUnique({
+      where: { id }
+    });
+
+    console.log('🔍 [UPDATE PODCAST] Podcast existant:', existingPodcast);
+
+    if (!existingPodcast) {
+      console.log('❌ [UPDATE PODCAST] Podcast non trouvé avec ID:', id);
+      return res.status(404).json({
+        success: false,
+        error: "Podcast non trouvé",
+        message: `Aucun podcast trouvé avec l'ID: ${id}`
+      });
+    }
+
     const updateData = {
       ...(title && { title }),
       ...(description && { description }),
-      ...(category !== undefined && { category }), // ← Simple string
+      ...(category !== undefined && { category }),
       ...(isActive !== undefined && { isActive: isActive === 'true' }),
       ...(duration && { duration })
     };
+
+    console.log('🔄 [UPDATE PODCAST] Données de mise à jour:', updateData);
 
     const podcast = await prisma.podcast.update({
       where: { id },
@@ -536,11 +582,13 @@ router.put("/podcasts/:id", async (req, res) => {
         fileSize: true,
         mimeType: true,
         storagePath: true,
-        category: true, // ← Simple string
+        category: true,
         createdAt: true,
         updatedAt: true
       }
     });
+
+    console.log('✅ [UPDATE PODCAST] Podcast mis à jour avec succès:', podcast.id);
 
     res.json({
       success: true,
@@ -549,7 +597,8 @@ router.put("/podcasts/:id", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Erreur lors de la mise à jour du podcast:", error);
+    console.error("❌ [UPDATE PODCAST] Erreur lors de la mise à jour du podcast:", error);
+    console.error("🔧 [UPDATE PODCAST] Stack:", error.stack);
     res.status(500).json({
       success: false,
       error: "Erreur serveur: " + error.message
@@ -561,16 +610,46 @@ router.put("/podcasts/:id", async (req, res) => {
 router.put("/videos/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, category, isActive, duration } = req.body;
+    const { title, description, category, isActive, duration, isPremium } = req.body;
+
+    console.log('🎬 [UPDATE VIDEO] REQUÊTE DE MODIFICATION REÇUE:');
+    console.log('🔧 [UPDATE VIDEO] ID reçu:', id);
+    console.log('📦 [UPDATE VIDEO] Body complet:', req.body);
+    console.log('📋 [UPDATE VIDEO] Données extraites:', {
+      title, description, category, isActive, duration, isPremium
+    });
+
+    // Vérifier si la vidéo existe
+    console.log('🔍 [UPDATE VIDEO] Recherche de la vidéo avec ID:', id);
+    const existingVideo = await prisma.video.findUnique({
+      where: { id }
+    });
+
+    console.log('🔍 [UPDATE VIDEO] Vidéo existante trouvée:', existingVideo);
+
+    if (!existingVideo) {
+      console.log('❌ [UPDATE VIDEO] VIDÉO NON TROUVÉE avec ID:', id);
+      return res.status(404).json({
+        success: false,
+        error: "Vidéo non trouvée",
+        message: `Aucune vidéo trouvée avec l'ID: ${id}`
+      });
+    }
+
+    console.log('✅ [UPDATE VIDEO] Vidéo trouvée:', existingVideo.title);
 
     const updateData = {
       ...(title && { title }),
       ...(description && { description }),
-      ...(category !== undefined && { category }), // ← Simple string
+      ...(category !== undefined && { category }),
       ...(isActive !== undefined && { isActive: isActive === 'true' }),
-      ...(duration && { duration })
+      ...(duration && { duration }),
+      ...(isPremium !== undefined && { isPremium })
     };
 
+    console.log('🔄 [UPDATE VIDEO] Données de mise à jour préparées:', updateData);
+
+    console.log('💾 [UPDATE VIDEO] Tentative de mise à jour en base de données...');
     const video = await prisma.video.update({
       where: { id },
       data: updateData,
@@ -587,11 +666,14 @@ router.put("/videos/:id", async (req, res) => {
         fileSize: true,
         mimeType: true,
         storagePath: true,
-        category: true, // ← Simple string
+        category: true,
         createdAt: true,
         updatedAt: true
       }
     });
+
+    console.log('✅ [UPDATE VIDEO] VIDÉO MISE À JOUR AVEC SUCCÈS:', video.id);
+    console.log('📊 [UPDATE VIDEO] Données après mise à jour:', video);
 
     res.json({
       success: true,
@@ -600,10 +682,20 @@ router.put("/videos/:id", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Erreur lors de la mise à jour de la vidéo:", error);
+    console.error("❌ [UPDATE VIDEO] ERREUR LORS DE LA MISE À JOUR DE LA VIDÉO:");
+    console.error("🔧 [UPDATE VIDEO] Message d'erreur:", error.message);
+    console.error("🔧 [UPDATE VIDEO] Stack:", error.stack);
+    console.error("🔧 [UPDATE VIDEO] Code d'erreur:", error.code);
+    console.error("🔧 [UPDATE VIDEO] Meta:", error.meta);
+    
     res.status(500).json({
       success: false,
-      error: "Erreur serveur: " + error.message
+      error: "Erreur serveur: " + error.message,
+      details: process.env.NODE_ENV === 'development' ? {
+        code: error.code,
+        meta: error.meta,
+        stack: error.stack
+      } : undefined
     });
   }
 });
@@ -612,6 +704,8 @@ router.put("/videos/:id", async (req, res) => {
 router.delete("/podcasts/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
+    console.log('🗑️ [DELETE PODCAST] Suppression demandée pour ID:', id);
 
     // Récupérer le podcast pour avoir les URLs des fichiers
     const podcast = await prisma.podcast.findUnique({
@@ -625,36 +719,42 @@ router.delete("/podcasts/:id", async (req, res) => {
     });
 
     if (!podcast) {
+      console.log('❌ [DELETE PODCAST] Podcast non trouvé avec ID:', id);
       return res.status(404).json({
         success: false,
         message: "Podcast non trouvé"
       });
     }
 
+    console.log('🔍 [DELETE PODCAST] Podcast trouvé:', podcast.id);
+
     // Supprimer les fichiers de Supabase
     if (podcast.storagePath) {
+      console.log('🗑️ [DELETE PODCAST] Suppression fichier audio:', podcast.storagePath);
       await supabase.storage.from('media').remove([podcast.storagePath]);
-      console.log('🗑️ Fichier audio supprimé:', podcast.storagePath);
     } else if (podcast.audioUrl) {
       const audioPath = podcast.audioUrl.split('/storage/v1/object/public/media/')[1];
       if (audioPath) {
+        console.log('🗑️ [DELETE PODCAST] Suppression fichier audio:', audioPath);
         await supabase.storage.from('media').remove([audioPath]);
-        console.log('🗑️ Fichier audio supprimé:', audioPath);
       }
     }
 
     if (podcast.thumbnailUrl) {
       const thumbnailPath = podcast.thumbnailUrl.split('/storage/v1/object/public/media/')[1];
       if (thumbnailPath) {
+        console.log('🗑️ [DELETE PODCAST] Suppression thumbnail:', thumbnailPath);
         await supabase.storage.from('media').remove([thumbnailPath]);
-        console.log('🗑️ Thumbnail supprimé:', thumbnailPath);
       }
     }
 
     // Supprimer de la base de données
+    console.log('💾 [DELETE PODCAST] Suppression de la base de données...');
     await prisma.podcast.delete({
       where: { id }
     });
+
+    console.log('✅ [DELETE PODCAST] Podcast supprimé avec succès:', id);
 
     res.json({
       success: true,
@@ -662,7 +762,7 @@ router.delete("/podcasts/:id", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Erreur lors de la suppression du podcast:", error);
+    console.error("❌ [DELETE PODCAST] Erreur lors de la suppression du podcast:", error);
     res.status(500).json({
       success: false,
       error: "Erreur serveur: " + error.message
@@ -674,6 +774,8 @@ router.delete("/podcasts/:id", async (req, res) => {
 router.delete("/videos/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
+    console.log('🗑️ [DELETE VIDEO] Suppression demandée pour ID:', id);
 
     // Récupérer la vidéo pour avoir les URLs des fichiers
     const video = await prisma.video.findUnique({
@@ -687,36 +789,42 @@ router.delete("/videos/:id", async (req, res) => {
     });
 
     if (!video) {
+      console.log('❌ [DELETE VIDEO] Vidéo non trouvée avec ID:', id);
       return res.status(404).json({
         success: false,
         message: "Vidéo non trouvée"
       });
     }
 
+    console.log('🔍 [DELETE VIDEO] Vidéo trouvée:', video.id);
+
     // Supprimer les fichiers de Supabase
     if (video.storagePath) {
+      console.log('🗑️ [DELETE VIDEO] Suppression fichier vidéo:', video.storagePath);
       await supabase.storage.from('media').remove([video.storagePath]);
-      console.log('🗑️ Fichier vidéo supprimé:', video.storagePath);
     } else if (video.videoUrl) {
       const videoPath = video.videoUrl.split('/storage/v1/object/public/media/')[1];
       if (videoPath) {
+        console.log('🗑️ [DELETE VIDEO] Suppression fichier vidéo:', videoPath);
         await supabase.storage.from('media').remove([videoPath]);
-        console.log('🗑️ Fichier vidéo supprimé:', videoPath);
       }
     }
 
     if (video.thumbnailUrl) {
       const thumbnailPath = video.thumbnailUrl.split('/storage/v1/object/public/media/')[1];
       if (thumbnailPath) {
+        console.log('🗑️ [DELETE VIDEO] Suppression thumbnail:', thumbnailPath);
         await supabase.storage.from('media').remove([thumbnailPath]);
-        console.log('🗑️ Thumbnail supprimé:', thumbnailPath);
       }
     }
 
     // Supprimer de la base de données
+    console.log('💾 [DELETE VIDEO] Suppression de la base de données...');
     await prisma.video.delete({
       where: { id }
     });
+
+    console.log('✅ [DELETE VIDEO] Vidéo supprimée avec succès:', id);
 
     res.json({
       success: true,
@@ -724,7 +832,7 @@ router.delete("/videos/:id", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Erreur lors de la suppression de la vidéo:", error);
+    console.error("❌ [DELETE VIDEO] Erreur lors de la suppression de la vidéo:", error);
     res.status(500).json({
       success: false,
       error: "Erreur serveur: " + error.message
