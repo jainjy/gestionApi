@@ -304,9 +304,11 @@ app.use("/api/suggestion", require("./routes/suggestionIntelligent"));
 app.use("/api/oeuvre", require("./routes/oeuvre"));
 app.use("/api/media", require("./routes/media"));
 app.use("/api/advertisements", require("./routes/advertisements"));
+app.use("/api/map", require("./routes/map"));
 app.use("/api/conversations", require("./routes/conversations"));
 app.use("/api/admin/media", require("./routes/admin-media"));
 app.use("/api/pro/demandes", require("./routes/proDemandes"));
+
 
 // Route pour l'upload de fichiers dans les messages
 app.post(
@@ -404,7 +406,8 @@ app.get("/health", (req, res) => {
       "orders",
       "media",
       "notifications",
-      "websocket"
+      "websocket",
+      "map", // 🗺️ AJOUT DU SERVICE MAP
     ],
     websocket: {
       connectedClients: io.engine.clientsCount,
