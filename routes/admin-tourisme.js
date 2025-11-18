@@ -17,10 +17,108 @@ router.options('*', (req, res) => {
   res.sendStatus(200);
 });
 
-// GET /api/admin/tourisme - Récupérer tous les hébergements
+// GET /api/admin/tourisme - Récupérer tous les hébergements ET lieux touristiques
 router.get('/', async (req, res) => {
   try {
     console.log('📦 Requête admin reçue pour /api/admin/tourisme', req.query);
+    
+    const {
+      page = 1,
+      limit = 12,
+      search,
+      type,
+      category,
+      city,
+      available,
+      featured,
+      isTouristicPlace
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Construction des filtres
+    const where = {};
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    if (type) {
+      where.type = type;
+    }
+
+    if (category) {
+      where.category = category;
+    }
+
+    if (city) {
+      where.city = { contains: city, mode: 'insensitive' };
+    }
+
+    if (available !== undefined) {
+      where.available = available === 'true';
+    }
+
+    if (featured !== undefined) {
+      where.featured = featured === 'true';
+    }
+
+    if (isTouristicPlace !== undefined) {
+      where.isTouristicPlace = isTouristicPlace === 'true';
+    }
+
+    // Récupération des données
+    const [listings, total] = await Promise.all([
+      prisma.tourisme.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          bookings: {
+            select: {
+              id: true,
+              status: true,
+              checkIn: true,
+              checkOut: true
+            }
+          }
+        }
+      }),
+      prisma.tourisme.count({ where })
+    ]);
+
+    console.log(`✅ ${listings.length} éléments trouvés pour l'admin`);
+
+    res.json({
+      success: true,
+      data: listings,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération admin tourisme:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des éléments',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/admin/tourisme/accommodations - Récupérer uniquement les hébergements
+router.get('/accommodations', async (req, res) => {
+  try {
+    console.log('🏨 Requête hébergements reçue');
     
     const {
       page = 1,
@@ -34,8 +132,9 @@ router.get('/', async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    // Construction des filtres
-    const where = {};
+    const where = {
+      isTouristicPlace: false
+    };
 
     if (search) {
       where.OR = [
@@ -61,8 +160,7 @@ router.get('/', async (req, res) => {
       where.featured = featured === 'true';
     }
 
-    // Récupération des données
-    const [listings, total] = await Promise.all([
+    const [accommodations, total] = await Promise.all([
       prisma.tourisme.findMany({
         where,
         skip,
@@ -82,11 +180,11 @@ router.get('/', async (req, res) => {
       prisma.tourisme.count({ where })
     ]);
 
-    console.log(`✅ ${listings.length} hébergements trouvés pour l'admin`);
+    console.log(`✅ ${accommodations.length} hébergements trouvés`);
 
     res.json({
       success: true,
-      data: listings,
+      data: accommodations,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -96,10 +194,98 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur récupération admin tourisme:', error);
+    console.error('❌ Erreur récupération hébergements:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la récupération des hébergements',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/admin/tourisme/places - Récupérer uniquement les lieux touristiques
+router.get('/places', async (req, res) => {
+  try {
+    console.log('🏛️ Requête lieux touristiques reçue');
+    
+    const {
+      page = 1,
+      limit = 12,
+      search,
+      category,
+      city,
+      available,
+      featured
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const where = {
+      isTouristicPlace: true
+    };
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    if (category) {
+      where.category = category;
+    }
+
+    if (city) {
+      where.city = { contains: city, mode: 'insensitive' };
+    }
+
+    if (available !== undefined) {
+      where.available = available === 'true';
+    }
+
+    if (featured !== undefined) {
+      where.featured = featured === 'true';
+    }
+
+    const [places, total] = await Promise.all([
+      prisma.tourisme.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          bookings: {
+            select: {
+              id: true,
+              status: true,
+              checkIn: true,
+              checkOut: true
+            }
+          }
+        }
+      }),
+      prisma.tourisme.count({ where })
+    ]);
+
+    console.log(`✅ ${places.length} lieux touristiques trouvés`);
+
+    res.json({
+      success: true,
+      data: places,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération lieux touristiques:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des lieux touristiques',
       details: error.message
     });
   }
@@ -112,12 +298,16 @@ router.get('/stats', async (req, res) => {
 
     const [
       totalListings,
+      totalAccommodations,
+      totalTouristicPlaces,
       availableListings,
       featuredListings,
       totalBookings,
       averageRating
     ] = await Promise.all([
       prisma.tourisme.count(),
+      prisma.tourisme.count({ where: { isTouristicPlace: false } }),
+      prisma.tourisme.count({ where: { isTouristicPlace: true } }),
       prisma.tourisme.count({ where: { available: true } }),
       prisma.tourisme.count({ where: { featured: true } }),
       prisma.tourismeBooking.count(),
@@ -128,11 +318,25 @@ router.get('/stats', async (req, res) => {
       })
     ]);
 
-    // Statistiques par type
-    const listingsByType = await prisma.tourisme.groupBy({
+    // Statistiques par type d'hébergement
+    const accommodationsByType = await prisma.tourisme.groupBy({
       by: ['type'],
       _count: {
         id: true
+      },
+      where: {
+        isTouristicPlace: false
+      }
+    });
+
+    // Statistiques par catégorie de lieu touristique
+    const placesByCategory = await prisma.tourisme.groupBy({
+      by: ['category'],
+      _count: {
+        id: true
+      },
+      where: {
+        isTouristicPlace: true
       }
     });
 
@@ -152,11 +356,14 @@ router.get('/stats', async (req, res) => {
 
     const stats = {
       totalListings,
+      totalAccommodations,
+      totalTouristicPlaces,
       availableListings,
       featuredListings,
       totalBookings,
       averageRating: averageRating._avg.rating || 0,
-      listingsByType,
+      accommodationsByType,
+      placesByCategory,
       listingsByCity
     };
 
@@ -176,9 +383,8 @@ router.get('/stats', async (req, res) => {
     });
   }
 });
- // POST /api/admin/tourisme - Créer un nouvel hébergement
 
-// POST /api/admin/tourisme - Ajouter un hébergement
+// POST /api/admin/tourisme - Créer un nouvel élément (hébergement ou lieu touristique)
 router.post('/', authenticateToken, async (req, res) => {
   try {
     console.log('➕ Requête POST admin reçue pour /api/admin/tourisme', req.body);
@@ -186,6 +392,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const {
       title,
       type,
+      category,
       price,
       city,
       lat,
@@ -202,17 +409,36 @@ router.post('/', authenticateToken, async (req, res) => {
       featured,
       available = true,
       rating = 0,
-      reviewCount = 0
+      reviewCount = 0,
+      isTouristicPlace = false,
+      openingHours,
+      entranceFee,
+      website,
+      contactInfo
     } = req.body;
 
-    if (!title || !type || !price || !city || !maxGuests) {
+    if (!title || !city) {
       return res.status(400).json({
         success: false,
-        error: 'Champs obligatoires manquants: title, type, price, city, maxGuests'
+        error: 'Champs obligatoires manquants: title, city'
       });
     }
 
-    const idUnique = `T${Date.now()}`;
+    if (!isTouristicPlace && (!type || !price || !maxGuests)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Pour les hébergements: type, price, maxGuests sont obligatoires'
+      });
+    }
+
+    if (isTouristicPlace && !category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Pour les lieux touristiques: category est obligatoire'
+      });
+    }
+
+    const idUnique = isTouristicPlace ? `PL${Date.now()}` : `T${Date.now()}`;
     const idPrestataire = `P${Date.now()}`;
 
     const newListing = await prisma.tourisme.create({
@@ -220,14 +446,15 @@ router.post('/', authenticateToken, async (req, res) => {
         idUnique,
         idPrestataire,
         title,
-        type,
-        price: parseFloat(price),
+        type: isTouristicPlace ? 'touristic_place' : type,
+        category: isTouristicPlace ? category : null,
+        price: price ? parseFloat(price) : 0,
         city,
         lat: lat ? parseFloat(lat) : 0,
         lng: lng ? parseFloat(lng) : 0,
         images: Array.isArray(images) ? images : (images ? [images] : []),
         amenities: Array.isArray(amenities) ? amenities : [],
-        maxGuests: parseInt(maxGuests),
+        maxGuests: isTouristicPlace ? 1 : parseInt(maxGuests),
         description: description || '',
         bedrooms: bedrooms ? parseInt(bedrooms) : null,
         bathrooms: bathrooms ? parseInt(bathrooms) : null,
@@ -237,22 +464,27 @@ router.post('/', authenticateToken, async (req, res) => {
         featured: Boolean(featured),
         available: Boolean(available),
         rating: parseFloat(rating),
-        reviewCount: parseInt(reviewCount)
+        reviewCount: parseInt(reviewCount),
+        isTouristicPlace: Boolean(isTouristicPlace),
+        openingHours: openingHours || '',
+        entranceFee: entranceFee || '',
+        website: website || '',
+        contactInfo: contactInfo || ''
       },
       include: {
         bookings: true
       }
     });
 
-    console.log(`✅ Hébergement créé par admin: ${newListing.id}`);
+    console.log(`✅ ${isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} créé: ${newListing.id}`);
 
-    // 🔔 Création de la notification pour l’utilisateur connecté
+    // 🔔 Création de la notification pour l'utilisateur connecté
     const io = req.app.get("io");
     await createNotification({
       userId: req.user.id,
       type: "success",
-      title: "Nouvel hébergement ajouté",
-      message: `L’hébergement "${title}" a été ajouté avec succès.`,
+      title: isTouristicPlace ? "Nouveau lieu touristique ajouté" : "Nouvel hébergement ajouté",
+      message: `${isTouristicPlace ? 'Le lieu touristique' : 'L\'hébergement'} "${title}" a été ajouté avec succès.`,
       relatedEntity: "tourisme",
       relatedEntityId: newListing.id,
       io
@@ -261,7 +493,7 @@ router.post('/', authenticateToken, async (req, res) => {
     res.status(201).json({
       success: true,
       data: newListing,
-      message: 'Hébergement créé avec succès et notification envoyée'
+      message: `${isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} créé avec succès`
     });
 
   } catch (error) {
@@ -276,13 +508,13 @@ router.post('/', authenticateToken, async (req, res) => {
 
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la création de l\'hébergement',
+      error: `Erreur lors de la création ${req.body.isTouristicPlace ? 'du lieu touristique' : 'de l\'hébergement'}`,
       details: error.message
     });
   }
 });
 
-// PUT /api/admin/tourisme/:id - Mettre à jour un hébergement
+// PUT /api/admin/tourisme/:id - Mettre à jour un élément
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -294,15 +526,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (!existingListing) {
       return res.status(404).json({
         success: false,
-        error: 'Hébergement non trouvé'
+        error: 'Élément non trouvé'
       });
     }
 
     const validFields = [
-      'title', 'type', 'price', 'city', 'lat', 'lng', 'images', 
+      'title', 'type', 'category', 'price', 'city', 'lat', 'lng', 'images', 
       'amenities', 'maxGuests', 'description', 'bedrooms', 'bathrooms', 
       'area', 'instantBook', 'cancellationPolicy', 'featured', 
-      'available', 'rating', 'reviewCount'
+      'available', 'rating', 'reviewCount', 'isTouristicPlace',
+      'openingHours', 'entranceFee', 'website', 'contactInfo'
     ];
 
     const filteredData = {};
@@ -323,6 +556,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (filteredData.instantBook !== undefined) filteredData.instantBook = Boolean(filteredData.instantBook);
     if (filteredData.featured !== undefined) filteredData.featured = Boolean(filteredData.featured);
     if (filteredData.available !== undefined) filteredData.available = Boolean(filteredData.available);
+    if (filteredData.isTouristicPlace !== undefined) filteredData.isTouristicPlace = Boolean(filteredData.isTouristicPlace);
 
     const updatedListing = await prisma.tourisme.update({
       where: { id },
@@ -334,15 +568,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     });
 
-    console.log(`✅ Hébergement ${id} mis à jour par admin`);
+    console.log(`✅ Élément ${id} mis à jour par admin`);
 
     // 🔔 Notification mise à jour
     const io = req.app.get("io");
     await createNotification({
       userId: req.user.id,
       type: "info",
-      title: "Hébergement mis à jour",
-      message: `L’hébergement "${updatedListing.title}" a été mis à jour avec succès.`,
+      title: `${updatedListing.isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} mis à jour`,
+      message: `${updatedListing.isTouristicPlace ? 'Le lieu touristique' : 'L\'hébergement'} "${updatedListing.title}" a été mis à jour avec succès.`,
       relatedEntity: "tourisme",
       relatedEntityId: updatedListing.id,
       io
@@ -351,7 +585,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       data: updatedListing,
-      message: 'Hébergement mis à jour avec succès et notification envoyée'
+      message: `${updatedListing.isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} mis à jour avec succès`
     });
 
   } catch (error) {
@@ -360,25 +594,25 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({
         success: false,
-        error: 'Hébergement non trouvé'
+        error: 'Élément non trouvé'
       });
     }
 
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la mise à jour de l\'hébergement',
+      error: 'Erreur lors de la mise à jour',
       details: error.message
     });
   }
 });
 
- // DELETE /api/admin/tourisme/:id - Supprimer un hébergement
+// DELETE /api/admin/tourisme/:id - Supprimer un élément
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`🗑️ Requête DELETE admin reçue pour /api/admin/tourisme/${id}`);
 
-    // Vérifier que l'hébergement existe
+    // Vérifier que l'élément existe
     const existingListing = await prisma.tourisme.findFirst({
       where: { 
         OR: [
@@ -394,7 +628,7 @@ router.delete('/:id', async (req, res) => {
     if (!existingListing) {
       return res.status(404).json({
         success: false,
-        error: 'Hébergement non trouvé'
+        error: 'Élément non trouvé'
       });
     }
 
@@ -404,23 +638,22 @@ router.delete('/:id', async (req, res) => {
     );
 
     if (activeBookings.length > 0) {
-  return res.status(400).json({
-    success: false,
-    error: "Impossible de supprimer cet hébergement : une ou plusieurs réservations actives sont associées."
-  });
-}
-
+      return res.status(400).json({
+        success: false,
+        error: "Impossible de supprimer cet élément : une ou plusieurs réservations actives sont associées."
+      });
+    }
 
     // Supprimer via l'id interne
     await prisma.tourisme.delete({
       where: { id: existingListing.id }
     });
 
-    console.log(`✅ Hébergement ${existingListing.id} supprimé`);
+    console.log(`✅ Élément ${existingListing.id} supprimé`);
 
     res.json({
       success: true,
-      message: 'Hébergement supprimé avec succès'
+      message: `${existingListing.isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} supprimé avec succès`
     });
 
   } catch (error) {
@@ -429,13 +662,13 @@ router.delete('/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({
         success: false,
-        error: 'Hébergement non trouvé'
+        error: 'Élément non trouvé'
       });
     }
 
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la suppression de l\'hébergement',
+      error: 'Erreur lors de la suppression',
       details: error.message
     });
   }
@@ -454,7 +687,7 @@ router.patch('/:id/toggle-availability', async (req, res) => {
     if (!listing) {
       return res.status(404).json({
         success: false,
-        error: 'Hébergement non trouvé'
+        error: 'Élément non trouvé'
       });
     }
 
@@ -470,7 +703,7 @@ router.patch('/:id/toggle-availability', async (req, res) => {
     res.json({
       success: true,
       data: updatedListing,
-      message: `Hébergement ${updatedListing.available ? 'activé' : 'désactivé'} avec succès`
+      message: `${listing.isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} ${updatedListing.available ? 'activé' : 'désactivé'} avec succès`
     });
   } catch (error) {
     console.error('❌ Erreur bascule disponibilité:', error);
@@ -495,7 +728,7 @@ router.patch('/:id/toggle-featured', async (req, res) => {
     if (!listing) {
       return res.status(404).json({
         success: false,
-        error: 'Hébergement non trouvé'
+        error: 'Élément non trouvé'
       });
     }
 
@@ -511,7 +744,7 @@ router.patch('/:id/toggle-featured', async (req, res) => {
     res.json({
       success: true,
       data: updatedListing,
-      message: `Hébergement ${updatedListing.featured ? 'mis en vedette' : 'retiré des vedettes'} avec succès`
+      message: `${listing.isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} ${updatedListing.featured ? 'mis en vedette' : 'retiré des vedettes'} avec succès`
     });
   } catch (error) {
     console.error('❌ Erreur bascule vedette:', error);

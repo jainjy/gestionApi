@@ -683,6 +683,14 @@ model Tourisme {
   featured           Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  
+  // Nouveaux champs pour lieux touristiques
+  isTouristicPlace   Boolean  @default(false)
+  category           String?  // monument, museum, park, etc.
+  openingHours       String?  // "9h-18h, fermé le lundi"
+  entranceFee        String?  // "Gratuit", "10€", "Enfants: 5€"
+  website            String?
+  contactInfo        String?
 
   bookings TourismeBooking[]
 }
