@@ -24,6 +24,7 @@ router.get("/", async (req, res) => {
       popular: plan.popular,
       features: plan.features,
       userTypes: plan.userTypes,
+      truePlanId: plan.id,
     }));
 
     res.json({

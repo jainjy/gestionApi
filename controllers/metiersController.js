@@ -50,6 +50,29 @@ class MetiersController {
       });
     }
   }
+  async getMetiers(req, res) {
+    try {
+      const metiers = await prisma.metier.findMany({
+        include: {
+          services: {
+            include: {
+              service: true,
+            },
+          },
+        },
+        orderBy: {
+          libelle: "asc",
+        },
+      });
+      res.json(metiers);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des métiers:", error);
+      res.status(500).json({
+        message: "Erreur serveur lors de la récupération des métiers",
+        error: error.message,
+      });
+    }
+  }
 
   // Récupérer un métier par son ID
   async getMetierById(req, res) {

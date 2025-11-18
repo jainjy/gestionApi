@@ -285,8 +285,8 @@ router.post("/signup-pro", async (req, res) => {
         lastName: utilisateur.lastName,
         phone: utilisateur.phone,
         role: "professional",
-        userType: utilisateur.userType, // AJOUT: Sauvegarder userType
-        status: "pending_payment", // Statut spécial en attente de paiement
+        userType: utilisateur.userType,
+        status: "pending_payment",
         companyName: utilisateur.companyName || null,
         address: utilisateur.address || null,
         addressComplement: utilisateur.addressComplement || null,
@@ -296,7 +296,7 @@ router.post("/signup-pro", async (req, res) => {
         longitude: utilisateur.longitude ? parseFloat(utilisateur.longitude) : null,
         siret: utilisateur.siret || null,
         commercialName: utilisateur.commercialName || null,
-        metiers: utilisateur.metiers && {
+        metiers: utilisateur.metiers && utilisateur.metiers.length > 0 && {
           create: utilisateur.metiers.map((metierId) => ({
             metier: {
               connect: { id: metierId },
