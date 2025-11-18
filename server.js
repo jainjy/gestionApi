@@ -212,7 +212,6 @@ app.use("/api/batiment", require("./routes/batiment"));
 //annonce et transaction
 app.use("/api/anonce", require("./routes/anonce"));
 
-
 //audit
 app.use("/api/add_audit", require("./routes/audit"));
 
@@ -265,7 +264,6 @@ app.use("/api/professional/profile", require("./routes/professional-profile"));
 //pour les estimations immobilières
 app.use("/api/estimation", require("./routes/estimation"));
 
-
 //planning pro
 app.use("/api/planning", require("./routes/PlanningPro"));
 //bienetre
@@ -285,19 +283,16 @@ app.use("/api/media", require("./routes/media"));
 //pour les publicités
 app.use("/api/advertisements", require("./routes/advertisements"));
 
+// 🗺️ AJOUT DES ROUTES MAP (NOUVELLE LIGNE AJOUTÉE)
+app.use("/api/map", require("./routes/map"));
+
 // Ajouter ces routes après les autres routes
 app.use("/api/conversations", require("./routes/conversations"));
 app.use("/api/admin/media", require("./routes/admin-media"));
 
-
-
-
-
-
-
-
 // Routes pour les demandes pro et discussions
 app.use("/api/pro/demandes", require("./routes/proDemandes"));
+
 // Route pour l'upload de fichiers dans les messages
 app.post(
   "/api/upload/message-file",
@@ -329,6 +324,7 @@ app.post(
     }
   }
 );
+
 //pour les documents et contrats types
 app.use("/api/documents", require("./routes/documents"));
 app.use("/api/client/documents", require("./routes/documents-client"));
@@ -380,6 +376,7 @@ app.get("/health", (req, res) => {
       "cart",
       "orders",
       "media",
+      "map", // 🗺️ AJOUT DU SERVICE MAP
     ],
   });
 });
