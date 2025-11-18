@@ -8,7 +8,7 @@ const {
   deleteFromSupabase,
 } = require("../middleware/upload");
 
-// GET /api/documents/mes-documents - Récupérer les documents de l'utilisateur
+// GET /api/client/documents/mes-documents - Récupérer les documents de l'utilisateur
 router.get("/mes-documents", authenticateToken, async (req, res) => {
   try {
     const documents = await prisma.document.findMany({
@@ -33,7 +33,7 @@ router.get("/mes-documents", authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/documents/upload - Uploader un document vers Supabase
+// POST /api/client/documents/upload - Uploader un document vers Supabase
 router.post(
   "/upload",
   authenticateToken,
@@ -134,7 +134,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/documents/:id - Mettre à jour un document
+// PUT /api/client/documents/:id - Mettre à jour un document
 router.put("/:id", authenticateToken, async (req, res) => {
   try {
     const { type, categorie, description, dateExpiration, tags, statut } =
@@ -198,7 +198,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE /api/documents/:id - Supprimer un document
+// DELETE /api/client/documents/:id - Supprimer un document
 router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     const document = await prisma.document.findFirst({
@@ -246,7 +246,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/documents/stats - Statistiques des documents
+// GET /api/client/documents/mes-statistiques - Statistiques des documents
 router.get("/stats/mes-statistiques", authenticateToken, async (req, res) => {
   try {
     const documents = await prisma.document.findMany({
@@ -296,7 +296,7 @@ router.get("/stats/mes-statistiques", authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/documents/upload-multiple - Upload multiple
+// POST /api/client/documents/upload-multiple - Upload multiple
 router.post(
   "/upload-multiple",
   authenticateToken,
@@ -370,5 +370,60 @@ router.post(
     }
   }
 );
+// PUT /api/client/documents/:id - Mettre à jour un document
+router.put("/:id", authenticateToken, async (req, res) => {
+  try {
+    const { nom, description, categorie, dateExpiration, tags, statut } = req.body;
 
+    // Vérifier que le document appartient à l'utilisateur
+    const existingDocument = await prisma.document.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user.id,
+      },
+    });
+
+    if (!existingDocument) {
+      return res.status(404).json({
+        success: false,
+        error: "Document non trouvé",
+      });
+    }
+
+    // Parser les tags
+    let tagsArray = existingDocument.tags;
+    if (tags) {
+      tagsArray = typeof tags === "string" 
+        ? tags.split(",").map(tag => tag.trim()).filter(tag => tag)
+        : tags;
+    }
+
+    const document = await prisma.document.update({
+      where: {
+        id: req.params.id,
+      },
+      data: {
+        nom: nom || existingDocument.nom,
+        description: description !== undefined ? description : existingDocument.description,
+        categorie: categorie || existingDocument.categorie,
+        dateExpiration: dateExpiration ? new Date(dateExpiration) : existingDocument.dateExpiration,
+        statut: statut || existingDocument.statut,
+        tags: tagsArray,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json({
+      success: true,
+      data: document,
+      message: "Document mis à jour avec succès",
+    });
+  } catch (error) {
+    console.error("Erreur mise à jour document:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la mise à jour du document",
+    });
+  }
+});
 module.exports = router;

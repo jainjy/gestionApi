@@ -288,14 +288,6 @@ app.use("/api/advertisements", require("./routes/advertisements"));
 // Ajouter ces routes après les autres routes
 app.use("/api/conversations", require("./routes/conversations"));
 app.use("/api/admin/media", require("./routes/admin-media"));
-
-
-
-
-
-
-
-
 // Routes pour les demandes pro et discussions
 app.use("/api/pro/demandes", require("./routes/proDemandes"));
 // Route pour l'upload de fichiers dans les messages
