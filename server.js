@@ -99,7 +99,6 @@ const limiter = rateLimit({
   },
 });
 
-app.use(bodyParser.json());
 app.use(cors);
 // Configure Helmet with less restrictive settings
 app.use(
@@ -122,10 +121,9 @@ app.use(
   })
 );
 app.use("/api", limiter);
-app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
-app.use(express.urlencoded({ extended: true }));
-
+app.use(express.json({ limit: "50mb" })); // Augmenter à 50MB pour être large
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // 🔥 CORRECTION CRITIQUE: Middleware CORS très permissif pour les fichiers média
 app.use("/media", (req, res, next) => {
   // Headers CORS très permissifs pour les fichiers média
@@ -212,7 +210,6 @@ app.use("/api/batiment", require("./routes/batiment"));
 //annonce et transaction
 app.use("/api/anonce", require("./routes/anonce"));
 
-
 //audit
 app.use("/api/add_audit", require("./routes/audit"));
 
@@ -264,7 +261,6 @@ app.use(
 app.use("/api/professional/profile", require("./routes/professional-profile"));
 //pour les estimations immobilières
 app.use("/api/estimation", require("./routes/estimation"));
-
 
 //planning pro
 app.use("/api/planning", require("./routes/PlanningPro"));
