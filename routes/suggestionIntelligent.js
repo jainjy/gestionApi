@@ -229,7 +229,7 @@ router.post("/activity/batch", authenticateToken, activityLimiter, async (req, r
           data: { 
             userId, 
             entityType, 
-            entityId, 
+            entityId: String(150),
             action, 
             duration,
             searchQuery,
@@ -290,7 +290,7 @@ router.post("/activity", authenticateToken, activityLimiter, async (req, res) =>
       data: { 
         userId, 
         entityType, 
-        entityId, 
+        entityId: String(150),
         action, 
         duration,
         searchQuery,
