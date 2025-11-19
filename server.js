@@ -258,6 +258,7 @@ app.use("/api/professional/services", require("./routes/professional-services"))
 app.use("/api/agenda", require("./routes/agenda"));
 app.use("/api/batiment", require("./routes/batiment"));
 app.use("/api/anonce", require("./routes/anonce"));
+app.use('/api/produits-naturels', require("./routes/produits-naturels"));
 
 //audit
 app.use("/api/add_audit", require("./routes/audit"));
