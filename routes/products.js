@@ -124,6 +124,121 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
+// Dans votre route GET /api/products 
+router.get('/all', async (req, res) => {
+  try {
+    const { 
+      search, 
+      category, 
+      status,
+      featured,
+      minPrice,
+      maxPrice,
+      productType, 
+      page = 1,
+      limit = 20
+    } = req.query;
+
+    // Construire les filtres
+    const where = {};
+
+    // Filtres classiques
+    if (status && status !== 'Tous') where.status = status;
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { category: { contains: search, mode: 'insensitive' } },
+        { subcategory: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    if (category && category !== 'Toutes') where.category = category;
+    if (featured !== undefined) where.featured = featured === 'true';
+    if (productType) where.productType = productType;
+
+    if (minPrice || maxPrice) {
+      where.price = {};
+      if (minPrice) where.price.gte = parseFloat(minPrice);
+      if (maxPrice) where.price.lte = parseFloat(maxPrice);
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: {
+          User: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              companyName: true,
+              phone: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit)
+      }),
+      prisma.product.count({ where })
+    ]);
+
+    const formattedProducts = products.map(product => ({
+      id: product.id,
+      name: product.name,
+      description: product.description,
+      category: product.category,
+      subcategory: product.subcategory,
+      productType: product.productType,
+      price: product.price,
+      comparePrice: product.comparePrice,
+      cost: product.cost,
+      sku: product.sku,
+      barcode: product.barcode,
+      trackQuantity: product.trackQuantity,
+      quantity: product.quantity,
+      lowStock: product.lowStock,
+      weight: product.weight,
+      dimensions: product.dimensions,
+      images: product.images || [],
+      status: product.status,
+      featured: !!product.featured,
+      visibility: product.visibility,
+      seoTitle: product.seoTitle,
+      seoDescription: product.seoDescription,
+      vendor: {
+        id: product.User?.id || null,
+        firstName: product.User?.firstName || null,
+        lastName: product.User?.lastName || null,
+        companyName: product.User?.companyName || null,
+        phone: product.User?.phone || null,
+        email: product.User?.email || null
+      },
+      createdAt: product.createdAt?.toISOString() || null,
+      updatedAt: product.updatedAt?.toISOString() || null,
+      publishedAt: product.publishedAt?.toISOString() || null
+    }));
+
+    res.json({
+      products: formattedProducts,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des produits:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Route pour les statistiques des produits
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
