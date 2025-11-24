@@ -136,10 +136,10 @@ router.post('/tourism-image', authenticateToken, upload.single('file'), async (r
   }
 })
 
-// TEMPORAIRE : Enlevez authenticateToken pour tester
-router.post('/tourism-multiple', upload.array('files', 10), async (req, res) => {
+// POST /api/upload/tourism-multiple - Upload multiple images for tourism
+router.post('/tourism-multiple', authenticateToken, upload.array('files', 10), async (req, res) => {
   try {
-    console.log('📨 Upload multiple reçu - Test sans auth');
+    console.log('📨 Upload multiple reçu');
     
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
@@ -148,26 +148,41 @@ router.post('/tourism-multiple', upload.array('files', 10), async (req, res) => 
       });
     }
 
-    // Réponse simulée pour test
-    const results = req.files.map((file, index) => ({
-      success: true,
-      url: `https://picsum.photos/800/600?random=${index}`,
-      fileName: file.originalname,
-      originalName: file.originalname,
-      size: file.size
-    }));
+    const results = [];
+    
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      try {
+        const uploadResult = await uploadToSupabase(file, 'tourism-images');
+        results.push({
+          success: true,
+          url: uploadResult.url,
+          fileName: uploadResult.fileName,
+          originalName: file.originalname,
+          size: file.size
+        });
+      } catch (fileError) {
+        console.error(`Erreur upload fichier ${i}:`, fileError);
+        results.push({
+          success: false,
+          fileName: file.originalname,
+          error: fileError.message
+        });
+      }
+    }
 
+    const successCount = results.filter(r => r.success).length;
     res.json({
-      success: true,
+      success: successCount === results.length,
       results: results,
-      message: `${req.files.length} fichiers testés avec succès`
+      message: `${successCount}/${req.files.length} fichiers uploadés avec succès`
     });
 
   } catch (error) {
-    console.error('❌ Erreur upload test:', error);
+    console.error('❌ Erreur upload:', error);
     res.status(500).json({
       success: false,
-      error: 'Erreur test: ' + error.message
+      error: 'Erreur: ' + error.message
     });
   }
 });
