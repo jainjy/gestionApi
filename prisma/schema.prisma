@@ -383,6 +383,9 @@ model Product {
   brand           String?
   expiryDate      DateTime?
   foodCategory    String?
+  isVegan       Boolean?  @default(false)
+  isVegetarian  Boolean?  @default(false)
+  healthScore   Int?      @default(0) // Score santé de 1 à 10
   isOrganic       Boolean?  @default(false)
   isPerishable    Boolean?  @default(false)
   nutritionalInfo Json?
@@ -392,7 +395,10 @@ model Product {
   unit            String?
 
   User User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+   
+  @@index([isVegan])
+  @@index([isVegetarian])
+  @@index([healthScore])
   @@index([userId])
   @@index([category])
   @@index([status])
