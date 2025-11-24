@@ -306,6 +306,7 @@ model Property {
   hasPool         Boolean?               @default(false)
   hasTerrace      Boolean?               @default(false)
   listingType     String?                @default("sale")
+  isPSLA          Boolean?               @default(false)
   metaDescription String?
   metaTitle       String?
   slug            String?                @unique
