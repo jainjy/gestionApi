@@ -85,6 +85,7 @@ model User {
   Appointment              Appointment[]
   orders                   Order[]
   messagesEnvoyes          Message[]                 @relation("MessageExpediteur")
+  messagesRecus            Message[]                 @relation("MessageReceiver")
   conversationsCrees       Conversation[]            @relation("ConversationCreateur")
   conversationsParticipees ConversationParticipant[]
   devisRecus               Devis[]                   @relation("DevisClient")
@@ -249,6 +250,7 @@ model Message {
   id             String         @id @default(uuid())
   conversationId String
   expediteurId   String
+  receiverId     String?
   contenu        String
   type           MessageType    @default(TEXT)
   urlFichier     String?
@@ -261,9 +263,11 @@ model Message {
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   expediteur   User         @relation("MessageExpediteur", fields: [expediteurId], references: [id], onDelete: Cascade)
+  receiver     User?        @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([expediteurId])
+  @@index([receiverId])
   @@index([createdAt])
   @@index([evenementType])
 }
