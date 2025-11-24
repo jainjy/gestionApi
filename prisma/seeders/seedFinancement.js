@@ -39,7 +39,7 @@ async function main() {
     ]
   });
 
-  // Services d'assurance
+  // Services d'assurance (10 assurances au total)
   const assurances = await prisma.assuranceService.createMany({
     data: [
       {
@@ -89,6 +89,39 @@ async function main() {
         icon: "Heart",
         obligatoire: false,
         public: "Entreprises & Particuliers"
+      },
+      // NOUVELLES ASSURANCES AJOUTÉES
+      {
+        nom: "Garantie Loyer Impayé",
+        description: "Protection contre les impayés de loyers",
+        details: "Couverture des loyers impayés et des frais de contentieux",
+        icon: "Shield",
+        obligatoire: false,
+        public: "Propriétaires bailleurs"
+      },
+      {
+        nom: "Assurance Voiture",
+        description: "Protection complète pour votre véhicule",
+        details: "Tous risques, au tiers, assistance routière",
+        icon: "Car",
+        obligatoire: true,
+        public: "Propriétaires de véhicules"
+      },
+      {
+        nom: "Assurance Voyage",
+        description: "Protection lors de vos déplacements",
+        details: "Annulation, rapatriement, frais médicaux à l'étranger",
+        icon: "Plane",
+        obligatoire: false,
+        public: "Voyageurs"
+      },
+      {
+        nom: "GFA",
+        description: "Garantie des Fonctions d'Architecte",
+        details: "Protection juridique pour les architectes",
+        icon: "FileText",
+        obligatoire: true,
+        public: "Architectes"
       }
     ]
   });
