@@ -1,0 +1,112 @@
+const express = require("express");
+const router = express.Router();
+const { prisma } = require("../lib/db");
+const nodemailer = require("nodemailer");
+
+// ================= ANALYSE =================
+async function generateReport() {
+
+  // TOP 3 PRODUITS
+  const topProducts = await prisma.product.findMany({
+    orderBy: [
+      { viewCount: "desc" },
+      { clickCount: "desc" },
+      { purchaseCount: "desc" }
+    ],
+    take: 3
+  });
+
+  // TOP 3 PROPERTIES
+  const properties = await prisma.property.findMany({
+    include: { favorites: true }
+  });
+
+  const topProperties = properties
+    .map(p => ({
+      ...p,
+      score: (p.views || 0) + (p.favorites.length * 2)
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+
+  // TOP 3 TOURISME
+  const tourisms = await prisma.tourisme.findMany({
+    include: { bookings: true }
+  });
+
+  const topTourisme = tourisms
+    .map(t => ({
+      ...t,
+      score: (t.rating * 2) + t.reviewCount + t.bookings.length
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+
+  return { topProducts, topProperties, topTourisme };
+}
+
+
+// ================= EMAIL =================
+async function sendEmail(report) {
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD
+    }
+  });
+
+  const html = `
+    <h2>📊 Rapport Popularité SERVO</h2>
+
+    <h3>🔥 Top 3 Produits</h3>
+    <ul>
+      ${report.topProducts.map(p => `<li>${p.name} </li>`).join("")}
+    </ul>
+
+    <h3>🏠 Top 3 Propriétés</h3>
+    <ul>
+      ${report.topProperties.map(p => `<li>${p.title} - Vues: ${p.views}</li>`).join("")}
+    </ul>
+
+    <h3>🌍 Top 3 Tourisme</h3>
+    <ul>
+      ${report.topTourisme.map(t => `<li>${t.title} - Note: ${t.rating}</li>`).join("")}
+    </ul>
+  `;
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM,
+    to: process.env.RESUME_EMAIL,
+    subject: "📈 TOP 3 Populaires - SERVO",
+    html
+  });
+}
+
+
+// ================= ENDPOINT =================
+router.get("/analyse-popularite", async (req, res) => {
+  try {
+    const report = await generateReport();
+    await sendEmail(report);
+
+    res.json({
+      success: true,
+      message: "Analyse effectuée + Email envoyé ✅",
+      data: report
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur analyse popularité",
+      error: error.message
+    });
+  }
+});
+
+module.exports = router;
