@@ -262,6 +262,8 @@ app.use('/api/produits-naturels', require("./routes/produits-naturels"));
 
 //rapport 
 app.use("/api/report", require("./routes/report"));
+//offres exclusives
+app.use("/api/offres-exclusives", require("./routes/offres-exclusives"));
 //audit
 app.use("/api/add_audit", require("./routes/audit"));
 app.use("/api/mail", require("./routes/mail"));

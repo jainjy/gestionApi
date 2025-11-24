@@ -530,6 +530,7 @@ router.post("/:demandeId/signer-devis", authenticateToken, async (req, res) => {
       data: {
         statut: "assignée",
         demandeAcceptee: true,
+        artisanId: artisanId,
       },
     });
 
