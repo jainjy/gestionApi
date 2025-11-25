@@ -116,10 +116,12 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/admin/tourisme/accommodations - Récupérer uniquement les hébergements
-router.get('/accommodations', async (req, res) => {
+router.get('/accommodations', authenticateToken, async (req, res) => {
   try {
     console.log('🏨 Requête hébergements reçue');
-    
+
+    const user = req.user; // Récupération de l'utilisateur connecté
+
     const {
       page = 1,
       limit = 12,
@@ -131,11 +133,18 @@ router.get('/accommodations', async (req, res) => {
     } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
+    // Filtre de base
     const where = {
       isTouristicPlace: false
     };
 
+    // Filtre par rôle : si professional, ne récupérer que ses hébergements
+    if (user.role === 'professional') {
+      where.idPrestataire = user.id;
+    }
+
+    // Filtres additionnels
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
@@ -202,91 +211,38 @@ router.get('/accommodations', async (req, res) => {
     });
   }
 });
-
+ 
 // GET /api/admin/tourisme/places - Récupérer uniquement les lieux touristiques
-router.get('/places', async (req, res) => {
+router.get('/places', authenticateToken, async (req, res) => {
   try {
-    console.log('🏛️ Requête lieux touristiques reçue');
-    
-    const {
-      page = 1,
-      limit = 12,
-      search,
-      category,
-      city,
-      available,
-      featured
-    } = req.query;
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    const where = {
+    const user = req.user;
+    let whereCondition = {
       isTouristicPlace: true
     };
 
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ];
+    if (user.role === 'professional') {
+      whereCondition.idPrestataire = user.id;
     }
 
-    if (category) {
-      where.category = category;
-    }
-
-    if (city) {
-      where.city = { contains: city, mode: 'insensitive' };
-    }
-
-    if (available !== undefined) {
-      where.available = available === 'true';
-    }
-
-    if (featured !== undefined) {
-      where.featured = featured === 'true';
-    }
-
-    const [places, total] = await Promise.all([
-      prisma.tourisme.findMany({
-        where,
-        skip,
-        take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
-        include: {
-          bookings: {
-            select: {
-              id: true,
-              status: true,
-              checkIn: true,
-              checkOut: true
-            }
+    const lieux = await prisma.tourisme.findMany({
+      where: whereCondition,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        prestataire: {
+          select: {
+            firstName: true,
+            lastName: true
           }
         }
-      }),
-      prisma.tourisme.count({ where })
-    ]);
-
-    console.log(`✅ ${places.length} lieux touristiques trouvés`);
-
-    res.json({
-      success: true,
-      data: places,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
       }
     });
 
+    res.json({ success: true, data: lieux });
+
   } catch (error) {
-    console.error('❌ Erreur récupération lieux touristiques:', error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la récupération des lieux touristiques',
-      details: error.message
+      error: "Erreur serveur"
     });
   }
 });
@@ -388,7 +344,7 @@ router.get('/stats', async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     console.log('➕ Requête POST admin reçue pour /api/admin/tourisme', req.body);
-    
+
     const {
       title,
       type,
@@ -424,27 +380,16 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    if (!isTouristicPlace && (!type || !price || !maxGuests)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Pour les hébergements: type, price, maxGuests sont obligatoires'
-      });
-    }
-
-    if (isTouristicPlace && !category) {
-      return res.status(400).json({
-        success: false,
-        error: 'Pour les lieux touristiques: category est obligatoire'
-      });
-    }
+    // ✅ Récupération ID utilisateur connecté
+    const idPrestataire = req.user.id;
 
     const idUnique = isTouristicPlace ? `PL${Date.now()}` : `T${Date.now()}`;
-    const idPrestataire = `P${Date.now()}`;
 
     const newListing = await prisma.tourisme.create({
       data: {
         idUnique,
-        idPrestataire,
+        idPrestataire: idPrestataire, // ✅ LIEN DIRECT AVEC USER
+
         title,
         type: isTouristicPlace ? 'touristic_place' : type,
         category: isTouristicPlace ? category : null,
@@ -452,7 +397,7 @@ router.post('/', authenticateToken, async (req, res) => {
         city,
         lat: lat ? parseFloat(lat) : 0,
         lng: lng ? parseFloat(lng) : 0,
-        images: Array.isArray(images) ? images : (images ? [images] : []),
+        images: Array.isArray(images) ? images : [],
         amenities: Array.isArray(amenities) ? amenities : [],
         maxGuests: isTouristicPlace ? 1 : parseInt(maxGuests),
         description: description || '',
@@ -466,50 +411,34 @@ router.post('/', authenticateToken, async (req, res) => {
         rating: parseFloat(rating),
         reviewCount: parseInt(reviewCount),
         isTouristicPlace: Boolean(isTouristicPlace),
-        openingHours: openingHours || '',
-        entranceFee: entranceFee || '',
-        website: website || '',
-        contactInfo: contactInfo || ''
+        openingHours,
+        entranceFee,
+        website,
+        contactInfo
       },
       include: {
-        bookings: true
+        prestataire: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        }
       }
-    });
-
-    console.log(`✅ ${isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} créé: ${newListing.id}`);
-
-    // 🔔 Création de la notification pour l'utilisateur connecté
-    const io = req.app.get("io");
-    await createNotification({
-      userId: req.user.id,
-      type: "success",
-      title: isTouristicPlace ? "Nouveau lieu touristique ajouté" : "Nouvel hébergement ajouté",
-      message: `${isTouristicPlace ? 'Le lieu touristique' : 'L\'hébergement'} "${title}" a été ajouté avec succès.`,
-      relatedEntity: "tourisme",
-      relatedEntityId: newListing.id,
-      io
     });
 
     res.status(201).json({
       success: true,
       data: newListing,
-      message: `${isTouristicPlace ? 'Lieu touristique' : 'Hébergement'} créé avec succès`
+      message: "Tourisme ajouté avec succès"
     });
 
   } catch (error) {
     console.error('❌ Erreur création admin tourisme:', error);
-    
-    if (error.code === 'P2002') {
-      return res.status(400).json({
-        success: false,
-        error: 'ID unique déjà utilisé'
-      });
-    }
-
     res.status(500).json({
       success: false,
-      error: `Erreur lors de la création ${req.body.isTouristicPlace ? 'du lieu touristique' : 'de l\'hébergement'}`,
-      details: error.message
+      error: "Erreur serveur"
     });
   }
 });
@@ -756,4 +685,14 @@ router.patch('/:id/toggle-featured', async (req, res) => {
   }
 });
 
+router.get('/mes-annonces', authenticateToken, async (req, res) => {
+  const data = await prisma.tourisme.findMany({
+    where: {
+      idPrestataire: req.user.id
+    }
+  });
+
+  res.json({ success: true, data });
+});
+ 
 module.exports = router;

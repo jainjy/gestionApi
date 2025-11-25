@@ -116,6 +116,9 @@ model User {
   courses Course[]   @relation("UserCourses")
   investmentRequests       InvestmentRequest[]
 
+  tourismes Tourisme[]
+   volsCrees       Flight[] @relation("PrestataireVol")
+  volsReserves    Flight[] @relation("ReservationVol")
 
   @@index([email])
   @@index([role])
@@ -675,7 +678,9 @@ model Order {
 model Tourisme {
   id                 String   @id @default(uuid())
   idUnique           String   @unique
-  idPrestataire      String   @unique
+    idPrestataire      String
+  prestataire        User     @relation(fields: [idPrestataire], references: [id])
+
   title              String
   type               String
   price              Float
@@ -1290,4 +1295,41 @@ model ReportDestination {
   updatedAt DateTime @updatedAt
 
   @@map("report_destinations")
+}
+
+//compganie aerrien 
+
+model Flight {
+  id                String   @id @default(uuid())
+
+  // Prestataire (professionnel qui ajoute le vol)
+  idPrestataire     String
+  prestataire       User     @relation("PrestataireVol", fields: [idPrestataire], references: [id])
+
+  compagnie         String
+  numeroVol         String
+
+  departVille       String
+  departDateHeure   DateTime   // ✅ Date + heure de départ
+
+  arriveeVille      String
+  arriveeDateHeure  DateTime   // ✅ Date + heure d'arrivée
+
+  duree             String
+  escales           Int
+  prix              Float
+  classe            String
+
+  services          String[]   // repas, baggage, wifi...
+
+  image             String?    // ✅ URL retournée par Supabase
+
+  // Réservation
+  idUser            String?
+  userReservation   User?      @relation("ReservationVol", fields: [idUser], references: [id])
+
+  nbrPersonne       Int?       // nombre de personnes
+  place             String?    // siège : ex A12, B3...
+
+  createdAt         DateTime   @default(now())
 }
