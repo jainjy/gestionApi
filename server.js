@@ -291,6 +291,7 @@ app.use("/api/financement", require("./routes/financement"));
 app.use("/api/appointment/", require("./routes/appointment"));
 app.use("/api/subscription-plans", require("./routes/subscriptionPlanRoutes"));
 app.use("/api/subscriptions", require("./routes/subscriptions"));
+app.use("/api/admin/subscriptions", require("./routes/admin-subscriptions"));
 app.use("/api/demande-actions", require("./routes/demande-actions"));
 app.use("/api/tourisme", require("./routes/tourisme"));
 app.use("/api/tourisme-bookings", require("./routes/tourisme-bookings"));
