@@ -111,6 +111,9 @@ model User {
   ContratType              ContratType[]
   DocumentArchive          DocumentArchive[]
 
+  // NOUVELLE RELATION
+  investmentRequests       InvestmentRequest[]
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -392,7 +395,6 @@ model Product {
   isPerishable    Boolean?  @default(false)
   nutritionalInfo Json?
   origin          String?
-  productType     String?   @default("general")
   storageTips     String?
   unit            String?
 
@@ -403,7 +405,6 @@ model Product {
   @@index([status])
   @@index([featured])
   @@index([createdAt])
-  @@index([productType])
   @@index([foodCategory])
 }
 
@@ -1151,4 +1152,32 @@ model Notification {
   @@index([createdAt])
   @@index([read])
   @@index([relatedEntity])
+}
+
+// ======================
+// NOUVEAU MODÈLE: DEMANDES D'INVESTISSEMENT INTERNATIONAL
+// ======================
+model InvestmentRequest {
+  id                  String   @id @default(uuid())
+  nom                 String
+  email               String
+  telephone           String?
+  pays_interet        String
+  type_investissement String
+  budget              String?
+  message             String?
+  status              String   @default("en_attente")
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  // Relation avec l'utilisateur (optionnelle - pour les utilisateurs connectés)
+  userId              String?
+  user                User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("investment_requests")
+  @@index([email])
+  @@index([status])
+  @@index([created_at])
+  @@index([pays_interet])
+  @@index([userId])
 }
