@@ -401,7 +401,6 @@ model Product {
   isPerishable    Boolean?  @default(false)
   nutritionalInfo Json?
   origin          String?
-  productType     String?   @default("general")
   storageTips     String?
   unit            String?
 
@@ -415,7 +414,6 @@ model Product {
   @@index([status])
   @@index([featured])
   @@index([createdAt])
-  @@index([productType])
   @@index([foodCategory])
 }
 

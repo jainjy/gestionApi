@@ -262,6 +262,9 @@ app.use('/api/produits-naturels', require("./routes/produits-naturels"));
 app.use('/api/courses', require("./routes/courses"));
 app.use('/api/reservation-cours', require("./routes/reservationCours"));
 
+// AJOUT: Route investissement international
+app.use("/api/investissement", require("./routes/investment"));
+
 //rapport 
 app.use("/api/report", require("./routes/report"));
 //offres exclusives
@@ -416,7 +419,8 @@ app.get("/health", (req, res) => {
       "media",
       "notifications",
       "websocket",
-      "map", // 🗺️ AJOUT DU SERVICE MAP
+      "map",
+      "investissement" // 🆕 AJOUT DU SERVICE INVESTISSEMENT
     ],
     websocket: {
       connectedClients: io.engine.clientsCount,
@@ -435,7 +439,8 @@ app.use("*", (req, res) => {
       "/websocket-test",
       "/api/notifications/user/:userId",
       "/api/auth/*",
-      "/api/users/*"
+      "/api/users/*",
+      "/api/investissement/*" // 🆕 AJOUT DE LA ROUTE INVESTISSEMENT
     ]
   });
 });
@@ -457,4 +462,5 @@ server.listen(PORT, async () => {
   console.log(`🏥 Route santé: http://localhost:${PORT}/health`);
   console.log(`🧪 Test WebSocket: http://localhost:${PORT}/websocket-test`);
   console.log(`📨 Notifications: http://localhost:${PORT}/api/notifications/user/:userId`);
+  console.log(`🌍 Investissement: http://localhost:${PORT}/api/investissement/demande`); // 🆕 AJOUT
 });
