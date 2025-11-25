@@ -46,13 +46,46 @@ router.patch("/:id", authenticateToken, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status, autoRenew, endDate } = req.body;
 
+    // Validation de la date d'expiration
+    if (endDate) {
+      const endDateObj = new Date(endDate);
+      if (isNaN(endDateObj.getTime())) {
+        return res.status(400).json({ error: "Date d'expiration invalide" });
+      }
+
+      // S'assurer que la date d'expiration est dans le futur
+      if (endDateObj <= new Date()) {
+        return res
+          .status(400)
+          .json({ error: "La date d'expiration doit être dans le futur" });
+      }
+    }
+
+    const updateData = {
+      ...(status && { status }),
+      ...(autoRenew !== undefined && { autoRenew }),
+      ...(endDate && { endDate: new Date(endDate) }),
+    };
+
+    // Si le statut devient actif et qu'aucune date d'expiration n'est fournie,
+    // définir une date d'expiration par défaut (30 jours)
+    if (status === "active" && !endDate) {
+      const existingSubscription = await prisma.subscription.findUnique({
+        where: { id },
+      });
+
+      if (
+        existingSubscription &&
+        (!existingSubscription.endDate ||
+          existingSubscription.endDate <= new Date())
+      ) {
+        updateData.endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // +30 jours
+      }
+    }
+
     const updatedSubscription = await prisma.subscription.update({
       where: { id },
-      data: {
-        ...(status && { status }),
-        ...(autoRenew !== undefined && { autoRenew }),
-        ...(endDate && { endDate: new Date(endDate) }),
-      },
+      data: updateData,
       include: {
         user: {
           select: {
