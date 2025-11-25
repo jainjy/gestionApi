@@ -113,7 +113,8 @@ model User {
   reservationsCours ReservationCours[]
 
   // relation pour coursdomicil
-courses Course[]   @relation("UserCourses")
+  courses Course[]   @relation("UserCourses")
+  investmentRequests       InvestmentRequest[]
 
 
   @@index([email])
@@ -1251,4 +1252,44 @@ enum StatutReservation {
   confirmee
   annulee
   terminee
+}
+
+// ======================
+// NOUVEAU MODÈLE: DEMANDES D'INVESTISSEMENT INTERNATIONAL
+// ======================
+model InvestmentRequest {
+  id                  String   @id @default(uuid())
+  nom                 String
+  email               String
+  telephone           String?
+  pays_interet        String
+  type_investissement String
+  budget              String?
+  message             String?
+  status              String   @default("en_attente")
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  // Relation avec l'utilisateur (optionnelle - pour les utilisateurs connectés)
+  userId              String?
+  user                User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("investment_requests")
+  @@index([email])
+  @@index([status])
+  @@index([created_at])
+  @@index([pays_interet])
+  @@index([userId])
+}
+// ======================
+// DESTINATIONS RAPPORT 
+// ======================
+model ReportDestination {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("report_destinations")
 }
