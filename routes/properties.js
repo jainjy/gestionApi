@@ -70,6 +70,81 @@ router.get('/', async (req, res) => {
   }
 })
 
+// GET /api/properties/psla - Récupérer les propriétés éligibles au Prêt Social Location Accession
+router.get('/psla', async (req, res) => {
+  try {
+    const {
+      status = 'for_sale',
+      city,
+      minPrice,
+      maxPrice,
+      type,
+      listingType = 'sale',
+      search,
+      limit = 20
+    } = req.query;
+
+    const where = { 
+      isActive: true,
+      isPSLA: true // Filtrer uniquement les propriétés PSLA
+    };
+    
+    if (status) where.status = status;
+    if (city) where.city = { contains: city, mode: 'insensitive' };
+    if (type) where.type = type;
+    if (listingType) where.listingType = listingType;
+    
+    if (minPrice || maxPrice) {
+      where.price = {};
+      if (minPrice) where.price.gte = parseFloat(minPrice);
+      if (maxPrice) where.price.lte = parseFloat(maxPrice);
+    }
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { address: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    const properties = await prisma.property.findMany({
+      where,
+      include: { 
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }, 
+        favorites: true 
+      },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit)
+    });
+
+    // Mapper isPSLA vers socialLoan pour le frontend
+    const propertiesWithSocialLoan = properties.map(property => ({
+      ...property,
+      socialLoan: property.isPSLA || false
+    }));
+
+    res.json({
+      success: true,
+      count: propertiesWithSocialLoan.length,
+      data: propertiesWithSocialLoan
+    });
+  } catch (error) {
+    console.error('Failed to fetch PSLA properties:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch PSLA properties',
+      message: error.message 
+    });
+  }
+});
 // POST /api/properties - Créer une nouvelle propriété
 router.post('/', authenticateToken, async (req, res) => {
   try {
@@ -703,81 +778,6 @@ router.get('/professional/all', authenticateToken, async (req, res) => {
   }
 })
 
-// GET /api/properties/psla - Récupérer les propriétés éligibles au Prêt Social Location Accession
-router.get('/psla', async (req, res) => {
-  try {
-    const {
-      status = 'for_sale',
-      city,
-      minPrice,
-      maxPrice,
-      type,
-      listingType = 'sale',
-      search,
-      limit = 20
-    } = req.query;
-
-    const where = { 
-      isActive: true,
-      isPSLA: true // Filtrer uniquement les propriétés PSLA
-    };
-    
-    if (status) where.status = status;
-    if (city) where.city = { contains: city, mode: 'insensitive' };
-    if (type) where.type = type;
-    if (listingType) where.listingType = listingType;
-    
-    if (minPrice || maxPrice) {
-      where.price = {};
-      if (minPrice) where.price.gte = parseFloat(minPrice);
-      if (maxPrice) where.price.lte = parseFloat(maxPrice);
-    }
-
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { address: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } }
-      ];
-    }
-
-    const properties = await prisma.property.findMany({
-      where,
-      include: { 
-        owner: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }, 
-        favorites: true 
-      },
-      orderBy: { createdAt: 'desc' },
-      take: parseInt(limit)
-    });
-
-    // Mapper isPSLA vers socialLoan pour le frontend
-    const propertiesWithSocialLoan = properties.map(property => ({
-      ...property,
-      socialLoan: property.isPSLA || false
-    }));
-
-    res.json({
-      success: true,
-      count: propertiesWithSocialLoan.length,
-      data: propertiesWithSocialLoan
-    });
-  } catch (error) {
-    console.error('Failed to fetch PSLA properties:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch PSLA properties',
-      message: error.message 
-    });
-  }
-});
 
 
 module.exports = router
