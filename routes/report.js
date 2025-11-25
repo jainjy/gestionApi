@@ -5,7 +5,6 @@ const nodemailer = require("nodemailer");
 
 // ================= ANALYSE =================
 async function generateReport() {
-
   // TOP 3 PRODUITS
   const topProducts = await prisma.product.findMany({
     orderBy: [
@@ -45,10 +44,8 @@ async function generateReport() {
   return { topProducts, topProperties, topTourisme };
 }
 
-
 // ================= EMAIL =================
-async function sendEmail(report) {
-
+async function sendEmail(report, recipientEmail) {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: process.env.SMTP_PORT,
@@ -80,22 +77,41 @@ async function sendEmail(report) {
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM,
-    to: process.env.RESUME_EMAIL,
+    to: recipientEmail, // Utilise l'email reçu du frontend
     subject: "📈 TOP 3 Populaires - SERVO",
     html
   });
 }
 
-
 // ================= ENDPOINT =================
-router.get("/analyse-popularite", async (req, res) => {
+// Changé en POST pour accepter le body avec l'email
+router.post("/analyse-popularite", async (req, res) => {
   try {
+    const { email } = req.body;
+    
+    // Validation de l'email
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "L'adresse email est requise"
+      });
+    }
+
+    // Validation basique du format email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: "Format d'email invalide"
+      });
+    }
+
     const report = await generateReport();
-    await sendEmail(report);
+    await sendEmail(report, email.trim()); // Passe l'email au service d'envoi
 
     res.json({
       success: true,
-      message: "Analyse effectuée + Email envoyé ✅",
+      message: `Analyse effectuée + Email envoyé à ${email} ✅`,
       data: report
     });
 

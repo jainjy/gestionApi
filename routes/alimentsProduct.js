@@ -15,6 +15,10 @@ router.get("/", async (req, res) => {
       featured,
       isOrganic,
       isPerishable,
+      isVegan,
+      isVegetarian,
+      minHealthScore,
+      maxHealthScore,
       minPrice,
       maxPrice,
       allergens,
@@ -61,6 +65,20 @@ router.get("/", async (req, res) => {
 
     if (isPerishable !== undefined) {
       where.isPerishable = isPerishable === "true";
+    }
+
+    if (isVegan !== undefined) {
+      where.isVegan = isVegan === "true";
+    }
+
+    if (isVegetarian !== undefined) {
+      where.isVegetarian = isVegetarian === "true";
+    }
+
+    if (minHealthScore || maxHealthScore) {
+      where.healthScore = {};
+      if (minHealthScore) where.healthScore.gte = parseInt(minHealthScore);
+      if (maxHealthScore) where.healthScore.lte = parseInt(maxHealthScore);
     }
 
     if (minPrice || maxPrice) {
@@ -137,6 +155,10 @@ router.get("/", async (req, res) => {
       origin: product.origin,
       brand: product.brand,
       unit: product.unit,
+      // Nouveaux champs pour badges santé
+      isVegan: !!product.isVegan,
+      isVegetarian: !!product.isVegetarian,
+      healthScore: product.healthScore || 0,
       vendor: {
         id: product.User?.id || null,
         firstName: product.User?.firstName || null,
@@ -321,6 +343,10 @@ router.get("/food-category/:foodCategoryName", async (req, res) => {
       unit: product.unit,
       quantity: product.quantity,
       featured: !!product.featured,
+      // Nouveaux champs pour badges santé
+      isVegan: !!product.isVegan,
+      isVegetarian: !!product.isVegetarian,
+      healthScore: product.healthScore || 0,
       vendor: {
         companyName: product.User?.companyName,
       },
@@ -476,6 +502,10 @@ router.get("/featured", async (req, res) => {
       isOrganic: !!product.isOrganic,
       origin: product.origin,
       unit: product.unit,
+      // Nouveaux champs pour badges santé
+      isVegan: !!product.isVegan,
+      isVegetarian: !!product.isVegetarian,
+      healthScore: product.healthScore || 0,
       vendor: {
         companyName: product.User?.companyName,
       },
@@ -544,6 +574,10 @@ router.get("/category/:categoryName", async (req, res) => {
       origin: product.origin,
       unit: product.unit,
       quantity: product.quantity,
+      // Nouveaux champs pour badges santé
+      isVegan: !!product.isVegan,
+      isVegetarian: !!product.isVegetarian,
+      healthScore: product.healthScore || 0,
       vendor: {
         companyName: product.User?.companyName,
       },
@@ -663,6 +697,10 @@ router.get("/:id", async (req, res) => {
       publishedAt: product.publishedAt
         ? product.publishedAt.toISOString()
         : null,
+      // Nouveaux champs pour badges santé
+      isVegan: !!product.isVegan,
+      isVegetarian: !!product.isVegetarian,
+      healthScore: product.healthScore || 0,
     };
 
     res.json(formattedProduct);
@@ -713,6 +751,10 @@ router.post(
         origin,
         brand,
         unit,
+        // Nouveaux champs pour badges santé
+        isVegan,
+        isVegetarian,
+        healthScore,
       } = req.body;
 
       // Générer un slug à partir du nom
@@ -770,6 +812,10 @@ router.post(
           origin: origin || null,
           brand: brand || null,
           unit: unit || null,
+          // Nouveaux champs pour badges santé
+          isVegan: isVegan !== undefined ? isVegan : false,
+          isVegetarian: isVegetarian !== undefined ? isVegetarian : false,
+          healthScore: healthScore !== undefined ? parseInt(healthScore) : 0,
           publishedAt: status === "active" ? new Date() : null,
         },
         include: {
@@ -840,6 +886,10 @@ router.put(
         origin,
         brand,
         unit,
+        // Nouveaux champs pour badges santé
+        isVegan,
+        isVegetarian,
+        healthScore,
       } = req.body;
 
       // Vérifier que le produit existe et que l'utilisateur a les droits
@@ -959,6 +1009,13 @@ router.put(
           origin: origin !== undefined ? origin : existingProduct.origin,
           brand: brand !== undefined ? brand : existingProduct.brand,
           unit: unit !== undefined ? unit : existingProduct.unit,
+          // Nouveaux champs pour badges santé
+          isVegan:
+            isVegan !== undefined ? isVegan : existingProduct.isVegan,
+          isVegetarian:
+            isVegetarian !== undefined ? isVegetarian : existingProduct.isVegetarian,
+          healthScore:
+            healthScore !== undefined ? parseInt(healthScore) : existingProduct.healthScore,
           publishedAt:
             status === "active" && existingProduct.status !== "active"
               ? new Date()

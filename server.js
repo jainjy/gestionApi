@@ -259,6 +259,8 @@ app.use("/api/agenda", require("./routes/agenda"));
 app.use("/api/batiment", require("./routes/batiment"));
 app.use("/api/anonce", require("./routes/anonce"));
 app.use('/api/produits-naturels', require("./routes/produits-naturels"));
+app.use('/api/courses', require("./routes/courses"));
+app.use('/api/reservation-cours', require("./routes/reservationCours"));
 
 //rapport 
 app.use("/api/report", require("./routes/report"));
@@ -288,6 +290,7 @@ app.use("/api/harmonie/", require("./routes/HarmoniePro"));
 app.use("/api/financement", require("./routes/financement"));
 app.use("/api/appointment/", require("./routes/appointment"));
 app.use("/api/subscription-plans", require("./routes/subscriptionPlanRoutes"));
+app.use("/api/subscriptions", require("./routes/subscriptions"));
 app.use("/api/demande-actions", require("./routes/demande-actions"));
 app.use("/api/tourisme", require("./routes/tourisme"));
 app.use("/api/tourisme-bookings", require("./routes/tourisme-bookings"));

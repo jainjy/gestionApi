@@ -58,6 +58,10 @@ const foodProductsData = [
     origin: "France",
     brand: "Fermes Bio de France",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 9,
   },
   {
     name: "Fraises Gariguette",
@@ -91,6 +95,10 @@ const foodProductsData = [
     origin: "Périgord, France",
     brand: "Verger du Sud-Ouest",
     unit: "barquette",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 8,
   },
   {
     name: "Bananes Bio",
@@ -124,6 +132,10 @@ const foodProductsData = [
     origin: "République Dominicaine",
     brand: "Bio Equitable",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 8,
   },
   {
     name: "Carottes Nouvelles Bio",
@@ -157,6 +169,10 @@ const foodProductsData = [
     origin: "Val de Loire, France",
     brand: "Jardins Bio de France",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 9,
   },
   {
     name: "Tomates Anciennes",
@@ -190,6 +206,10 @@ const foodProductsData = [
     origin: "Provence, France",
     brand: "Jardins du Sud",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 8,
   },
   {
     name: "Lait Entier Bio 1L",
@@ -223,6 +243,10 @@ const foodProductsData = [
     origin: "Normandie, France",
     brand: "Fermes Bio Normandes",
     unit: "litre",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 7,
   },
   {
     name: "Yaourt Nature Bio",
@@ -256,6 +280,10 @@ const foodProductsData = [
     origin: "Bretagne, France",
     brand: "Laiterie Bio",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 6,
   },
   {
     name: "Oeufs Frais Bio x6",
@@ -289,6 +317,10 @@ const foodProductsData = [
     origin: "Normandie, France",
     brand: "Fermes Bio",
     unit: "boite",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 6,
   },
   {
     name: "Poulet Fermier Label Rouge",
@@ -322,6 +354,10 @@ const foodProductsData = [
     origin: "Bresse, France",
     brand: "Élevages de Bresse",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: false,
+    healthScore: 5,
   },
   {
     name: "Steak Haché 15% MG",
@@ -355,6 +391,10 @@ const foodProductsData = [
     origin: "France",
     brand: "Boucherie Tradition",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: false,
+    healthScore: 4,
   },
   {
     name: "Saumon Fumé Norvégien",
@@ -388,6 +428,10 @@ const foodProductsData = [
     origin: "Norvège",
     brand: "Fjord Norvégien",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: false,
+    healthScore: 6,
   },
   {
     name: "Riz Basmati Bio 1kg",
@@ -421,6 +465,10 @@ const foodProductsData = [
     origin: "Inde",
     brand: "Terre Bio",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 8,
   },
   {
     name: "Pâtes Spaghetti Bio 500g",
@@ -454,6 +502,10 @@ const foodProductsData = [
     origin: "Italie",
     brand: "Pasta Bio",
     unit: "paquet",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 7,
   },
 
   // ======================
@@ -491,6 +543,10 @@ const foodProductsData = [
     origin: "Boulangerie du Village",
     brand: "Artisans Boulangers",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 6,
   },
   {
     name: "Croissants au Beurre",
@@ -524,6 +580,10 @@ const foodProductsData = [
     origin: "Boulangerie Parisienne",
     brand: "Maison du Croissant",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 4,
   },
   {
     name: "Baguette Tradition",
@@ -557,6 +617,10 @@ const foodProductsData = [
     origin: "Boulangerie du Quartier",
     brand: "Artisans Boulangers",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 6,
   },
   {
     name: "Pain au Chocolat",
@@ -590,6 +654,10 @@ const foodProductsData = [
     origin: "Boulangerie Parisienne",
     brand: "Maison du Croissant",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 4,
   },
   {
     name: "Jambon de Bayonne",
@@ -623,6 +691,10 @@ const foodProductsData = [
     origin: "Pays Basque, France",
     brand: "Salaisons du Sud-Ouest",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: false,
+    healthScore: 5,
   },
   {
     name: "Saucisson Sec Artisanal",
@@ -656,6 +728,10 @@ const foodProductsData = [
     origin: "Ardèche, France",
     brand: "Salaisons Ardéchoises",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: false,
+    healthScore: 4,
   },
   {
     name: "Fromage de Chèvre Frais",
@@ -689,6 +765,10 @@ const foodProductsData = [
     origin: "Périgord, France",
     brand: "Fromagerie du Périgord",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 5,
   },
   {
     name: "Comté AOP 18 mois",
@@ -722,6 +802,10 @@ const foodProductsData = [
     origin: "Jura, France",
     brand: "Fromageries du Jura",
     unit: "kg",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 5,
   },
   {
     name: "Brie de Meaux AOP",
@@ -755,6 +839,10 @@ const foodProductsData = [
     origin: "Île-de-France, France",
     brand: "Fromageries de Brie",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 5,
   },
 
   // ======================
@@ -792,6 +880,10 @@ const foodProductsData = [
     origin: "Bordeaux, France",
     brand: "Château Tradition",
     unit: "bouteille",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 3,
   },
   {
     name: "Sancerre Blanc 2022",
@@ -825,6 +917,10 @@ const foodProductsData = [
     origin: "Loire, France",
     brand: "Domaine des Olivettes",
     unit: "bouteille",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 3,
   },
   {
     name: "Champagne Brut Réserve",
@@ -858,6 +954,10 @@ const foodProductsData = [
     origin: "Champagne, France",
     brand: "Maison Champenoise",
     unit: "bouteille",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 3,
   },
   {
     name: "Rosé de Provence 2023",
@@ -891,6 +991,10 @@ const foodProductsData = [
     origin: "Provence, France",
     brand: "Domaine Provençal",
     unit: "bouteille",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 3,
   },
   {
     name: "Bourgogne Pinot Noir 2020",
@@ -924,6 +1028,10 @@ const foodProductsData = [
     origin: "Bourgogne, France",
     brand: "Domaine Bourguignon",
     unit: "bouteille",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 3,
   },
   {
     name: "Whisky Single Malt 12 ans",
@@ -957,6 +1065,10 @@ const foodProductsData = [
     origin: "Écosse",
     brand: "Highland Distillery",
     unit: "bouteille",
+    // Nouveaux champs
+    isVegan: true,
+    isVegetarian: true,
+    healthScore: 2,
   },
 
   // ======================
@@ -994,6 +1106,10 @@ const foodProductsData = [
     origin: "Préparé sur place",
     brand: "Notre Restaurant",
     unit: "portion",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: false,
+    healthScore: 5,
   },
   {
     name: "Tarte aux Pommes Maison",
@@ -1027,6 +1143,10 @@ const foodProductsData = [
     origin: "Préparé sur place",
     brand: "Notre Restaurant",
     unit: "part",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 4,
   },
   {
     name: "Croque-Monsieur",
@@ -1060,6 +1180,10 @@ const foodProductsData = [
     origin: "Préparé sur place",
     brand: "Notre Restaurant",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: false,
+    healthScore: 4,
   },
   {
     name: "Soupe à l'Oignon Gratinée",
@@ -1093,6 +1217,10 @@ const foodProductsData = [
     origin: "Préparé sur place",
     brand: "Notre Restaurant",
     unit: "portion",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 5,
   },
   {
     name: "Éclair au Chocolat",
@@ -1126,6 +1254,10 @@ const foodProductsData = [
     origin: "Préparé sur place",
     brand: "Notre Restaurant",
     unit: "pièce",
+    // Nouveaux champs
+    isVegan: false,
+    isVegetarian: true,
+    healthScore: 3,
   }
 ];
 
@@ -1234,6 +1366,45 @@ async function main() {
       console.log(`   ${cat.category}: ${cat._count.id} produits`);
     });
 
+    // Résumé par type de régime
+    const veganCount = await prisma.product.count({
+      where: {
+        productType: "food",
+        isVegan: true,
+      },
+    });
+
+    const vegetarianCount = await prisma.product.count({
+      where: {
+        productType: "food",
+        isVegetarian: true,
+      },
+    });
+
+    console.log("\n🌱 Résumé par type de régime:");
+    console.log(`   Produits Vegan: ${veganCount}`);
+    console.log(`   Produits Végétariens: ${vegetarianCount}`);
+    console.log(`   Produits Non-végétariens: ${foodProductsData.length - vegetarianCount}`);
+
+    // Résumé par score santé
+    const healthScoreStats = await prisma.product.groupBy({
+      by: ["healthScore"],
+      where: {
+        productType: "food",
+      },
+      _count: {
+        id: true,
+      },
+      orderBy: {
+        healthScore: "asc",
+      },
+    });
+
+    console.log("\n💚 Résumé par score santé:");
+    healthScoreStats.forEach((stat) => {
+      console.log(`   Score ${stat.healthScore}: ${stat._count.id} produits`);
+    });
+
   } catch (error) {
     console.error("❌ Erreur lors du seeding des produits alimentaires:", error);
     throw error;
@@ -1248,3 +1419,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+  
