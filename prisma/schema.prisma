@@ -116,8 +116,6 @@ model User {
   courses Course[]   @relation("UserCourses")
   investmentRequests       InvestmentRequest[]
 
-  // NOUVELLE RELATION
-  investmentRequests       InvestmentRequest[]
 
   @@index([email])
   @@index([role])
