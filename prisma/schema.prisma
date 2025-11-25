@@ -113,7 +113,8 @@ model User {
   reservationsCours ReservationCours[]
 
   // relation pour coursdomicil
-courses Course[]   @relation("UserCourses")
+  courses Course[]   @relation("UserCourses")
+  investmentRequests       InvestmentRequest[]
 
   // NOUVELLE RELATION
   investmentRequests       InvestmentRequest[]
