@@ -5,6 +5,7 @@ const { prisma } = require("../lib/db");
 const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../lib/email");
 const stripe = require("../utils/stripe");
+const { authenticateToken } = require("../middleware/auth");
 
 // POST /api/auth/login - Connexion
 router.post("/login", async (req, res) => {
@@ -187,19 +188,10 @@ router.post("/signup", async (req, res) => {
     });
   }
 });
-
-// POST /api/auth/signup-pro - Inscription Pro avec paiement
+// POST /api/auth/signup-pro - Inscription Pro sans paiement (essai gratuit 2 mois)
 router.post("/signup-pro", async (req, res) => {
   try {
-    const {
-      utilisateur,
-      amount,
-      planId,
-      currency = "eur",
-      description = "Inscription professionnelle",
-      referenceType = "subscription",
-    } = req.body;
-
+    const { utilisateur,planId } = req.body;
     // Validation des données utilisateur
     if (
       !utilisateur ||
@@ -213,70 +205,18 @@ router.post("/signup-pro", async (req, res) => {
         error: "Tous les champs obligatoires doivent être remplis",
       });
     }
-
-    // Validation du montant
-    if (!amount) {
-      return res.status(400).json({
-        error: "Le montant est requis",
-      });
-    }
-
     // Vérifier si l'email existe déjà
     const existingUser = await prisma.user.findUnique({
       where: { email: utilisateur.email },
     });
-
     if (existingUser) {
       return res.status(409).json({
         error: "Un utilisateur avec cet email existe déjà",
       });
     }
-
-    // Validation et conversion du montant
-    const amountNumber = parseFloat(amount);
-    if (isNaN(amountNumber) || amountNumber <= 0) {
-      return res.status(400).json({
-        error: "Le montant doit être un nombre positif",
-      });
-    }
-
-    // Conversion en centimes pour Stripe
-    const amountInCents = Math.round(amountNumber * 100);
-
-    // Validation du montant minimum Stripe (0.50€)
-    if (amountInCents < 50) {
-      return res.status(400).json({
-        error: "Le montant minimum est de 0.50 €",
-      });
-    }
-
-    console.log("Création PaymentIntent pour inscription pro:", {
-      email: utilisateur.email,
-      amount: amountNumber,
-      amountInCents,
-      currency,
-      description,
-    });
-
-    // Créer le PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountInCents,
-      currency,
-      description,
-      metadata: {
-        userEmail: utilisateur.email,
-        referenceType: referenceType,
-        action: "pro_signup",
-      },
-      automatic_payment_methods: {
-        enabled: true,
-      },
-    });
-
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(utilisateur.password, 12);
-
-    // Créer l'utilisateur avec le statut "pending_payment"
+    // Créer l'utilisateur avec statut "active"
     const user = await prisma.user.create({
       data: {
         email: utilisateur.email,
@@ -286,7 +226,7 @@ router.post("/signup-pro", async (req, res) => {
         phone: utilisateur.phone,
         role: "professional",
         userType: utilisateur.userType,
-        status: "pending_payment",
+        status: "active", // Actif immédiatement
         companyName: utilisateur.companyName || null,
         address: utilisateur.address || null,
         addressComplement: utilisateur.addressComplement || null,
@@ -303,11 +243,6 @@ router.post("/signup-pro", async (req, res) => {
             },
           })),
         },
-        subscriptions: {
-          create: {
-            planId: planId,
-          },
-        },
       },
       include: {
         metiers: {
@@ -317,26 +252,23 @@ router.post("/signup-pro", async (req, res) => {
         },
       },
     });
-
-    // Créer la transaction en base avec statut "created"
-    await prisma.transaction.create({
+    // Créer un abonnement essai gratuit de 2 mois
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + 2);
+    await prisma.subscription.create({
       data: {
         userId: user.id,
-        provider: "stripe",
-        providerId: paymentIntent.id,
-        amount: amountNumber,
-        currency,
-        status: "created",
-        description,
-        referenceType: referenceType,
-        referenceId: user.id.toString(),
-        metadata: paymentIntent.metadata,
+        startDate,
+        endDate,
+        status: "active",
+        autoRenew: false,
+        planId: planId,
       },
     });
-
+    // Générer le token
+    const token = `real-jwt-token-${user.id}`;
     res.json({
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
       user: {
         id: user.id,
         email: user.email,
@@ -348,36 +280,35 @@ router.post("/signup-pro", async (req, res) => {
         userType: user.userType,
         companyName: user.companyName,
         metiers: user.metiers,
+        avatar: user.avatar,
+        address: user.address,
+        siret: user.siret,
+        city: user.city,
       },
-      message: "Utilisateur créé en attente de paiement",
+      token,
+      message: "Utilisateur créé avec essai gratuit de 2 mois",
     });
   } catch (error) {
     console.error("Pro signup error:", error);
-
-    // Gestion spécifique des erreurs Stripe
-    if (error.type === "StripeInvalidRequestError") {
-      return res.status(400).json({
-        error: `Erreur Stripe: ${error.message}`,
-      });
-    }
-
-    // En cas d'erreur, supprimer l'utilisateur créé si nécessaire
-    if (utilisateur && utilisateur.email) {
-      try {
-        await prisma.user.deleteMany({
-          where: {
-            email: utilisateur.email,
-            status: "pending_payment",
-          },
-        });
-      } catch (deleteError) {
-        console.error("Error cleaning up user:", deleteError);
-      }
-    }
-
     res.status(500).json({
       error: "Erreur serveur lors de l'inscription professionnelle",
     });
+  }
+});
+
+// GET /api/auth/subscription/status - Récupérer l'état de l'abonnement (nouveau endpoint)
+router.get("/subscription/status",authenticateToken, async (req, res) => {
+  try {
+
+    const userId = req.user.id;
+    const subscription = await prisma.subscription.findFirst({
+      where: { userId },
+      include: { plan: true },
+    });
+    if (!subscription) return res.status(404).json({ error: "Aucun abonnement trouvé" });
+    res.json(subscription);
+  } catch (error) {
+    res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
