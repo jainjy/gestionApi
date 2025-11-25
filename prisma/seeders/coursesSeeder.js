@@ -1,6 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-
+const { prisma } = require('../../lib/db');
 // Données synchronisées avec les Cours & Formations existants du projet
 const COURSES_DATA = [
   {
@@ -225,10 +223,15 @@ const DEFAULT_AVAILABILITIES = [
   { dayOfWeek: 6, startTime: "10:00", endTime: "16:00", isRecurring: true }
 ];
 
-// ID du professionnel spécifique (celui que vous avez fourni)
-const PROFESSIONAL_ID = "b14f8e76-667b-4c13-9eb5-d24a0f012071";
 
 async function seedCourses() {
+  const user = await prisma.user.findFirst({
+    where: { email: "agence@immo.mg" },
+  });
+  // ID du professionnel spécifique (celui que vous avez fourni)
+  //const PROFESSIONAL_ID = "b14f8e76-667b-4c13-9eb5-d24a0f012071";
+  const PROFESSIONAL_ID = user.id;
+
   try {
     console.log('🌱 Début du seeding des cours à domicile...');
     console.log(`👨‍💼 Utilisation du professionnel ID: ${PROFESSIONAL_ID}`);
@@ -364,4 +367,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { seedCourses, COURSES_DATA, PROFESSIONAL_ID };
+module.exports = { seedCourses, COURSES_DATA };
