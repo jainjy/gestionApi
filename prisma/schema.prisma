@@ -110,6 +110,11 @@ model User {
   Document                 Document[]
   ContratType              ContratType[]
   DocumentArchive          DocumentArchive[]
+  reservationsCours ReservationCours[]
+
+  // relation pour coursdomicil
+courses Course[]   @relation("UserCourses")
+
 
   @@index([email])
   @@index([role])
@@ -388,6 +393,9 @@ model Product {
   brand           String?
   expiryDate      DateTime?
   foodCategory    String?
+  isVegan       Boolean?  @default(false)
+  isVegetarian  Boolean?  @default(false)
+  healthScore   Int?      @default(0) // Score santé de 1 à 10
   isOrganic       Boolean?  @default(false)
   isPerishable    Boolean?  @default(false)
   nutritionalInfo Json?
@@ -397,7 +405,10 @@ model Product {
   unit            String?
 
   User User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+   
+  @@index([isVegan])
+  @@index([isVegetarian])
+  @@index([healthScore])
   @@index([userId])
   @@index([category])
   @@index([status])
@@ -1151,4 +1162,93 @@ model Notification {
   @@index([createdAt])
   @@index([read])
   @@index([relatedEntity])
+}
+// ======================
+// COURS À DOMICILE
+// ======================
+model Course {
+  id               String         @id @default(uuid())
+  professionalId   String
+  category         String
+  title            String
+  description      String?
+  price            Float
+  priceUnit        String         @default("session")
+  durationMinutes  Int            @default(60)
+  maxParticipants  Int            @default(1)
+  materialsIncluded Boolean       @default(false)
+  level            String         @default("Tous niveaux")
+  imageUrl         String?
+  documents        Json?
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  professional  User @relation("UserCourses", fields: [professionalId], references: [id], onDelete: Cascade)
+  availabilities CourseAvailability[]
+  reservationsCours ReservationCours[]
+}
+
+
+// ======================
+// DISPONIBILITÉS DES COURS
+// ======================
+model CourseAvailability {
+  id          String   @id @default(uuid())
+  courseId    String
+  dayOfWeek   Int      // 0: Dimanche, 1: Lundi, etc.
+  startTime   String   // Format: "HH:MM"
+  endTime     String   // Format: "HH:MM"
+  isRecurring Boolean  @default(true)
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([dayOfWeek])
+}
+// ======================
+// RÉSERVATIONS DE COURS
+// ======================
+model ReservationCours {
+  id               String   @id @default(cuid())
+  courseId         String
+  userId           String
+  userEmail        String
+  userName         String
+  date             DateTime
+  participants     Int
+  totalPrice       Float
+  status           StatutReservation @default(en_attente)
+  notes            String?
+  raisonAnnulation String?
+  
+  // Relations
+  course           Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Métadonnées
+  professionalId   String
+  courseTitle      String
+  professionalName String
+  courseCategory   String
+  courseDuration   Int
+  
+  // Timestamps
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  dateAnnulation   DateTime?
+
+  @@map("reservation_cours")
+  @@index([courseId])
+  @@index([userId])
+  @@index([status])
+  @@index([date])
+  @@index([professionalId])
+}
+
+enum StatutReservation {
+  en_attente
+  confirmee
+  annulee
+  terminee
 }

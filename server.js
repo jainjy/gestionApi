@@ -259,6 +259,8 @@ app.use("/api/agenda", require("./routes/agenda"));
 app.use("/api/batiment", require("./routes/batiment"));
 app.use("/api/anonce", require("./routes/anonce"));
 app.use('/api/produits-naturels', require("./routes/produits-naturels"));
+app.use('/api/courses', require("./routes/courses"));
+app.use('/api/reservation-cours', require("./routes/reservationCours"));
 
 //rapport 
 app.use("/api/report", require("./routes/report"));
