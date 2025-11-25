@@ -110,6 +110,7 @@ model User {
   Document                 Document[]
   ContratType              ContratType[]
   DocumentArchive          DocumentArchive[]
+  tourismes Tourisme[]
 
   @@index([email])
   @@index([role])
@@ -665,7 +666,9 @@ model Order {
 model Tourisme {
   id                 String   @id @default(uuid())
   idUnique           String   @unique
-  idPrestataire      String   @unique
+    idPrestataire      String
+  prestataire        User     @relation(fields: [idPrestataire], references: [id])
+
   title              String
   type               String
   price              Float
