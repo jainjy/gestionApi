@@ -72,53 +72,54 @@ model User {
   demandesFinancement FinancementDemande[]
 
   // Relations existantes
-  blogArticles             BlogArticle[]
-  properties               Property[]
-  favorites                Favorite[]
-  metiers                  UtilisateurMetier[]
-  services                 UtilisateurService[]
-  demandesCrees            Demande[]                 @relation("DemandeCreePar")
-  demandesArtisan          DemandeArtisan[]          @relation("DemandeArtisanUser")
-  Product                  Product[]
-  Transaction              Transaction[]
-  Review                   Review[]
-  Appointment              Appointment[]
-  orders                   Order[]
-  messagesEnvoyes          Message[]                 @relation("MessageExpediteur")
-  messagesRecus            Message[]                 @relation("MessageReceiver")
-  conversationsCrees       Conversation[]            @relation("ConversationCreateur")
-  conversationsParticipees ConversationParticipant[]
-  devisRecus               Devis[]                   @relation("DevisClient")
-  devisEnvoyes             Devis[]                   @relation("DevisPrestataire")
-  subscriptions            Subscription[]
-  tourismeBookings         TourismeBooking[]
-  advertisements           Advertisement[]
-  demandesRecues           Demande[]                 @relation("DemandeArtisanSpecifique")
-  activities               UserActivity[]
-  preferences              UserPreference[]
-  events                   UserEvent[]
-   audits              Audit[]  
-   notifications        Notification[]
-  notificationsProprietaire Notification[] @relation("UserProprietaireRelation")
+  blogArticles              BlogArticle[]
+  properties                Property[]
+  favorites                 Favorite[]
+  metiers                   UtilisateurMetier[]
+  services                  UtilisateurService[]
+  demandesCrees             Demande[]                 @relation("DemandeCreePar")
+  demandesArtisan           DemandeArtisan[]          @relation("DemandeArtisanUser")
+  Product                   Product[]
+  Transaction               Transaction[]
+  Review                    Review[]
+  Appointment               Appointment[]
+  orders                    Order[]
+  messagesEnvoyes           Message[]                 @relation("MessageExpediteur")
+  messagesRecus             Message[]                 @relation("MessageReceiver")
+  conversationsCrees        Conversation[]            @relation("ConversationCreateur")
+  conversationsParticipees  ConversationParticipant[]
+  devisRecus                Devis[]                   @relation("DevisClient")
+  devisEnvoyes              Devis[]                   @relation("DevisPrestataire")
+  subscriptions             Subscription[]
+  tourismeBookings          TourismeBooking[]
+  advertisements            Advertisement[]
+  demandesRecues            Demande[]                 @relation("DemandeArtisanSpecifique")
+  activities                UserActivity[]
+  preferences               UserPreference[]
+  events                    UserEvent[]
+  audits                    Audit[]
+  notifications             Notification[]
+  notificationsProprietaire Notification[]            @relation("UserProprietaireRelation")
 
   // RELATION POUR PODCAST 
-  podcasts                 Podcast[] // Podcasts créés par l'utilisateur
-  videos                   Video[] // Vidéos créées par l'utilisateur
-  mediaFavorites           UserMediaFavorite[] // Favoris médias de l'utilisateur
-  wellBeingStats           WellBeingStats? // Statistiques bien-être
-  ProfessionalSettings     ProfessionalSettings?
-  Document                 Document[]
-  ContratType              ContratType[]
-  DocumentArchive          DocumentArchive[]
-  reservationsCours ReservationCours[]
+  podcasts             Podcast[] // Podcasts créés par l'utilisateur
+  videos               Video[] // Vidéos créées par l'utilisateur
+  mediaFavorites       UserMediaFavorite[] // Favoris médias de l'utilisateur
+  wellBeingStats       WellBeingStats? // Statistiques bien-être
+  ProfessionalSettings ProfessionalSettings?
+  Document             Document[]
+  ContratType          ContratType[]
+  DocumentArchive      DocumentArchive[]
+  reservationsCours    ReservationCours[]
 
   // relation pour coursdomicil
-  courses Course[]   @relation("UserCourses")
-  investmentRequests       InvestmentRequest[]
+  courses            Course[]            @relation("UserCourses")
+  investmentRequests InvestmentRequest[]
 
-  tourismes Tourisme[]
-   volsCrees       Flight[] @relation("PrestataireVol")
-  volsReserves    Flight[] @relation("ReservationVol")
+  tourismes              Tourisme[]
+  volsCrees              Flight[]                @relation("PrestataireVol")
+  volsReserves           Flight[]                @relation("ReservationVol")
+  touristicPlaceBookings TouristicPlaceBooking[]
 
   @@index([email])
   @@index([role])
@@ -134,27 +135,27 @@ model ProfessionalSettings {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  horairesLundi    Json?
-  horairesMardi    Json?
-  horairesMercredi Json?
-  horairesJeudi    Json?
-  horairesVendredi Json?
-  horairesSamedi   Json?
-  horairesDimanche Json?
-  joursFermes      Json?
-  delaiReponseEmail     Int? @default(24)
-  delaiReponseTelephone Int? @default(2)
-  delaiReponseUrgence   Int? @default(4)
+  horairesLundi           Json?
+  horairesMardi           Json?
+  horairesMercredi        Json?
+  horairesJeudi           Json?
+  horairesVendredi        Json?
+  horairesSamedi          Json?
+  horairesDimanche        Json?
+  joursFermes             Json?
+  delaiReponseEmail       Int?    @default(24)
+  delaiReponseTelephone   Int?    @default(2)
+  delaiReponseUrgence     Int?    @default(4)
   delaiAnnulationGratuit  Int?    @default(48)
   fraisAnnulationPourcent Int?    @default(15)
   conditionsAnnulation    String?
-  acomptePourcentage Int?    @default(30)
-  montantMinimum     Float?  @default(100)
-  conditionsPaiement String?
-  nomEntreprise String?
-  emailContact  String?
-  telephone     String?
-  adresse       String?
+  acomptePourcentage      Int?    @default(30)
+  montantMinimum          Float?  @default(100)
+  conditionsPaiement      String?
+  nomEntreprise           String?
+  emailContact            String?
+  telephone               String?
+  adresse                 String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -392,14 +393,15 @@ model Product {
   clickCount     Int                    @default(0)
   purchaseCount  Int                    @default(0)
   embedding      Unsupported("vector")?
+  productType    String?                @default("general")
 
   allergens       String[]
   brand           String?
   expiryDate      DateTime?
   foodCategory    String?
-  isVegan       Boolean?  @default(false)
-  isVegetarian  Boolean?  @default(false)
-  healthScore   Int?      @default(0) // Score santé de 1 à 10
+  isVegan         Boolean?  @default(false)
+  isVegetarian    Boolean?  @default(false)
+  healthScore     Int?      @default(0) // Score santé de 1 à 10
   isOrganic       Boolean?  @default(false)
   isPerishable    Boolean?  @default(false)
   nutritionalInfo Json?
@@ -408,7 +410,7 @@ model Product {
   unit            String?
 
   User User @relation(fields: [userId], references: [id], onDelete: Cascade)
-   
+
   @@index([isVegan])
   @@index([isVegetarian])
   @@index([healthScore])
@@ -457,7 +459,7 @@ model Service {
   metiers     MetierService[]
   users       UtilisateurService[]
   demandes    Demande[]
-    
+
   Review      Review[]
   Appointment Appointment[]
 }
@@ -502,7 +504,7 @@ model UtilisateurService {
 //DEMANDE
 //===================
 model Demande {
-  id                  Int              @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   disponibiliteBien   String?
   description         String?
   contactNom          String?
@@ -515,29 +517,29 @@ model Demande {
   lieuAdresse         String?
   lieuAdresseCp       String?
   lieuAdresseVille    String?
-  optionAssurance     Boolean?         @default(false)
-  demandeAcceptee     Boolean?         @default(false)
+  optionAssurance     Boolean?  @default(false)
+  demandeAcceptee     Boolean?  @default(false)
   nombreArtisans      String?
   createdById         String
   serviceId           Int?
-  createdAt           DateTime         @default(now())
+  createdAt           DateTime  @default(now())
   dateSouhaitee       DateTime?
   heureSouhaitee      String?
   metierId            Int?
   propertyId          String?
   statut              String?
-  isRead              Boolean          @default(false)
+  isRead              Boolean   @default(false)
   artisanId           String?
 
-  createdBy           User             @relation("DemandeCreePar", fields: [createdById], references: [id])
-  service             Service?         @relation(fields: [serviceId], references: [id])
-  metier              Metier?          @relation(fields: [metierId], references: [id])
-  property            Property?        @relation(fields: [propertyId], references: [id])
-  artisan             User?            @relation("DemandeArtisanSpecifique", fields: [artisanId], references: [id])
-  artisans            DemandeArtisan[] @relation("DemandeArtisanDemande")
-  conversations       Conversation[]
-  devis               String?
-  devis_demande       Devis[]
+  createdBy     User             @relation("DemandeCreePar", fields: [createdById], references: [id])
+  service       Service?         @relation(fields: [serviceId], references: [id])
+  metier        Metier?          @relation(fields: [metierId], references: [id])
+  property      Property?        @relation(fields: [propertyId], references: [id])
+  artisan       User?            @relation("DemandeArtisanSpecifique", fields: [artisanId], references: [id])
+  artisans      DemandeArtisan[] @relation("DemandeArtisanDemande")
+  conversations Conversation[]
+  devis         String?
+  devis_demande Devis[]
 
   @@index([propertyId])
   @@index([createdById])
@@ -627,9 +629,9 @@ model Review {
   rating    Int
   comment   String?
   createdAt DateTime @default(now())
-  metadata  Json?    // NOUVEAU CHAMP pour stocker les réponses et métadonnées
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  metadata  Json? // NOUVEAU CHAMP pour stocker les réponses et métadonnées
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
 
 // ======================
@@ -644,8 +646,8 @@ model Appointment {
   message   String?
   status    String   @default("pending")
   createdAt DateTime @default(now())
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
 
 // ======================
@@ -676,10 +678,10 @@ model Order {
 // TOURISME
 // ======================
 model Tourisme {
-  id                 String   @id @default(uuid())
-  idUnique           String   @unique
-    idPrestataire      String
-  prestataire        User     @relation(fields: [idPrestataire], references: [id])
+  id            String @id @default(uuid())
+  idUnique      String @unique
+  idPrestataire String
+  prestataire   User   @relation(fields: [idPrestataire], references: [id])
 
   title              String
   type               String
@@ -703,16 +705,17 @@ model Tourisme {
   featured           Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-  
-  // Nouveaux champs pour lieux touristiques
-  isTouristicPlace   Boolean  @default(false)
-  category           String?  // monument, museum, park, etc.
-  openingHours       String?  // "9h-18h, fermé le lundi"
-  entranceFee        String?  // "Gratuit", "10€", "Enfants: 5€"
-  website            String?
-  contactInfo        String?
 
-  bookings TourismeBooking[]
+  // Nouveaux champs pour lieux touristiques
+  isTouristicPlace Boolean @default(false)
+  category         String? // monument, museum, park, etc.
+  openingHours     String? // "9h-18h, fermé le lundi"
+  entranceFee      String? // "Gratuit", "10€", "Enfants: 5€"
+  website          String?
+  contactInfo      String?
+
+  bookings               TourismeBooking[]
+  touristicPlaceBookings TouristicPlaceBooking[]
 }
 
 // ======================
@@ -1144,22 +1147,22 @@ model DocumentArchive {
 
 //notification 
 model Notification {
-  id               Int       @id @default(autoincrement())
-  type             String
-  title            String
-  message          String
-  relatedEntity    String?
-  relatedEntityId  String?
-  read             Boolean   @default(false)
-  createdAt        DateTime  @default(now())
+  id              Int      @id @default(autoincrement())
+  type            String
+  title           String
+  message         String
+  relatedEntity   String?
+  relatedEntityId String?
+  read            Boolean  @default(false)
+  createdAt       DateTime @default(now())
 
   // Utilisateur qui reçoit la notification
-  userId           String?
-  user             User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Propriétaire (nullable)
   userProprietaireId String?
-  userProprietaire    User?  @relation("UserProprietaireRelation", fields: [userProprietaireId], references: [id])
+  userProprietaire   User?   @relation("UserProprietaireRelation", fields: [userProprietaireId], references: [id])
 
   @@index([userId])
   @@index([userProprietaireId])
@@ -1167,54 +1170,55 @@ model Notification {
   @@index([read])
   @@index([relatedEntity])
 }
+
 // ======================
 // COURS À DOMICILE
 // ======================
 model Course {
-  id               String         @id @default(uuid())
-  professionalId   String
-  category         String
-  title            String
-  description      String?
-  price            Float
-  priceUnit        String         @default("session")
-  durationMinutes  Int            @default(60)
-  maxParticipants  Int            @default(1)
-  materialsIncluded Boolean       @default(false)
-  level            String         @default("Tous niveaux")
-  imageUrl         String?
-  documents        Json?
-  isActive         Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                String   @id @default(uuid())
+  professionalId    String
+  category          String
+  title             String
+  description       String?
+  price             Float
+  priceUnit         String   @default("session")
+  durationMinutes   Int      @default(60)
+  maxParticipants   Int      @default(1)
+  materialsIncluded Boolean  @default(false)
+  level             String   @default("Tous niveaux")
+  imageUrl          String?
+  documents         Json?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  professional  User @relation("UserCourses", fields: [professionalId], references: [id], onDelete: Cascade)
-  availabilities CourseAvailability[]
+  professional      User                 @relation("UserCourses", fields: [professionalId], references: [id], onDelete: Cascade)
+  availabilities    CourseAvailability[]
   reservationsCours ReservationCours[]
 }
-
 
 // ======================
 // DISPONIBILITÉS DES COURS
 // ======================
 model CourseAvailability {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   courseId    String
-  dayOfWeek   Int      // 0: Dimanche, 1: Lundi, etc.
-  startTime   String   // Format: "HH:MM"
-  endTime     String   // Format: "HH:MM"
-  isRecurring Boolean  @default(true)
+  dayOfWeek   Int // 0: Dimanche, 1: Lundi, etc.
+  startTime   String // Format: "HH:MM"
+  endTime     String // Format: "HH:MM"
+  isRecurring Boolean @default(true)
 
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([courseId])
   @@index([dayOfWeek])
 }
+
 // ======================
 // RÉSERVATIONS DE COURS
 // ======================
 model ReservationCours {
-  id               String   @id @default(cuid())
+  id               String            @id @default(cuid())
   courseId         String
   userId           String
   userEmail        String
@@ -1225,29 +1229,29 @@ model ReservationCours {
   status           StatutReservation @default(en_attente)
   notes            String?
   raisonAnnulation String?
-  
+
   // Relations
-  course           Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Métadonnées
   professionalId   String
   courseTitle      String
   professionalName String
   courseCategory   String
   courseDuration   Int
-  
-  // Timestamps
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  dateAnnulation   DateTime?
 
-  @@map("reservation_cours")
+  // Timestamps
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  dateAnnulation DateTime?
+
   @@index([courseId])
   @@index([userId])
   @@index([status])
   @@index([date])
   @@index([professionalId])
+  @@map("reservation_cours")
 }
 
 enum StatutReservation {
@@ -1274,22 +1278,23 @@ model InvestmentRequest {
   updated_at          DateTime @updatedAt
 
   // Relation avec l'utilisateur (optionnelle - pour les utilisateurs connectés)
-  userId              String?
-  user                User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("investment_requests")
   @@index([email])
   @@index([status])
   @@index([created_at])
   @@index([pays_interet])
   @@index([userId])
+  @@map("investment_requests")
 }
+
 // ======================
 // DESTINATIONS RAPPORT 
 // ======================
 model ReportDestination {
   id        String   @id @default(cuid())
-  email     String   @unique
+  email     String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1300,36 +1305,73 @@ model ReportDestination {
 //compganie aerrien 
 
 model Flight {
-  id                String   @id @default(uuid())
+  id String @id @default(uuid())
 
   // Prestataire (professionnel qui ajoute le vol)
-  idPrestataire     String
-  prestataire       User     @relation("PrestataireVol", fields: [idPrestataire], references: [id])
+  idPrestataire String
+  prestataire   User   @relation("PrestataireVol", fields: [idPrestataire], references: [id])
 
-  compagnie         String
-  numeroVol         String
+  compagnie String
+  numeroVol String
 
-  departVille       String
-  departDateHeure   DateTime   // ✅ Date + heure de départ
+  departVille     String
+  departDateHeure DateTime // ✅ Date + heure de départ
 
-  arriveeVille      String
-  arriveeDateHeure  DateTime   // ✅ Date + heure d'arrivée
+  arriveeVille     String
+  arriveeDateHeure DateTime // ✅ Date + heure d'arrivée
 
-  duree             String
-  escales           Int
-  prix              Float
-  classe            String
+  duree   String
+  escales Int
+  prix    Float
+  classe  String
 
-  services          String[]   // repas, baggage, wifi...
+  services String[] // repas, baggage, wifi...
 
-  image             String?    // ✅ URL retournée par Supabase
+  image String? // ✅ URL retournée par Supabase
 
   // Réservation
-  idUser            String?
-  userReservation   User?      @relation("ReservationVol", fields: [idUser], references: [id])
+  idUser          String?
+  userReservation User?   @relation("ReservationVol", fields: [idUser], references: [id])
 
-  nbrPersonne       Int?       // nombre de personnes
-  place             String?    // siège : ex A12, B3...
+  nbrPersonne Int? // nombre de personnes
+  place       String? // siège : ex A12, B3...
 
-  createdAt         DateTime   @default(now())
+  createdAt DateTime @default(now())
+}
+
+// ======================
+// RÉSERVATIONS LIEUX TOURISTIQUES
+// ======================
+model TouristicPlaceBooking {
+  id                  String    @id @default(uuid())
+  placeId             String
+  userId              String?
+  visitDate           DateTime
+  visitTime           String
+  numberOfTickets     Int
+  ticketType          String    @default("adult") // adult, child, student, senior
+  totalAmount         Float
+  serviceFee          Float     @default(0)
+  specialRequests     String?
+  paymentMethod       String    @default("card")
+  status              String    @default("pending")
+  paymentStatus       String    @default("pending")
+  stripePaymentIntent String?
+  confirmationNumber  String    @unique
+  qrCodeUrl           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  cancelledAt         DateTime?
+
+  // Relations
+  place Tourisme @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  user  User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([placeId])
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([visitDate])
+  @@index([confirmationNumber])
+  @@index([createdAt])
 }
