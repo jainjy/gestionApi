@@ -10,101 +10,6 @@ const courseUpload = upload.fields([
   { name: 'documents', maxCount: 5 }
 ]);
 
-// GET /api/courses - Liste des cours
-router.get("/", async (req, res) => {
-  try {
-    const { page = 1, limit = 50, category, search, professionalId } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    console.log('📚 [COURSES] Récupération cours - Page:', page, 'Limit:', limit, 'Catégorie:', category, 'Recherche:', search);
-
-    const where = { isActive: true };
-    
-    if (category && category !== 'all') {
-      where.category = category;
-    }
-    
-    if (professionalId) {
-      where.professionalId = professionalId;
-    }
-    
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { category: { contains: search, mode: 'insensitive' } }
-      ];
-    }
-
-    const courses = await prisma.course.findMany({
-      where,
-      include: {
-        professional: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            companyName: true,
-            avatar: true,
-            city: true
-          }
-        },
-        availabilities: true
-      },
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: parseInt(limit),
-    });
-
-    const total = await prisma.course.count({ where });
-
-    console.log('✅ [COURSES]', courses.length, 'cours récupérés sur', total);
-
-    res.json({
-      success: true,
-      data: courses,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total
-      }
-    });
-  } catch (error) {
-    console.error("❌ [COURSES] Erreur lors de la récupération des cours:", error);
-    res.status(500).json({ 
-      success: false,
-      error: "Erreur serveur" 
-    });
-  }
-});
-
-// GET /api/courses/categories - Catégories disponibles
-router.get("/categories", async (req, res) => {
-  try {
-    console.log('📂 [COURSES CATEGORIES] Récupération des catégories');
-
-    const categories = await prisma.course.findMany({
-      where: { category: { not: null } },
-      select: { category: true },
-      distinct: ['category']
-    });
-
-    const categoryList = categories.map(c => c.category).filter(Boolean).sort();
-
-    console.log('✅ [COURSES CATEGORIES]', categoryList.length, 'catégories récupérées');
-
-    res.json({
-      success: true,
-      data: categoryList
-    });
-  } catch (error) {
-    console.error("❌ [COURSES CATEGORIES] Erreur:", error);
-    res.status(500).json({ 
-      success: false,
-      error: "Erreur serveur" 
-    });
-  }
-});
 
 // POST /api/courses - Créer un nouveau cours
 router.post("/", courseUpload, async (req, res) => {
@@ -255,6 +160,103 @@ router.post("/", courseUpload, async (req, res) => {
     });
   }
 });
+
+// GET /api/courses - Liste des cours
+router.get("/", async (req, res) => {
+  try {
+    const { page = 1, limit = 50, category, search, professionalId } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    console.log('📚 [COURSES] Récupération cours - Page:', page, 'Limit:', limit, 'Catégorie:', category, 'Recherche:', search);
+
+    const where = { isActive: true };
+    
+    if (category && category !== 'all') {
+      where.category = category;
+    }
+    
+    if (professionalId) {
+      where.professionalId = professionalId;
+    }
+    
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { category: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    const courses = await prisma.course.findMany({
+      where,
+      include: {
+        professional: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            avatar: true,
+            city: true
+          }
+        },
+        availabilities: true
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: parseInt(limit),
+    });
+
+    const total = await prisma.course.count({ where });
+
+    console.log('✅ [COURSES]', courses.length, 'cours récupérés sur', total);
+
+    res.json({
+      success: true,
+      data: courses,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total
+      }
+    });
+  } catch (error) {
+    console.error("❌ [COURSES] Erreur lors de la récupération des cours:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "Erreur serveur" 
+    });
+  }
+});
+
+// GET /api/courses/categories - Catégories disponibles
+router.get("/categories", async (req, res) => {
+  try {
+    console.log('📂 [COURSES CATEGORIES] Récupération des catégories');
+
+    const categories = await prisma.course.findMany({
+      where: { category: { not: null } },
+      select: { category: true },
+      distinct: ['category']
+    });
+
+    const categoryList = categories.map(c => c.category).filter(Boolean).sort();
+
+    console.log('✅ [COURSES CATEGORIES]', categoryList.length, 'catégories récupérées');
+
+    res.json({
+      success: true,
+      data: categoryList
+    });
+  } catch (error) {
+    console.error("❌ [COURSES CATEGORIES] Erreur:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "Erreur serveur" 
+    });
+  }
+});
+
 
 // PUT /api/courses/:id - Mettre à jour un cours
 router.put("/:id", courseUpload, async (req, res) => {

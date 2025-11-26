@@ -285,6 +285,7 @@ app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 
 // 🔥 CORRECTION: Route notifications
 app.use("/api/notifications", require("./routes/notifications"));
+app.use("/api/bienetre", require("./routes/reservationbien_etre"));
 
 app.use("/api/Vol", require("./routes/Vol"));
 app.use("/api/notificationadmin", require("./routes/AllNotifications"));
