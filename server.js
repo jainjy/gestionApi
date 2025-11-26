@@ -309,7 +309,7 @@ app.use("/api/reviews", require("./routes/reviews"));
 app.use("/api/professional/settings", require("./routes/professional-settings"));
 app.use("/api/professional/profile", require("./routes/professional-profile"));
 app.use("/api/estimation", require("./routes/estimation"));
-
+app.use("/api/touristic-place-bookings", require("./routes/touristic-place-bookings"));
 //planning pro
 app.use("/api/planning", require("./routes/PlanningPro"));
 app.use("/api/bienetre", require("./routes/bienetre"));
