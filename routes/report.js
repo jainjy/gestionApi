@@ -139,14 +139,14 @@ router.post("/analyse-popularite", async (req, res) => {
     const cleanEmail = email.trim();
     console.log("📧 Email nettoyé:", cleanEmail);
 
-    // ✅ STOCKAGE de l'email AVEC ReportService
-    try {
-      const storedEmail = await reportService.addDestinationEmail(cleanEmail);
-      console.log("✅ Email stocké en base via ReportService:", storedEmail.id);
-    } catch (storageError) {
-      console.error("❌ Erreur stockage email:", storageError.message);
-      // Continue quand même l'envoi même si le stockage échoue
-    }
+   // ✅ STOCKAGE de l'email AVEC ReportService - TOUJOURS créer un nouveau
+  try {
+    const storedEmail = await reportService.addDestinationEmail(cleanEmail);
+    console.log("✅ Email traité via ReportService:", storedEmail.id, storedEmail.email);
+  } catch (storageError) {
+    console.error("❌ Erreur stockage email:", storageError.message);
+    // Continue quand même l'envoi même si le stockage échoue
+  }
 
     // Génération du rapport
     console.log("📊 Génération du rapport...");
