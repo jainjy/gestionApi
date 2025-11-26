@@ -381,5 +381,105 @@ router.delete('/:id', async (req, res) => {
     });
   }
 });
+// Dans routes/tourisme.js - Ajouter ces routes
+
+// GET /api/tourisme/touristic-places - Récupérer uniquement les lieux touristiques
+router.get('/touristic-places', async (req, res) => {
+  try {
+    console.log('🏛️ Requête reçue pour les lieux touristiques');
+    
+    const {
+      category,
+      city,
+      featured,
+      page = 1,
+      limit = 12
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const where = {
+      isTouristicPlace: true
+    };
+
+    if (category && category !== 'tous') {
+      where.category = category;
+    }
+
+    if (city) {
+      where.city = {
+        contains: city,
+        mode: 'insensitive'
+      };
+    }
+
+    if (featured !== undefined) {
+      where.featured = featured === 'true';
+    }
+
+    const [places, total] = await Promise.all([
+      prisma.tourisme.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { rating: 'desc' }
+      }),
+      prisma.tourisme.count({ where })
+    ]);
+
+    console.log(`✅ ${places.length} lieux touristiques trouvés`);
+
+    res.json({
+      success: true,
+      data: places,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération lieux touristiques:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des lieux touristiques',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/tourisme/prestataire/:prestataireId/touristic-places - Lieux d'un prestataire
+router.get('/prestataire/:prestataireId/touristic-places', async (req, res) => {
+  try {
+    const { prestataireId } = req.params;
+    
+    console.log(`👨‍💼 Lieux touristiques du prestataire: ${prestataireId}`);
+
+    const places = await prisma.tourisme.findMany({
+      where: {
+        idPrestataire: prestataireId,
+        isTouristicPlace: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    console.log(`✅ ${places.length} lieux trouvés pour le prestataire`);
+
+    res.json({
+      success: true,
+      data: places
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération lieux prestataire:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des lieux du prestataire',
+      details: error.message
+    });
+  }
+});
 
 module.exports = router;
