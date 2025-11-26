@@ -51,7 +51,7 @@ model User {
   updatedAt           DateTime             @updatedAt
   resetToken          String?
   resetTokenExpiry    DateTime?
-  status              String               @default("inactive")
+  status              String               @default("active")
   companyName         String?
   address             String?
   addressComplement   String?
