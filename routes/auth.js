@@ -56,6 +56,7 @@ router.post("/login", async (req, res) => {
       address: user.address,
       siret: user.siret,
       city: user.city,
+      status: user.status,
     };
 
     res.json({
