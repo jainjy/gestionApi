@@ -1379,7 +1379,6 @@ model TouristicPlaceBooking {
   @@index([createdAt])
 }
 
-
 model ReservationFlight {
   id              String   @id @default(uuid())
 
