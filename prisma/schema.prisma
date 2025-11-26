@@ -120,6 +120,9 @@ model User {
   volsCrees              Flight[]                @relation("PrestataireVol")
   volsReserves           Flight[]                @relation("ReservationVol")
   touristicPlaceBookings TouristicPlaceBooking[]
+  flightReservations ReservationFlight[] @relation("ReservationVol")
+
+  flightReservationsReceived ReservationFlight[] @relation("PrestataireVolReservation")
 
   @@index([email])
   @@index([role])
@@ -1332,7 +1335,7 @@ model Flight {
   // Réservation
   idUser          String?
   userReservation User?   @relation("ReservationVol", fields: [idUser], references: [id])
-
+  reservations ReservationFlight[]
   nbrPersonne Int? // nombre de personnes
   place       String? // siège : ex A12, B3...
 
@@ -1374,4 +1377,26 @@ model TouristicPlaceBooking {
   @@index([visitDate])
   @@index([confirmationNumber])
   @@index([createdAt])
+}
+
+
+model ReservationFlight {
+  id              String   @id @default(uuid())
+
+  flightId        String
+  flight          Flight   @relation(fields: [flightId], references: [id])
+
+  // Celui qui réserve
+  idUser          String
+  userReservation User     @relation("ReservationVol", fields: [idUser], references: [id])
+
+  // Propriétaire du vol
+  idPrestataire   String
+  prestataire     User     @relation("PrestataireVolReservation", fields: [idPrestataire], references: [id])
+
+  nbrPersonne     Int
+  place           String
+
+  status          String   @default("pending")
+  createdAt       DateTime @default(now())
 }

@@ -3,7 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 //const { v4: uuidv4 } = require('uuid');
 const prisma = new PrismaClient();
-const { createNotification ,createNotificationTourisme } = require("../services/notificationService");
+const { createNotification  } = require("../services/notificationService");
 
 // Middleware CORS
 router.use((req, res, next) => {
