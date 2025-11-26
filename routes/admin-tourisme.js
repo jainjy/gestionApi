@@ -487,13 +487,14 @@ router.post(
         available = true,
         rating = 0,
         reviewCount = 0,
-        isTouristicPlace = false,
         openingHours,
         entranceFee,
         website,
         contactInfo,
       } = req.body;
-
+      const isTouristicPlace =
+        req.body.isTouristicPlace === "true" ||
+        req.body.isTouristicPlace === true;
       const idUnique = isTouristicPlace ? `PL${Date.now()}` : `T${Date.now()}`;
 
       const newListing = await prisma.tourisme.create({
@@ -567,7 +568,7 @@ router.put(
     try {
       const { id } = req.params;
       const userId = req.user.id;
-
+      
       // Vérifier que l'élément existe et appartient à l'utilisateur
       const existingListing = await prisma.tourisme.findFirst({
         where: {
@@ -614,7 +615,6 @@ router.put(
         available,
         rating,
         reviewCount,
-        isTouristicPlace,
         openingHours,
         entranceFee,
         website,
@@ -622,7 +622,9 @@ router.put(
         // Pour gérer la suppression d'images
         removedImages,
       } = req.body;
-
+      const isTouristicPlace =
+        req.body.isTouristicPlace === "true" ||
+        req.body.isTouristicPlace === true;
       // Filtrer les images supprimées
       if (removedImages) {
         const removedArray = Array.isArray(removedImages)
