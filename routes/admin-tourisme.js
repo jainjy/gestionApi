@@ -248,10 +248,11 @@ router.get("/places", authenticateToken, async (req, res) => {
 // GET /api/admin/tourisme/stats - Statistiques pour le dashboard admin
 router.get("/stats", authenticateToken, async (req, res) => {
   try {
-    console.log("📊 Requête stats reçue pour /api/admin/tourisme/stats");
+    console.log("📊 Requête stats reçue pour /api/admin/tourisme/stats", req.query);
 
     const userId = req.user.id;
     const userRole = req.user.role;
+    const { contentType } = req.query; // "accommodations" ou "touristic_places"
 
     // Condition pour filtrer par utilisateur si c'est un professionnel
     let whereCondition = {};
@@ -259,12 +260,20 @@ router.get("/stats", authenticateToken, async (req, res) => {
       whereCondition.idPrestataire = userId;
     }
 
+    // Condition spécifique selon le type de contenu
+    if (contentType === "accommodations") {
+      whereCondition.isTouristicPlace = false;
+    } else if (contentType === "touristic_places") {
+      whereCondition.isTouristicPlace = true;
+    }
+    // Si contentType n'est pas spécifié, on garde les deux types
+
     // Condition pour les réservations liées aux listings du professionnel
     let bookingWhereCondition = {};
     if (userRole === "professional") {
-      // Récupérer les IDs des listings du professionnel
+      // Récupérer les IDs des listings du professionnel avec le même filtre
       const professionalListings = await prisma.tourisme.findMany({
-        where: { idPrestataire: userId },
+        where: whereCondition,
         select: { id: true },
       });
       const listingIds = professionalListings.map((listing) => listing.id);
@@ -274,33 +283,15 @@ router.get("/stats", authenticateToken, async (req, res) => {
 
     const [
       totalListings,
-      totalAccommodations,
-      totalTouristicPlaces,
       availableListings,
       featuredListings,
       totalBookings,
       averageRating,
     ] = await Promise.all([
-      // Total des listings (avec filtre professionnel)
+      // Total des listings (avec filtres)
       prisma.tourisme.count({ where: whereCondition }),
 
-      // Hébergements (avec filtre professionnel + condition isTouristicPlace)
-      prisma.tourisme.count({
-        where: {
-          ...whereCondition,
-          isTouristicPlace: false,
-        },
-      }),
-
-      // Lieux touristiques (avec filtre professionnel + condition isTouristicPlace)
-      prisma.tourisme.count({
-        where: {
-          ...whereCondition,
-          isTouristicPlace: true,
-        },
-      }),
-
-      // Listings disponibles (avec filtre professionnel)
+      // Listings disponibles (avec filtres)
       prisma.tourisme.count({
         where: {
           ...whereCondition,
@@ -308,7 +299,7 @@ router.get("/stats", authenticateToken, async (req, res) => {
         },
       }),
 
-      // Listings en vedette (avec filtre professionnel)
+      // Listings en vedette (avec filtres)
       prisma.tourisme.count({
         where: {
           ...whereCondition,
@@ -316,12 +307,12 @@ router.get("/stats", authenticateToken, async (req, res) => {
         },
       }),
 
-      // Réservations (filtrées par les listings du professionnel)
+      // Réservations (filtrées par les listings)
       prisma.tourismeBooking.count({
         where: bookingWhereCondition,
       }),
 
-      // Note moyenne (avec filtre professionnel)
+      // Note moyenne (avec filtres)
       prisma.tourisme.aggregate({
         _avg: {
           rating: true,
@@ -330,31 +321,37 @@ router.get("/stats", authenticateToken, async (req, res) => {
       }),
     ]);
 
-    // Statistiques par type d'hébergement (avec filtre professionnel)
-    const accommodationsByType = await prisma.tourisme.groupBy({
-      by: ["type"],
-      _count: {
-        id: true,
-      },
-      where: {
-        ...whereCondition,
-        isTouristicPlace: false,
-      },
-    });
+    // Statistiques par type d'hébergement (uniquement pour accommodations)
+    let accommodationsByType = [];
+    if (!contentType || contentType === "accommodations") {
+      accommodationsByType = await prisma.tourisme.groupBy({
+        by: ["type"],
+        _count: {
+          id: true,
+        },
+        where: {
+          ...whereCondition,
+          isTouristicPlace: false,
+        },
+      });
+    }
 
-    // Statistiques par catégorie de lieu touristique (avec filtre professionnel)
-    const placesByCategory = await prisma.tourisme.groupBy({
-      by: ["category"],
-      _count: {
-        id: true,
-      },
-      where: {
-        ...whereCondition,
-        isTouristicPlace: true,
-      },
-    });
+    // Statistiques par catégorie de lieu touristique (uniquement pour touristic_places)
+    let placesByCategory = [];
+    if (!contentType || contentType === "touristic_places") {
+      placesByCategory = await prisma.tourisme.groupBy({
+        by: ["category"],
+        _count: {
+          id: true,
+        },
+        where: {
+          ...whereCondition,
+          isTouristicPlace: true,
+        },
+      });
+    }
 
-    // Statistiques par ville (avec filtre professionnel)
+    // Statistiques par ville (avec filtres)
     const listingsByCity = await prisma.tourisme.groupBy({
       by: ["city"],
       _count: {
@@ -411,8 +408,6 @@ router.get("/stats", authenticateToken, async (req, res) => {
 
     const stats = {
       totalListings,
-      totalAccommodations,
-      totalTouristicPlaces,
       availableListings,
       featuredListings,
       totalBookings,
@@ -421,13 +416,12 @@ router.get("/stats", authenticateToken, async (req, res) => {
       placesByCategory,
       listingsByCity,
       revenue: revenueStats,
-      userRole: userRole, // Inclure le rôle pour le frontend
+      userRole: userRole,
+      contentType: contentType || "all", // Inclure le type de contenu pour le frontend
     };
 
-    console.log(`✅ Statistiques calculées pour ${userRole} ${req.user.email}`);
-    console.log(
-      `📊 Résultats: ${totalListings} listings, ${totalBookings} réservations`
-    );
+    console.log(`✅ Statistiques calculées pour ${contentType || 'tous les types'}`);
+    console.log(`📊 Résultats: ${totalListings} listings, ${totalBookings} réservations`);
 
     res.json({
       success: true,
@@ -442,7 +436,6 @@ router.get("/stats", authenticateToken, async (req, res) => {
     });
   }
 });
-
 
 // =======================================
 // CRÉATION HÉBERGEMENT/LIEU TOURISTIQUE AVEC IMAGES SUR SUPABASE
