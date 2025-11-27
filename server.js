@@ -322,6 +322,7 @@ app.use("/api/map", require("./routes/map"));
 app.use("/api/conversations", require("./routes/conversations"));
 app.use("/api/admin/media", require("./routes/admin-media"));
 app.use("/api/pro/demandes", require("./routes/proDemandes"));
+app.use("/api/services-ibr", require("./routes/services-ibr"));
 
 
 // Route pour l'upload de fichiers dans les messages
