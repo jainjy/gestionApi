@@ -117,49 +117,26 @@ router.post("/signup", async (req, res) => {
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Déterminer le userType selon le rôle
-    const finalUserType = role == "professional" ? userType : "CLIENT";
 
     // Créer l'utilisateur avec TOUS les champs
     const user = await prisma.user.create({
       data: {
-        email,
+        email : email,
         passwordHash: hashedPassword,
-        firstName,
-        lastName,
-        phone,
-        role: role === "professional" ? "professional" : "user",
-        userType: finalUserType, // AJOUT: Sauvegarder userType
-        status: "inactive",
-        companyName: role === "professional" ? companyName : null,
-        demandType: role === "user" ? demandType : null,
+        firstName : firstName,
+        lastName: lastName,
+        phone: phone,
+        role: role,
+        userType: "CLIENT",
+        demandType: demandType || "particulier",
         address: address || null,
         addressComplement: addressComplement || null,
         zipCode: zipCode || null,
         city: city || null,
         latitude: latitude ? parseFloat(latitude) : null,
         longitude: longitude ? parseFloat(longitude) : null,
-        siret: siret || null,
-        commercialName: commercialName || null,
         avatar: avatar || null,
-        ...(role === "professional" &&
-          metiers && {
-            metiers: {
-              create: metiers.map((metierId) => ({
-                metier: {
-                  connect: { id: metierId },
-                },
-              })),
-            },
-          }),
-      },
-      include: {
-        metiers: {
-          include: {
-            metier: true,
-          },
-        },
-      },
+      }
     });
 
     // Générer le token
@@ -178,7 +155,9 @@ router.post("/signup", async (req, res) => {
         companyName: user.companyName,
         demandType: user.demandType,
         userType: user.userType,
-        metiers: user.metiers,
+        avatar: user.avatar,
+        address: user.address,
+        city: user.city,
       },
       token,
     });
@@ -189,6 +168,7 @@ router.post("/signup", async (req, res) => {
     });
   }
 });
+
 // POST /api/auth/signup-pro - Inscription Pro sans paiement (essai gratuit 2 mois)
 router.post("/signup-pro", async (req, res) => {
   try {
