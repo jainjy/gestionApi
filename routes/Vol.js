@@ -288,7 +288,7 @@ router.get('/reservations', authenticateToken, async (req, res) => {
 });
 
 // ================================
-// METTRE À JOUR LE STATUT D'UNE RÉSERVATION
+// METTRE À JOUR LE STATUT D'UNE RÉSERVATION DE VOL
 // ================================
 router.put('/reservations/:id/status', authenticateToken, requireRole("professional"), async (req, res) => {
   try {
@@ -297,7 +297,10 @@ router.put('/reservations/:id/status', authenticateToken, requireRole("professio
 
     console.log(`🔄 Mise à jour statut réservation ${id} vers:`, status);
 
-    if (!['pending', 'confirmed', 'cancelled', 'completed'].includes(status)) {
+    // Statuts combinés pour réservation et paiement
+    const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed', 'paid', 'failed', 'refunded'];
+    
+    if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
         message: "Statut invalide"
@@ -370,85 +373,6 @@ router.put('/reservations/:id/status', authenticateToken, requireRole("professio
     res.status(500).json({
       success: false,
       message: "Erreur lors de la mise à jour du statut",
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-});
-
-// ================================
-// METTRE À JOUR LE STATUT DE PAIEMENT
-// ================================
-router.put('/reservations/:id/payment-status', authenticateToken, requireRole("professional"), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { paymentStatus } = req.body;
-
-    console.log(`🔄 Mise à jour paiement réservation ${id} vers:`, paymentStatus);
-
-    if (!['pending', 'paid', 'failed', 'refunded'].includes(paymentStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Statut de paiement invalide"
-      });
-    }
-
-    const reservation = await prisma.reservationFlight.findUnique({
-      where: { id },
-      include: {
-        prestataire: true
-      }
-    });
-
-    if (!reservation) {
-      return res.status(404).json({
-        success: false,
-        message: "Réservation introuvable"
-      });
-    }
-
-    console.log(`🔍 Réservation trouvée - Prestataire: ${reservation.idPrestataire}, Utilisateur: ${req.user.id}`);
-
-    // Vérifier que le professionnel peut modifier cette réservation
-    if (reservation.idPrestataire !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: "Non autorisé à modifier cette réservation"
-      });
-    }
-
-    const updatedReservation = await prisma.reservationFlight.update({
-      where: { id },
-      data: {
-        paymentStatus
-      },
-      include: {
-        flight: true,
-        userReservation: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true
-          }
-        }
-      }
-    });
-
-    console.log(`✅ Paiement mis à jour avec succès`);
-
-    res.json({
-      success: true,
-      message: `Statut de paiement mis à jour: ${paymentStatus}`,
-      data: updatedReservation
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur détaillée mise à jour paiement:", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de la mise à jour du statut de paiement",
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
