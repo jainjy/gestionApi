@@ -13,6 +13,22 @@ exports.getPartenaires = async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la récupération des partenaires' });
   }
 };
+exports.getPartenairesDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const partenaires = await prisma.financementPartenaire.findFirst({
+      where: { isActive: true, id: parseInt(id) },include: {
+        ServiceFinancier: true,
+      }
+    });
+    res.json(partenaires);
+  } catch (error) {
+    console.error("Erreur getPartenaires:", error);
+    res
+      .status(500)
+      .json({ error: "Erreur lors de la récupération du partenaires" });
+  }
+};
 
 // Récupérer tous les services d'assurance
 exports.getAssurances = async (req, res) => {

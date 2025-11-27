@@ -5,6 +5,7 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 
 // Routes publiques
 router.get('/partenaires', financementController.getPartenaires);
+router.get('/partenaires/:id', financementController.getPartenairesDetails);
 router.get('/assurances', financementController.getAssurances);
 router.post('/demande', financementController.submitDemande);
 

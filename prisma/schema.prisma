@@ -120,10 +120,12 @@ model User {
   volsCrees              Flight[]                @relation("PrestataireVol")
   volsReserves           Flight[]                @relation("ReservationVol")
   touristicPlaceBookings TouristicPlaceBooking[]
-  flightReservations ReservationFlight[] @relation("ReservationVol")
+  flightReservations     ReservationFlight[]     @relation("ReservationVol")
 
   flightReservationsReceived ReservationFlight[] @relation("PrestataireVolReservation")
 
+  // Nouvelle relation avec FinancementPartenaire
+  financementPartenaires FinancementPartenaire[]
   @@index([email])
   @@index([role])
   @@index([status])
@@ -681,10 +683,10 @@ model Order {
 // TOURISME
 // ======================
 model Tourisme {
-  id            String @id @default(uuid())
-  idUnique      String @unique
-  idPrestataire String
-  prestataire   User   @relation(fields: [idPrestataire], references: [id])
+  id                 String   @id @default(uuid())
+  idUnique           String   @unique
+  idPrestataire      String
+  prestataire        User     @relation(fields: [idPrestataire], references: [id])
   title              String
   type               String
   price              Float
@@ -771,14 +773,19 @@ model FinancementDemande {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user       User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  partenaire FinancementPartenaire? @relation(fields: [partenaireId], references: [id])
-  assurance  AssuranceService?      @relation(fields: [assuranceId], references: [id])
+  // Nouveaux champs pour les services financiers
+  serviceFinancierId String?
+
+  user             User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  partenaire       FinancementPartenaire? @relation(fields: [partenaireId], references: [id])
+  assurance        AssuranceService?      @relation(fields: [assuranceId], references: [id])
+  serviceFinancier ServiceFinancier?      @relation(fields: [serviceFinancierId], references: [id])
 
   @@index([userId])
   @@index([type])
   @@index([status])
   @@index([createdAt])
+  @@index([serviceFinancierId])
 }
 
 //type de message
@@ -826,9 +833,64 @@ model FinancementPartenaire {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
   demandes    FinancementDemande[]
+  
+  // Nouvelle relation avec User (nullable)
+  userId      String?
+  user        User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Nouveaux champs pour Crédit Réunion
+  website          String? // https://creditreunion.com/
+  phone            String?
+  email            String?
+  address          String?
+  conditions       String? // Conditions spécifiques du partenaire
+  tauxMin          Float? // Taux d'intérêt minimum
+  tauxMax          Float? // Taux d'intérêt maximum
+  dureeMin         Int? // Durée minimum en mois
+  dureeMax         Int? // Durée maximum en mois
+  montantMin       Float? // Montant minimum du prêt
+  montantMax       Float? // Montant maximum du prêt
+  ServiceFinancier ServiceFinancier[]
 
   @@index([type])
   @@index([isActive])
+  @@index([website])
+}
+
+// ======================
+// SERVICES FINANCIERS
+// ======================
+model ServiceFinancier {
+  id                   String   @id @default(uuid())
+  nom                  String
+  description          String
+  type                 String // "pret_immobilier", "pret_travaux", "rachat_credit", "assurance_emprunteur"
+  categorie            String // "particulier", "professionnel", "entreprise"
+  partenaireId         Int
+  conditions           String?
+  avantages            String[]
+  taux                 Float? // Taux d'intérêt annuel
+  dureeMin             Int? // Durée minimum en mois
+  dureeMax             Int? // Durée maximum en mois
+  montantMin           Float? // Montant minimum
+  montantMax           Float? // Montant maximum
+  fraisDossier         Float? // Frais de dossier
+  assuranceObligatoire Boolean  @default(false)
+  documentsRequises    String[] // Liste des documents nécessaires
+  delaiTraitement      String? // "48h", "1 semaine", etc.
+  isActive             Boolean  @default(true)
+  ordreAffichage       Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  partenaire         FinancementPartenaire @relation(fields: [partenaireId], references: [id])
+  FinancementDemande FinancementDemande[]
+
+  @@index([partenaireId])
+  @@index([type])
+  @@index([categorie])
+  @@index([isActive])
+  @@index([ordreAffichage])
 }
 
 //===================
@@ -1333,10 +1395,10 @@ model Flight {
 
   // Réservation
   idUser          String?
-  userReservation User?   @relation("ReservationVol", fields: [idUser], references: [id])
-  reservations ReservationFlight[]
-  nbrPersonne Int? // nombre de personnes
-  place       String? // siège : ex A12, B3...
+  userReservation User?               @relation("ReservationVol", fields: [idUser], references: [id])
+  reservations    ReservationFlight[]
+  nbrPersonne     Int? // nombre de personnes
+  place           String? // siège : ex A12, B3...
 
   createdAt DateTime @default(now())
 }
@@ -1379,22 +1441,22 @@ model TouristicPlaceBooking {
 }
 
 model ReservationFlight {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  flightId        String
-  flight          Flight   @relation(fields: [flightId], references: [id])
+  flightId String
+  flight   Flight @relation(fields: [flightId], references: [id])
 
   // Celui qui réserve
   idUser          String
-  userReservation User     @relation("ReservationVol", fields: [idUser], references: [id])
+  userReservation User   @relation("ReservationVol", fields: [idUser], references: [id])
 
   // Propriétaire du vol
-  idPrestataire   String
-  prestataire     User     @relation("PrestataireVolReservation", fields: [idPrestataire], references: [id])
+  idPrestataire String
+  prestataire   User   @relation("PrestataireVolReservation", fields: [idPrestataire], references: [id])
 
-  nbrPersonne     Int
-  place           String
+  nbrPersonne Int
+  place       String
 
-  status          String   @default("pending")
-  createdAt       DateTime @default(now())
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
 }
