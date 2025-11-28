@@ -83,8 +83,11 @@ model User {
   Transaction               Transaction[]
   Review                    Review[]
   Appointment               Appointment[]
-  orders                    Order[]
-   ordersRecues Order[] @relation("OrderPrestataire")
+  
+  // RELATIONS ORDER CORRIGÉES
+  ordersClient      Order[] @relation("OrderClient") // Commandes passées en tant que client
+  ordersPrestataire Order[] @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
+  
   messagesEnvoyes           Message[]                 @relation("MessageExpediteur")
   messagesRecus             Message[]                 @relation("MessageReceiver")
   conversationsCrees        Conversation[]            @relation("ConversationCreateur")
@@ -127,10 +130,12 @@ model User {
 
   // Nouvelle relation avec FinancementPartenaire
   financementPartenaires FinancementPartenaire[]
+  
   @@index([email])
   @@index([role])
   @@index([status])
 }
+
 
 // ======================
 // PARAMÈTRES PROFESSIONNELS
@@ -664,23 +669,23 @@ model Order {
   orderNumber     String   @unique
 
   userId          String              // client qui commande
-  idPrestataire   String              // propriétaire du produit/service
+  prestataireId   String              // propriétaire du produit/service
 
   items           Json
   totalAmount     Float
   status          String   @default("pending")
   shippingAddress Json?
-  paymentMethod   String
+  paymentMethod   String?  // Rend optionnel
   paymentStatus   String   @default("pending")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // relations
-  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  prestataire    User @relation("OrderPrestataire", fields: [idPrestataire], references: [id], onDelete: Cascade)
+  // Relations avec noms cohérents
+  user        User @relation("OrderClient", fields: [userId], references: [id], onDelete: Cascade)
+  prestataire User @relation("OrderPrestataire", fields: [prestataireId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([idPrestataire])
+  @@index([prestataireId])
   @@index([orderNumber])
   @@index([status])
   @@index([createdAt])
