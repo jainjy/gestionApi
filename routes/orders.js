@@ -104,128 +104,93 @@ router.post('/pro/migrate-product-types', async (req, res) => {
 /**
  * 👨‍🔧 GET /api/orders/pro - Récupérer TOUTES les commandes - VERSION ULTRA ROBUSTE
  */
-router.get("/pro", async (req, res) => {
+
+router.get("/pro", authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 50, status, productType } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const prestataireId = req.user.id; // ID du prestataire connecté
 
-    console.log(`🔍 Récupération commandes pro`, { 
+    console.log(`🔍 Récupération commandes pro pour prestataire:`, { 
+      prestataireId,
       productType, 
       status,
       page,
       limit 
     });
 
-    // Récupérer TOUTES les commandes
+    // Construire le filtre de base avec le prestataireId
+    const whereClause = {
+      idPrestataire: prestataireId // Filtrer par le prestataire connecté
+    };
+
+    // Ajouter le filtre de statut si spécifié
+    if (status && status !== 'all') {
+      whereClause.status = status;
+    }
+
+    // Récupérer les commandes avec relations utilisateur
     const allOrders = await prisma.order.findMany({
+      where: whereClause,
+      include: {
+        user: { // Relation avec le client
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            companyName: true,
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
 
-    // Fonction pour obtenir le productType d'un item (avec fallback)
+    // Fonction pour obtenir le productType d'un item
     const getItemProductType = (item) => {
-      // 1. Si productType est défini, on l'utilise
       if (item.productType) return item.productType;
-      
-      // 2. Sinon, on déduit du nom
       return deduceProductTypeFromName(item.name);
     };
 
-    // Filtrer par statut si spécifié
+    // Filtrer par productType si spécifié
     let filteredOrders = allOrders;
-    if (status && status !== 'all') {
-      filteredOrders = filteredOrders.filter(order => order.status === status);
-    }
-
-    // Filtrer par productType si spécifié - VERSION ROBUSTE
     if (productType && productType !== 'all') {
       filteredOrders = filteredOrders.filter(order => {
         if (!order.items || !Array.isArray(order.items)) return false;
         
-        const hasMatchingProductType = order.items.some(item => {
+        return order.items.some(item => {
           const itemProductType = getItemProductType(item);
-          const match = itemProductType === productType;
-          
-          // Debug seulement pour les premières occurrences
-          if (match && Math.random() < 0.1) { // 10% des matches pour éviter les logs massifs
-            console.log(`🎯 Match trouvé: "${item.name}" -> ${itemProductType} (recherché: ${productType})`);
-          }
-          
-          return match;
+          return itemProductType === productType;
         });
-        
-        return hasMatchingProductType;
       });
     }
 
-    console.log(`📊 Résultats: ${allOrders.length} -> ${filteredOrders.length} commandes`);
+    console.log(`📊 Résultats pour prestataire ${prestataireId}: ${allOrders.length} -> ${filteredOrders.length} commandes`);
 
     // Pagination
     const paginatedOrders = filteredOrders.slice(skip, skip + parseInt(limit));
 
-    // Récupérer les informations utilisateur
-    const ordersWithUsers = await Promise.all(
-      paginatedOrders.map(async (order) => {
-        try {
-          const user = await prisma.user.findUnique({
-            where: { id: order.userId },
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              phone: true,
-              companyName: true,
-            },
-          });
+    // Filtrer les items si un productType spécifique est demandé
+    const finalOrders = paginatedOrders.map(order => {
+      let displayItems = order.items;
+      if (productType && productType !== 'all') {
+        displayItems = order.items.filter(item => 
+          getItemProductType(item) === productType
+        );
+      }
 
-          // Filtrer les items si un productType spécifique est demandé
-          let displayItems = order.items;
-          if (productType && productType !== 'all') {
-            displayItems = order.items.filter(item => 
-              getItemProductType(item) === productType
-            );
-          }
+      return {
+        ...order,
+        items: displayItems
+      };
+    });
 
-          return {
-            ...order,
-            items: displayItems,
-            user: user || {
-              id: order.userId,
-              firstName: "Client",
-              lastName: "Non Trouvé",
-              email: "client.inconnu@example.com",
-              phone: null,
-              companyName: null,
-            },
-          };
-        } catch (userError) {
-          console.warn(
-            `⚠️ Erreur récupération user ${order.userId}:`,
-            userError.message
-          );
-          return {
-            ...order,
-            items: productType && productType !== 'all' 
-              ? order.items.filter(item => getItemProductType(item) === productType)
-              : order.items,
-            user: {
-              id: order.userId,
-              firstName: "Client",
-              lastName: "Non Trouvé",
-              email: "client.inconnu@example.com",
-              phone: null,
-              companyName: null,
-            },
-          };
-        }
-      })
-    );
-
-    console.log(`✅ ${ordersWithUsers.length} commandes récupérées`);
+    console.log(`✅ ${finalOrders.length} commandes récupérées pour prestataire ${prestataireId}`);
 
     res.json({
       success: true,
-      orders: ordersWithUsers,
+      orders: finalOrders,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -315,34 +280,30 @@ router.put("/pro/:id/status", async (req, res) => {
 /**
  * 📊 GET /api/orders/pro/stats - Statistiques des commandes pour le pro (SANS AUTH)
  */
-router.get("/pro/stats", async (req, res) => {
+router.get("/pro/stats", authenticateToken, async (req, res) => {
   try {
-    console.log(`📊 Récupération statistiques (sans auth)`);
+    const prestataireId = req.user.id; // ID du prestataire connecté
+    
+    console.log(`📊 Récupération statistiques pour prestataire: ${prestataireId}`);
 
-    // Récupérer toutes les commandes pour les statistiques
+    // Récupérer les commandes du prestataire connecté
     const allOrders = await prisma.order.findMany({
+      where: {
+        idPrestataire: prestataireId
+      },
       orderBy: { createdAt: "desc" },
     });
 
     const stats = {
       total: allOrders.length,
       pending: allOrders.filter((order) => order.status === "pending").length,
-      confirmed: allOrders.filter((order) => order.status === "confirmed")
-        .length,
-      processing: allOrders.filter((order) => order.status === "processing")
-        .length,
+      confirmed: allOrders.filter((order) => order.status === "confirmed").length,
+      processing: allOrders.filter((order) => order.status === "processing").length,
       shipped: allOrders.filter((order) => order.status === "shipped").length,
-      delivered: allOrders.filter((order) => order.status === "delivered")
-        .length,
-      cancelled: allOrders.filter((order) => order.status === "cancelled")
-        .length,
-      totalRevenue: allOrders.reduce(
-        (sum, order) => sum + (order.totalAmount || 0),
-        0
-      ),
-      // Statistiques mensuelles
+      delivered: allOrders.filter((order) => order.status === "delivered").length,
+      cancelled: allOrders.filter((order) => order.status === "cancelled").length,
+      totalRevenue: allOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0),
       monthlyRevenue: calculateMonthlyRevenue(allOrders),
-      // Commandes de cette semaine
       thisWeek: allOrders.filter((order) => {
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -362,69 +323,81 @@ router.get("/pro/stats", async (req, res) => {
       error: error.message,
     });
   }
-})
+});
+
 
 /**
  * 📈 GET /api/orders/pro/product-types - Récupérer les statistiques par type de produit
  */
-router.get('/pro/product-types', async (req, res) => {
+router.get("/pro/product-types", authenticateToken, async (req, res) => {
   try {
-    console.log(`📈 Récupération statistiques par type de produit`);
+    const prestataireId = req.user.id; // ID du prestataire connecté
+    
+    console.log(`📈 Récupération statistiques par type de produit pour prestataire: ${prestataireId}`);
 
-    // Récupérer toutes les commandes
+    // Récupérer les commandes du prestataire connecté
     const allOrders = await prisma.order.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-
-    // Analyser les types de produits depuis les items des commandes
-    const productTypeStats = {};
-    let totalItems = 0;
-
-    allOrders.forEach(order => {
-      if (order.items && Array.isArray(order.items)) {
-        order.items.forEach(item => {
-          totalItems++;
-          const productType = item.productType || 'Non catégorisé';
-          
-          if (!productTypeStats[productType]) {
-            productTypeStats[productType] = {
-              count: 0,
-              revenue: 0,
-              orders: new Set(),
-              products: new Set()
-            };
-          }
-          
-          productTypeStats[productType].count += item.quantity || 1;
-          productTypeStats[productType].revenue += (item.price || 0) * (item.quantity || 1);
-          productTypeStats[productType].orders.add(order.id);
-          productTypeStats[productType].products.add(item.productId);
-        });
+      where: {
+        idPrestataire: prestataireId
       }
     });
 
-    // Convertir les Sets en arrays et formater les données
-    const formattedStats = Object.entries(productTypeStats).map(([productType, data]) => ({
-      productType,
-      itemsCount: data.count,
-      revenue: parseFloat(data.revenue.toFixed(2)),
-      ordersCount: data.orders.size,
-      productsCount: data.products.size,
-      percentage: totalItems > 0 ? ((data.count / totalItems) * 100).toFixed(1) : 0
-    }));
+    // Calculer les statistiques par type de produit
+    const productTypeStats = {};
+    
+    allOrders.forEach(order => {
+      if (!order.items || !Array.isArray(order.items)) return;
+      
+      order.items.forEach(item => {
+        const productType = getItemProductType(item);
+        const itemTotal = (item.price || 0) * (item.quantity || 1);
+        
+        if (!productTypeStats[productType]) {
+          productTypeStats[productType] = {
+            productType,
+            itemsCount: 0,
+            revenue: 0,
+            ordersCount: 0
+          };
+        }
+        
+        productTypeStats[productType].itemsCount += (item.quantity || 1);
+        productTypeStats[productType].revenue += itemTotal;
+      });
+    });
 
-    // Trier par revenu décroissant
-    formattedStats.sort((a, b) => b.revenue - a.revenue);
+    // Compter le nombre de commandes par type de produit
+    allOrders.forEach(order => {
+      if (!order.items || !Array.isArray(order.items)) return;
+      
+      const orderProductTypes = new Set();
+      order.items.forEach(item => {
+        orderProductTypes.add(getItemProductType(item));
+      });
+      
+      orderProductTypes.forEach(productType => {
+        if (productTypeStats[productType]) {
+          productTypeStats[productType].ordersCount += 1;
+        }
+      });
+    });
+
+    // Convertir en array et calculer les pourcentages
+    const totalRevenue = Object.values(productTypeStats).reduce((sum, stat) => sum + stat.revenue, 0);
+    const result = Object.values(productTypeStats).map(stat => ({
+      ...stat,
+      revenue: parseFloat(stat.revenue.toFixed(2)),
+      percentage: totalRevenue > 0 ? parseFloat(((stat.revenue / totalRevenue) * 100).toFixed(1)) : 0
+    })).sort((a, b) => b.revenue - a.revenue);
+
+    console.log(`✅ Statistiques types produits récupérées pour prestataire ${prestataireId}:`, result.length, 'types');
 
     res.json({
       success: true,
-      productTypes: formattedStats,
-      totalItems,
-      totalProductTypes: formattedStats.length
+      productTypes: result
     });
-
   } catch (error) {
-    console.error('💥 Erreur récupération statistiques types produits:', error);
+    console.error('❌ Erreur récupération statistiques types produits:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des statistiques par type de produit',
@@ -670,19 +643,17 @@ async function updateStock(orderItems) {
 /**
  * 🛍️ POST /api/orders - Créer une commande (AVEC AUTHENTIFICATION) - CORRIGÉ
  */
+
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { items, shippingAddress, paymentMethod } = req.body;
-    
-    console.log('=== 🎯 CRÉATION COMMANDE AVEC PRODUCT TYPE ===');
-    console.log('👤 req.user:', req.user);
-    console.log('📦 Body items count:', items?.length);
-
     const userId = req.user.id;
-    const isAuthenticated = true;
-    
-    console.log('✅ UserId depuis auth middleware:', userId, req.user.email);
 
+    console.log("🛒 [ORDER CREATE] - Début création commande");
+    console.log("📍 User ID:", userId);
+    console.log("📍 Items reçus:", items);
+
+    // Validation des données
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
@@ -693,20 +664,47 @@ router.post('/', authenticateToken, async (req, res) => {
     let totalAmount = 0;
     const orderItems = [];
     const stockErrors = [];
+    let idPrestataire = null;
 
-    // Vérification des stocks et construction des items avec productType
+    // ✅ VÉRIFICATION DES PRODUITS ET CALCUL DU TOTAL
     for (const item of items) {
+      console.log(`🔍 Vérification produit: ${item.productId}`);
+      
       const product = await prisma.product.findUnique({
         where: { id: item.productId },
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          quantity: true,
+          images: true,
+          trackQuantity: true,
+          productType: true,
+          userId: true
+        }
       });
 
       if (!product) {
         return res.status(400).json({
           success: false,
-          message: `Produit non trouvé: ${item.name}`,
+          message: `Produit non trouvé: ${item.productId}`,
         });
       }
 
+      console.log(`✅ Produit trouvé: ${product.name}, Stock: ${product.quantity}, Propriétaire: ${product.userId}`);
+
+      // ✅ VÉRIFICATION DU PRESTATAIRE UNIQUE
+      if (!idPrestataire) {
+        idPrestataire = product.userId;
+        console.log(`🏪 Prestataire défini: ${idPrestataire}`);
+      } else if (idPrestataire !== product.userId) {
+        return res.status(400).json({
+          success: false,
+          message: "Une commande ne peut contenir que des produits d'un seul prestataire."
+        });
+      }
+
+      // ✅ VÉRIFICATION DU STOCK
       if (product.trackQuantity && product.quantity < item.quantity) {
         stockErrors.push(
           `Stock insuffisant pour "${product.name}". Disponible: ${product.quantity}, Demandé: ${item.quantity}`
@@ -714,23 +712,22 @@ router.post('/', authenticateToken, async (req, res) => {
         continue;
       }
 
+      // ✅ CALCUL DU TOTAL
       const itemTotal = product.price * item.quantity;
       totalAmount += itemTotal;
 
-      // INCLURE LE PRODUCTTYPE DANS L'ITEM DE LA COMMANDE
       orderItems.push({
         productId: product.id,
         name: product.name,
         price: product.price,
         quantity: item.quantity,
         images: product.images,
-        productType: product.productType || 'general', // ← CORRECTION IMPORTANTE
+        productType: product.productType || 'general',
         itemTotal: parseFloat(itemTotal.toFixed(2))
       });
-
-      console.log(`📦 Item ajouté: ${product.name} (${product.productType || 'general'})`);
     }
 
+    // ✅ GESTION DES ERREURS DE STOCK
     if (stockErrors.length > 0) {
       return res.status(400).json({
         success: false,
@@ -739,23 +736,22 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Numéro unique de commande
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substr(2, 9).toUpperCase();
-    const orderNumber = `CMD-${timestamp}-${random}`;
+    // ✅ GÉNÉRATION DU NUMÉRO DE COMMANDE
+    const orderNumber = `CMD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-    console.log("📦 Création commande:", orderNumber, {
-      items: orderItems.length,
-      total: totalAmount,
-      user: userId,
-      productTypes: [...new Set(orderItems.map(item => item.productType))]
-    });
+    console.log(`📦 Création commande dans table Order:`);
+    console.log(`   📝 Numéro: ${orderNumber}`);
+    console.log(`   👤 Client: ${userId}`);
+    console.log(`   🏪 Prestataire: ${idPrestataire}`);
+    console.log(`   💰 Total: ${totalAmount.toFixed(2)}€`);
+    console.log(`   📋 Articles: ${orderItems.length}`);
 
-    // Enregistrement de la commande
+    // ✅ CRÉATION DE LA COMMANDE
     const order = await prisma.order.create({
       data: {
         orderNumber,
         userId,
+        idPrestataire,
         items: orderItems,
         totalAmount: parseFloat(totalAmount.toFixed(2)),
         shippingAddress: shippingAddress || {},
@@ -765,33 +761,70 @@ router.post('/', authenticateToken, async (req, res) => {
       },
     });
 
-    // Mise à jour des stocks
-    await updateStock(orderItems);
+    console.log(`✅ Commande créée dans table Order:`, {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      totalAmount: order.totalAmount
+    });
 
-    console.log('✅ Commande créée:', order.orderNumber, 'avec productTypes:', 
-      [...new Set(orderItems.map(item => item.productType))]);
+    // ✅ MISE À JOUR DU STOCK
+    await updateStock(orderItems);
 
     res.status(201).json({
       success: true,
       message: "Commande créée avec succès",
-      order,
-      userInfo: {
-        id: userId,
-        authenticated: isAuthenticated,
-        email: req.user.email,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        createdAt: order.createdAt,
+        items: orderItems
       }
     });
+
   } catch (error) {
     console.error("💥 Erreur création commande:", error);
+    
+    // Gestion spécifique des erreurs Prisma
+    if (error.code === 'P2003') {
+      console.error("❌ Erreur clé étrangère - User ou Product non trouvé");
+      return res.status(400).json({
+        success: false,
+        message: "Erreur: Utilisateur ou produit non trouvé"
+      });
+    }
+    
+    if (error.code === 'P2025') {
+      console.error("❌ Enregistrement non trouvé");
+      return res.status(400).json({
+        success: false,
+        message: "Données non trouvées"
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: "Erreur lors de la création de la commande",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
+
+async function updateStock(orderItems) {
+  for (const item of orderItems) {
+    await prisma.product.update({
+      where: { id: item.productId },
+      data: {
+        quantity: {
+          decrement: item.quantity
+        }
+      }
+    });
+  }
+}
+
 /**
  * 👤 GET /api/orders/user/my-orders - Commandes de l'utilisateur connecté
  */
