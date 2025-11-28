@@ -15,6 +15,7 @@ exports.getPartenaires = async (req, res) => {
       .json({ error: "Erreur lors de la récupération des partenaires" });
   }
 };
+
 exports.getPartenairesPro = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -29,6 +30,7 @@ exports.getPartenairesPro = async (req, res) => {
       .json({ error: "Erreur lors de la récupération des partenaires" });
   }
 };
+
 exports.getPartenairesDetails = async (req, res) => {
   try {
     const { id } = req.params;
@@ -77,6 +79,7 @@ exports.submitDemande = async (req, res) => {
       partenaireId,
       assuranceId,
       userId,
+      serviceFinancierId,
     } = req.body;
 
     const demande = await prisma.financementDemande.create({
@@ -92,6 +95,7 @@ exports.submitDemande = async (req, res) => {
         partenaireId: partenaireId ? parseInt(partenaireId) : null,
         assuranceId: assuranceId ? parseInt(assuranceId) : null,
         userId: userId || null,
+        serviceFinancierId: serviceFinancierId || null,
       },
     });
 
@@ -116,6 +120,7 @@ exports.getUserDemandes = async (req, res) => {
       include: {
         partenaire: true,
         assurance: true,
+        serviceFinancier: true,
       },
       orderBy: { createdAt: "desc" },
     });
@@ -142,19 +147,19 @@ exports.getAllDemandes = async (req, res) => {
     const where = {};
     if (status) where.status = status;
     if (type) where.type = type;
-    
+
     if (user.role == "professional") {
       // Récupérer les IDs des partenaires de l'utilisateur
       const partenaireIds = await prisma.financementPartenaire.findMany({
         where: { userId: user.id },
         select: { id: true },
       });
-      const ids = partenaireIds.map(p => p.id);
-      
+      const ids = partenaireIds.map((p) => p.id);
+
       // Filtrer les demandes par ces IDs
       where.partenaireId = { in: ids };
     }
-    
+
     const demandes = await prisma.financementDemande.findMany({
       where: where,
       include: {
@@ -162,6 +167,9 @@ exports.getAllDemandes = async (req, res) => {
           select: { id: true, nom: true },
         },
         assurance: {
+          select: { id: true, nom: true },
+        },
+        serviceFinancier: {
           select: { id: true, nom: true },
         },
         user: {
@@ -263,42 +271,39 @@ exports.getServicesFinanciers = async (req, res) => {
     res.json(services);
   } catch (error) {
     console.error("Erreur getServicesFinanciers:", error);
-    res
-      .status(500)
-      .json({
-        error: "Erreur lors de la récupération des services financiers",
-      });
+    res.status(500).json({
+      error: "Erreur lors de la récupération des services financiers",
+    });
   }
 };
-// Récupérer tous les services financiers (public)
+
+// Récupérer tous les services financiers (professionnel)
 exports.getServicesFinanciersPro = async (req, res) => {
   try {
     const userId = req.user.id;
     const { type, categorie } = req.query;
 
-    const where = { isActive: true, userId: userId };
-    if (type) where.type = type;
-    if (categorie) where.categorie = categorie;
-
+    // Récupérer d'abord les partenaires de l'utilisateur
     const partenaires = await prisma.financementPartenaire.findMany({
-      where,
-      select: {
-        id: true,
-        nom: true,
-        icon: true,
-        website: true,
-        ServiceFinancier: true,
+      where: { userId: userId, isActive: true },
+      include: {
+        ServiceFinancier: {
+          where: {
+            isActive: true,
+            ...(type && { type }),
+            ...(categorie && { categorie }),
+          },
+          orderBy: { ordreAffichage: "asc" },
+        },
       },
     });
 
     res.json(partenaires);
   } catch (error) {
-    console.error("Erreur getServicesFinanciers:", error);
-    res
-      .status(500)
-      .json({
-        error: "Erreur lors de la récupération des services financiers",
-      });
+    console.error("Erreur getServicesFinanciersPro:", error);
+    res.status(500).json({
+      error: "Erreur lors de la récupération des services financiers",
+    });
   }
 };
 
@@ -476,6 +481,11 @@ exports.updateServiceFinancier = async (req, res) => {
         dataToUpdate[key] = parseFloat(updateData[key]);
       } else if (key === "avantages" && Array.isArray(updateData[key])) {
         dataToUpdate[key] = updateData[key];
+      } else if (
+        key === "documentsRequises" &&
+        Array.isArray(updateData[key])
+      ) {
+        dataToUpdate[key] = updateData[key];
       } else if (updateData[key] !== undefined) {
         dataToUpdate[key] = updateData[key];
       }
@@ -612,11 +622,9 @@ exports.getAllServicesFinanciers = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur getAllServicesFinanciers:", error);
-    res
-      .status(500)
-      .json({
-        error: "Erreur lors de la récupération des services financiers",
-      });
+    res.status(500).json({
+      error: "Erreur lors de la récupération des services financiers",
+    });
   }
 };
 

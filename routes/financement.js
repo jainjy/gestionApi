@@ -26,7 +26,7 @@ router.get(
 router.get(
   "/admin/demandes",
   authenticateToken,
-  requireRole(["admin","professional"]),
+  requireRole(["admin", "professional"]),
   financementController.getAllDemandes
 );
 
