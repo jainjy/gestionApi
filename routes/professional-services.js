@@ -4,46 +4,10 @@ const { authenticateToken } = require('../middleware/auth')
 
 const { prisma } = require('../lib/db')
 
-// GET /api/professional/services - Récupérer les services liés au professionnel connecté
+// GET /api/professional/services - Récupérer tous les services du professionnel (associés + personnalisés)
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id
-
-    // Récupérer les métiers du professionnel
-    const userMetiers = await prisma.utilisateurMetier.findMany({
-      where: { userId },
-      include: {
-        metier: {
-          include: {
-            services: {
-              include: {
-                service: {
-                  // select explicit fields and nested relations to avoid missing DB columns
-                  select: {
-                    id: true,
-                    libelle: true,
-                    description: true,
-                    categoryId: true,
-                    images: true,
-                    price: true,
-                    duration: true,
-                    category: true,
-                    metiers: {
-                      include: { metier: true }
-                    },
-                    users: {
-                      include: {
-                        user: { select: { id: true, firstName: true, lastName: true, companyName: true } }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    })
 
     // Récupérer les services directement associés au professionnel
     const userServices = await prisma.utilisateurService.findMany({
@@ -58,45 +22,39 @@ router.get('/', authenticateToken, async (req, res) => {
             images: true,
             price: true,
             duration: true,
+            tags: true,
+            isCustom: true,
+            isActive: true,
+            createdById: true,
             metiers: { include: { metier: true } },
-            users: { include: { user: { select: { id: true, firstName: true, lastName: true, companyName: true } } } }
+            users: { 
+              include: { 
+                user: { 
+                  select: { 
+                    id: true, 
+                    firstName: true, 
+                    lastName: true, 
+                    companyName: true 
+                  } 
+                } 
+              } 
+            },
+            category: true
           }
         }
       }
     })
 
-    // // Transformer les données des services par métiers
-    // const servicesFromMetiers = userMetiers.flatMap(um =>
-    //   um.metier.services.map(ms => ({
-    //     id: ms.service.id.toString(),
-    //     name: ms.service.libelle,
-    //     description: ms.service.description,
-    //     category: ms.service.category?.name || 'Non catégorisé',
-    //     categoryId: ms.service.categoryId,
-    //     images: ms.service.images,
-    //     metiers: ms.service.metiers.map(m => ({
-    //       id: m.metier.id,
-    //       libelle: m.metier.libelle
-    //     })),
-    //     vendors: ms.service.users.map(u => ({
-    //       id: u.user.id,
-    //       name: u.user.companyName || `${u.user.firstName} ${u.user.lastName}`,
-    //       isCurrentUser: u.user.id === userId
-    //     })),
-    //     isAssociated: ms.service.users.some(u => u.userId === userId),
-    //     isFromMetier: true,
-    //     status: 'active'
-    //   }))
-    // )
-
-    // Transformer les données des services directs
-    const directServices = userServices.map(us => ({
+    // Transformer les données
+    const transformedServices = userServices.map(us => ({
       id: us.service.id.toString(),
       name: us.service.libelle,
       description: us.service.description,
       category: us.service.category?.name || 'Non catégorisé',
-      categoryId: us.service.categoryId,
       images: us.service.images,
+      price: us.service.price,
+      duration: us.service.duration,
+      tags: us.service.tags,
       metiers: us.service.metiers.map(m => ({
         id: m.metier.id,
         libelle: m.metier.libelle
@@ -107,17 +65,16 @@ router.get('/', authenticateToken, async (req, res) => {
         isCurrentUser: u.user.id === userId
       })),
       isAssociated: true,
-      isFromMetier: false,
-      status: 'active'
+      isCustom: us.service.isCustom,
+      isFromMetier: !us.service.isCustom, // Les services personnalisés ne viennent pas des métiers
+      status: us.service.isActive ? 'active' : 'inactive',
+      canEdit: us.service.isCustom && us.service.createdById === userId,
+      customPrice: us.customPrice,
+      customDuration: us.customDuration,
+      isAvailable: us.isAvailable
     }))
 
-    // Fusionner et dédupliquer les services
-    const allServices = [...directServices]
-    const uniqueServices = allServices.filter((service, index, self) =>
-      index === self.findIndex(s => s.id === service.id)
-    )
-
-    res.json(uniqueServices)
+    res.json(transformedServices)
   } catch (error) {
     console.error('Erreur lors de la récupération des services professionnels:', error)
     res.status(500).json({ error: 'Erreur serveur' })
@@ -338,5 +295,330 @@ router.get('/stats', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
+// POST /api/professional/services/custom - Créer un service personnalisé
+router.post('/custom', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const {
+      libelle,
+      description,
+      categoryId,
+      images = [],
+      duration,
+      price,
+      tags = [],
+      metierIds = []
+    } = req.body
+
+    // Validation des données requises
+    if (!libelle) {
+      return res.status(400).json({ error: 'Le nom du service est obligatoire' })
+    }
+
+    // Créer le service personnalisé
+    const customService = await prisma.service.create({
+      data: {
+        libelle,
+        description,
+        categoryId: categoryId ? parseInt(categoryId) : null,
+        images,
+        duration: duration ? parseInt(duration) : null,
+        price: price ? parseFloat(price) : null,
+        tags,
+        createdById: userId,
+        isCustom: true,
+        isActive: true
+      },
+      include: {
+        category: true,
+        metiers: {
+          include: { metier: true }
+        }
+      }
+    })
+
+    // Associer les métiers si spécifiés
+    if (metierIds && metierIds.length > 0) {
+      const metierServiceConnections = metierIds.map(metierId => ({
+        metierId: parseInt(metierId),
+        serviceId: customService.id
+      }))
+
+      await prisma.metierService.createMany({
+        data: metierServiceConnections
+      })
+    }
+
+    // Associer automatiquement le service au professionnel qui l'a créé
+    await prisma.utilisateurService.create({
+      data: {
+        userId,
+        serviceId: customService.id,
+        customPrice: price ? parseFloat(price) : null,
+        customDuration: duration ? parseInt(duration) : null,
+        isAvailable: true,
+        description: description || null
+      }
+    })
+
+    // Récupérer le service complet avec ses relations
+    const completeService = await prisma.service.findUnique({
+      where: { id: customService.id },
+      select: {
+        id: true,
+        libelle: true,
+        description: true,
+        categoryId: true,
+        images: true,
+        price: true,
+        duration: true,
+        tags: true,
+        isCustom: true,
+        isActive: true,
+        category: true,
+        metiers: { 
+          include: { metier: true } 
+        },
+        users: { 
+          include: { 
+            user: { 
+              select: { 
+                id: true, 
+                firstName: true, 
+                lastName: true, 
+                companyName: true 
+              } 
+            } 
+          } 
+        }
+      }
+    })
+
+    res.json({
+      success: true,
+      message: 'Service personnalisé créé avec succès',
+      service: {
+        id: completeService.id.toString(),
+        name: completeService.libelle,
+        description: completeService.description,
+        category: completeService.category?.name || 'Non catégorisé',
+        images: completeService.images,
+        price: completeService.price,
+        duration: completeService.duration,
+        tags: completeService.tags,
+        metiers: completeService.metiers.map(m => ({
+          id: m.metier.id,
+          libelle: m.metier.libelle
+        })),
+        vendors: completeService.users.map(u => ({
+          id: u.user.id,
+          name: u.user.companyName || `${u.user.firstName} ${u.user.lastName}`,
+          isCurrentUser: u.user.id === userId
+        })),
+        isAssociated: true,
+        isFromMetier: false,
+        isCustom: true,
+        status: 'active'
+      }
+    })
+  } catch (error) {
+    console.error('Erreur lors de la création du service personnalisé:', error)
+    res.status(500).json({ error: 'Erreur serveur lors de la création du service' })
+  }
+})
+
+// PUT /api/professional/services/custom/:serviceId - Modifier un service personnalisé
+router.put('/custom/:serviceId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const serviceId = parseInt(req.params.serviceId)
+    const {
+      libelle,
+      description,
+      categoryId,
+      images,
+      duration,
+      price,
+      tags,
+      metierIds,
+      isActive
+    } = req.body
+
+    // Vérifier que le service existe et appartient à l'utilisateur
+    const existingService = await prisma.service.findUnique({
+      where: { id: serviceId },
+      include: { users: true }
+    })
+
+    if (!existingService) {
+      return res.status(404).json({ error: 'Service non trouvé' })
+    }
+
+    if (existingService.createdById !== userId) {
+      return res.status(403).json({ error: 'Vous ne pouvez modifier que vos propres services' })
+    }
+
+    // Mettre à jour le service
+    const updatedService = await prisma.service.update({
+      where: { id: serviceId },
+      data: {
+        libelle,
+        description,
+        categoryId: categoryId ? parseInt(categoryId) : null,
+        images,
+        duration: duration ? parseInt(duration) : null,
+        price: price ? parseFloat(price) : null,
+        tags,
+        isActive
+      },
+      include: {
+        category: true,
+        metiers: {
+          include: { metier: true }
+        },
+        users: {
+          include: {
+            user: {
+              select: { id: true, firstName: true, lastName: true, companyName: true }
+            }
+          }
+        }
+      }
+    })
+
+    // Mettre à jour les métiers associés si spécifiés
+    if (metierIds) {
+      // Supprimer les associations existantes
+      await prisma.metierService.deleteMany({
+        where: { serviceId }
+      })
+
+      // Créer les nouvelles associations
+      if (metierIds.length > 0) {
+        const metierServiceConnections = metierIds.map(metierId => ({
+          metierId: parseInt(metierId),
+          serviceId
+        }))
+
+        await prisma.metierService.createMany({
+          data: metierServiceConnections
+        })
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Service mis à jour avec succès',
+      service: {
+        id: updatedService.id.toString(),
+        name: updatedService.libelle,
+        description: updatedService.description,
+        category: updatedService.category?.name || 'Non catégorisé',
+        images: updatedService.images,
+        price: updatedService.price,
+        duration: updatedService.duration,
+        tags: updatedService.tags,
+        metiers: updatedService.metiers.map(m => ({
+          id: m.metier.id,
+          libelle: m.metier.libelle
+        })),
+        vendors: updatedService.users.map(u => ({
+          id: u.user.id,
+          name: u.user.companyName || `${u.user.firstName} ${u.user.lastName}`,
+          isCurrentUser: u.user.id === userId
+        })),
+        isAssociated: true,
+        isFromMetier: false,
+        isCustom: true,
+        status: updatedService.isActive ? 'active' : 'inactive'
+      }
+    })
+  } catch (error) {
+    console.error('Erreur lors de la modification du service personnalisé:', error)
+    res.status(500).json({ error: 'Erreur serveur lors de la modification du service' })
+  }
+})
+
+// GET /api/professional/services/categories - Récupérer les catégories disponibles
+router.get('/categories', authenticateToken, async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({
+      select: {
+        id: true,
+        name: true,
+        services: {
+          where: { isCustom: false }, // Seulement les services standards
+          select: { id: true }
+        }
+      },
+      orderBy: { name: 'asc' }
+    })
+
+    res.json(categories)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des catégories:', error)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// GET /api/professional/services/metiers - Récupérer les métiers de l'utilisateur
+router.get('/metiers', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+
+    const userMetiers = await prisma.utilisateurMetier.findMany({
+      where: { userId },
+      include: {
+        metier: {
+          select: {
+            id: true,
+            libelle: true
+          }
+        }
+      }
+    })
+
+    const metiers = userMetiers.map(um => ({
+      id: um.metier.id,
+      libelle: um.metier.libelle
+    }))
+
+    res.json(metiers)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des métiers:', error)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+// DELETE /api/professional/services/custom/:serviceId - Supprimer un service personnalisé
+router.delete('/custom/:serviceId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const serviceId = parseInt(req.params.serviceId)
+
+    // Vérifier que le service existe et appartient à l'utilisateur
+    const service = await prisma.service.findUnique({
+      where: { id: serviceId }
+    })
+
+    if (!service) {
+      return res.status(404).json({ error: 'Service non trouvé' })
+    }
+
+    if (service.createdById !== userId) {
+      return res.status(403).json({ error: 'Vous ne pouvez supprimer que vos propres services' })
+    }
+
+    // Supprimer le service (les associations utilisateurService seront supprimées en cascade)
+    await prisma.service.delete({
+      where: { id: serviceId }
+    })
+
+    res.json({ success: true, message: 'Service supprimé avec succès' })
+  } catch (error) {
+    console.error('Erreur lors de la suppression du service personnalisé:', error)
+    res.status(500).json({ error: 'Erreur serveur lors de la suppression du service' })
+  }
+})
+
 
 module.exports = router

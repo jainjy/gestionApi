@@ -130,7 +130,9 @@ model User {
 
   // Nouvelle relation avec FinancementPartenaire
   financementPartenaires FinancementPartenaire[]
-  
+  servicesCrees Service[]
+
+  @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
   @@index([role])
   @@index([status])
@@ -466,13 +468,25 @@ model Service {
   duration    Int?
   price       Float?
   embedding   Unsupported("vector")?
+  
+  // Nouveaux champs pour les services personnalisés
+  createdById String?               // ID du professionnel qui a créé le service
+  isCustom    Boolean   @default(false) // Si c'est un service personnalisé
+  isActive    Boolean   @default(true)  // Si le service est actif
+  tags        String[]               // Tags personnalisés
+  
   category    Category?              @relation(fields: [categoryId], references: [id])
+  createdBy   User?                  @relation(fields: [createdById], references: [id]) // Relation avec le créateur
   metiers     MetierService[]
   users       UtilisateurService[]
   demandes    Demande[]
 
   Review      Review[]
   Appointment Appointment[]
+
+  @@index([createdById])
+  @@index([isCustom])
+  @@index([isActive])
 }
 
 //===================
@@ -507,8 +521,15 @@ model UtilisateurService {
   serviceId Int
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   service   Service @relation(fields: [serviceId], references: [id])
+  
+  // Nouveaux champs pour personnaliser le service par utilisateur
+  customPrice    Float?   // Prix personnalisé pour ce professionnel
+  customDuration Int?     // Durée personnalisée
+  isAvailable    Boolean  @default(true) // Si le service est disponible
+  description    String?  // Description personnalisée
 
   @@id([userId, serviceId])
+  @@index([isAvailable])
 }
 
 //===================
