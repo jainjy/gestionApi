@@ -88,8 +88,15 @@ router.get("/:id", async (req, res) => {
   
   try {
     console.log("🔍 Recherche du service en base...");
-    const service = await prisma.service.findUnique({ 
-      where: { id: serviceId } 
+    const service = await prisma.service.findUnique({
+      where: { id: serviceId },
+      include: {
+        users: {
+          include: {
+            user: true
+          }
+        }
+      },
     });
     
     console.log("📦 Résultat Prisma:", service);
