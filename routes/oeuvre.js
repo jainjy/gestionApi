@@ -44,6 +44,12 @@ router.post("/new", authenticateToken, async (req, res) => {
         images: images || [],
       },
     });
+    const liaison=await prisma.utilisateurService.create({
+      data:{
+        userId:req.user.id,
+        serviceId:newOeuvre.id,
+      }
+    })
 
     // 🔔 Création automatique d’une notification
     await createNotification({
