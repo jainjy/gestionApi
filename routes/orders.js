@@ -644,16 +644,185 @@ async function updateStock(orderItems) {
  * 🛍️ POST /api/orders - Créer une commande (AVEC AUTHENTIFICATION) - CORRIGÉ
  */
 
+// router.post('/', authenticateToken, async (req, res) => {
+//   try {
+//     const { items, shippingAddress, paymentMethod } = req.body;
+//     const userId = req.user.id;
+
+//     console.log("🛒 [ORDER CREATE] - Début création commande");
+//     console.log("📍 User ID:", userId);
+//     console.log("📍 Items reçus:", items);
+
+//     // Validation des données
+//     if (!items || !Array.isArray(items) || items.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Le panier est vide",
+//       });
+//     }
+
+//     let totalAmount = 0;
+//     const orderItems = [];
+//     const stockErrors = [];
+//     let idPrestataire = null;
+
+//     // ✅ VÉRIFICATION DES PRODUITS ET CALCUL DU TOTAL
+//     for (const item of items) {
+//       console.log(`🔍 Vérification produit: ${item.productId}`);
+      
+//       const product = await prisma.product.findUnique({
+//         where: { id: item.productId },
+//         select: {
+//           id: true,
+//           name: true,
+//           price: true,
+//           quantity: true,
+//           images: true,
+//           trackQuantity: true,
+//           productType: true,
+//           userId: true
+//         }
+//       });
+
+//       if (!product) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Produit non trouvé: ${item.productId}`,
+//         });
+//       }
+
+//       console.log(`✅ Produit trouvé: ${product.name}, Stock: ${product.quantity}, Propriétaire: ${product.userId}`);
+
+//       // ✅ VÉRIFICATION DU PRESTATAIRE UNIQUE
+//       if (!idPrestataire) {
+//         idPrestataire = product.userId;
+//         console.log(`🏪 Prestataire défini: ${idPrestataire}`);
+//       } else if (idPrestataire !== product.userId) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Une commande ne peut contenir que des produits d'un seul prestataire."
+//         });
+//       }
+
+//       // ✅ VÉRIFICATION DU STOCK
+//       if (product.trackQuantity && product.quantity < item.quantity) {
+//         stockErrors.push(
+//           `Stock insuffisant pour "${product.name}". Disponible: ${product.quantity}, Demandé: ${item.quantity}`
+//         );
+//         continue;
+//       }
+
+//       // ✅ CALCUL DU TOTAL
+//       const itemTotal = product.price * item.quantity;
+//       totalAmount += itemTotal;
+
+//       orderItems.push({
+//         productId: product.id,
+//         name: product.name,
+//         price: product.price,
+//         quantity: item.quantity,
+//         images: product.images,
+//         productType: product.productType || 'general',
+//         itemTotal: parseFloat(itemTotal.toFixed(2))
+//       });
+//     }
+
+//     // ✅ GESTION DES ERREURS DE STOCK
+//     if (stockErrors.length > 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Problèmes de stock",
+//         errors: stockErrors,
+//       });
+//     }
+
+//     // ✅ GÉNÉRATION DU NUMÉRO DE COMMANDE
+//     const orderNumber = `CMD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+//     console.log(`📦 Création commande dans table Order:`);
+//     console.log(`   📝 Numéro: ${orderNumber}`);
+//     console.log(`   👤 Client: ${userId}`);
+//     console.log(`   🏪 Prestataire: ${idPrestataire}`);
+//     console.log(`   💰 Total: ${totalAmount.toFixed(2)}€`);
+//     console.log(`   📋 Articles: ${orderItems.length}`);
+
+//     // ✅ CRÉATION DE LA COMMANDE
+//     const order = await prisma.order.create({
+//       data: {
+//         orderNumber,
+//         userId,
+//         idPrestataire,
+//         items: orderItems,
+//         totalAmount: parseFloat(totalAmount.toFixed(2)),
+//         shippingAddress: shippingAddress || {},
+//         paymentMethod: paymentMethod || "card",
+//         status: "pending",
+//         paymentStatus: "pending",
+//       },
+//     });
+
+//     console.log(`✅ Commande créée dans table Order:`, {
+//       id: order.id,
+//       orderNumber: order.orderNumber,
+//       totalAmount: order.totalAmount
+//     });
+
+//     // ✅ MISE À JOUR DU STOCK
+//     await updateStock(orderItems);
+
+//     res.status(201).json({
+//       success: true,
+//       message: "Commande créée avec succès",
+//       order: {
+//         id: order.id,
+//         orderNumber: order.orderNumber,
+//         totalAmount: order.totalAmount,
+//         status: order.status,
+//         paymentStatus: order.paymentStatus,
+//         createdAt: order.createdAt,
+//         items: orderItems
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error("💥 Erreur création commande:", error);
+    
+//     // Gestion spécifique des erreurs Prisma
+//     if (error.code === 'P2003') {
+//       console.error("❌ Erreur clé étrangère - User ou Product non trouvé");
+//       return res.status(400).json({
+//         success: false,
+//         message: "Erreur: Utilisateur ou produit non trouvé"
+//       });
+//     }
+    
+//     if (error.code === 'P2025') {
+//       console.error("❌ Enregistrement non trouvé");
+//       return res.status(400).json({
+//         success: false,
+//         message: "Données non trouvées"
+//       });
+//     }
+
+//     res.status(500).json({
+//       success: false,
+//       message: "Erreur lors de la création de la commande",
+//       error: process.env.NODE_ENV === 'development' ? error.message : undefined
+//     });
+//   }
+// });
+
+
+
+
+
+
+
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { items, shippingAddress, paymentMethod } = req.body;
     const userId = req.user.id;
 
-    console.log("🛒 [ORDER CREATE] - Début création commande");
-    console.log("📍 User ID:", userId);
-    console.log("📍 Items reçus:", items);
-
-    // Validation des données
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
@@ -666,68 +835,129 @@ router.post('/', authenticateToken, async (req, res) => {
     const stockErrors = [];
     let idPrestataire = null;
 
-    // ✅ VÉRIFICATION DES PRODUITS ET CALCUL DU TOTAL
+    // =====================================================
+    //               BOUCLE SUR LES ITEMS
+    // =====================================================
     for (const item of items) {
-      console.log(`🔍 Vérification produit: ${item.productId}`);
-      
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        select: {
-          id: true,
-          name: true,
-          price: true,
-          quantity: true,
-          images: true,
-          trackQuantity: true,
-          productType: true,
-          userId: true
+
+      const rawId = item.productId; // ce que le front envoie
+
+      // =====================================================
+      // 1) ESSAI EN TANT QUE PRODUIT (UUID -> String)
+      // =====================================================
+      let product = null;
+      try {
+        product = await prisma.product.findUnique({
+          where: { id: String(rawId) },
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            quantity: true,
+            images: true,
+            trackQuantity: true,
+            productType: true,
+            userId: true
+          }
+        });
+      } catch (e) {
+        product = null; // Normal si rawId = int → pas un product
+      }
+
+      // =====================================================
+      // S'IL EXISTE → LOGIQUE PRODUIT NORMALE
+      // =====================================================
+      if (product) {
+
+        if (!idPrestataire) idPrestataire = product.userId;
+        else if (idPrestataire !== product.userId) {
+          return res.status(400).json({
+            success: false,
+            message: "Une commande ne peut contenir que les produits d’un seul prestataire."
+          });
+        }
+
+        // Vérification stock
+        if (product.trackQuantity && product.quantity < item.quantity) {
+          stockErrors.push(
+            `Stock insuffisant pour "${product.name}". Disponible: ${product.quantity}, Demandé: ${item.quantity}`
+          );
+          continue;
+        }
+
+        const itemTotal = product.price * item.quantity;
+        totalAmount += itemTotal;
+
+        orderItems.push({
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          quantity: item.quantity,
+          images: product.images,
+          productType: product.productType || "general",
+          itemTotal: Number(itemTotal.toFixed(2))
+        });
+
+        continue; // skip service logic
+      }
+
+      // =====================================================
+      // 2) ESSAI EN TANT QUE SERVICE (id = Int)
+      // =====================================================
+      const service = await prisma.service.findUnique({
+        where: { id: Number(rawId) },
+        include: {
+          users: {
+            include: {
+              user: true
+            }
+          }
         }
       });
 
-      if (!product) {
+      if (!service) {
         return res.status(400).json({
           success: false,
-          message: `Produit non trouvé: ${item.productId}`,
+          message: `Produit/Service introuvable: ${rawId}`
         });
       }
 
-      console.log(`✅ Produit trouvé: ${product.name}, Stock: ${product.quantity}, Propriétaire: ${product.userId}`);
+      // Récupération propriétaire service
+      const proprietaireService = service.users?.[0]?.userId;
 
-      // ✅ VÉRIFICATION DU PRESTATAIRE UNIQUE
-      if (!idPrestataire) {
-        idPrestataire = product.userId;
-        console.log(`🏪 Prestataire défini: ${idPrestataire}`);
-      } else if (idPrestataire !== product.userId) {
+      if (!proprietaireService) {
         return res.status(400).json({
           success: false,
-          message: "Une commande ne peut contenir que des produits d'un seul prestataire."
+          message: `Aucun prestataire trouvé pour le service: ${service.id}`
         });
       }
 
-      // ✅ VÉRIFICATION DU STOCK
-      if (product.trackQuantity && product.quantity < item.quantity) {
-        stockErrors.push(
-          `Stock insuffisant pour "${product.name}". Disponible: ${product.quantity}, Demandé: ${item.quantity}`
-        );
-        continue;
+      if (!idPrestataire) idPrestataire = proprietaireService;
+      else if (idPrestataire !== proprietaireService) {
+        return res.status(400).json({
+          success: false,
+          message: "Impossible de commander chez plusieurs prestataires."
+        });
       }
 
-      // ✅ CALCUL DU TOTAL
-      const itemTotal = product.price * item.quantity;
+      const itemTotal = (service.price || 0) * item.quantity;
       totalAmount += itemTotal;
 
       orderItems.push({
-        productId: product.id,
-        name: product.name,
-        price: product.price,
+        productId: service.id,
+        name: service.libelle,
+        price: service.price || 0,
         quantity: item.quantity,
-        images: product.images,
-        productType: product.productType || 'general',
-        itemTotal: parseFloat(itemTotal.toFixed(2))
+        images: service.images,
+        productType: "service",
+        itemTotal: Number(itemTotal.toFixed(2))
       });
-    }
 
-    // ✅ GESTION DES ERREURS DE STOCK
+    } // fin for
+
+    // =====================================================
+    // ERREURS STOCK PRODUITS
+    // =====================================================
     if (stockErrors.length > 0) {
       return res.status(400).json({
         success: false,
@@ -736,24 +966,20 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // ✅ GÉNÉRATION DU NUMÉRO DE COMMANDE
-    const orderNumber = `CMD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    // Numéro commande
+    const orderNumber =
+      `CMD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-    console.log(`📦 Création commande dans table Order:`);
-    console.log(`   📝 Numéro: ${orderNumber}`);
-    console.log(`   👤 Client: ${userId}`);
-    console.log(`   🏪 Prestataire: ${idPrestataire}`);
-    console.log(`   💰 Total: ${totalAmount.toFixed(2)}€`);
-    console.log(`   📋 Articles: ${orderItems.length}`);
-
-    // ✅ CRÉATION DE LA COMMANDE
+    // =====================================================
+    //             CRÉATION COMMANDE
+    // =====================================================
     const order = await prisma.order.create({
       data: {
         orderNumber,
         userId,
         idPrestataire,
         items: orderItems,
-        totalAmount: parseFloat(totalAmount.toFixed(2)),
+        totalAmount: Number(totalAmount.toFixed(2)),
         shippingAddress: shippingAddress || {},
         paymentMethod: paymentMethod || "card",
         status: "pending",
@@ -761,56 +987,42 @@ router.post('/', authenticateToken, async (req, res) => {
       },
     });
 
-    console.log(`✅ Commande créée dans table Order:`, {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      totalAmount: order.totalAmount
-    });
+    // =====================================================
+    //     MISE À JOUR STOCK (produits UNIQUEMENT)
+    // =====================================================
+    for (const item of orderItems) {
+      if (item.productType !== "service") {
+        await prisma.product.update({
+          where: { id: item.productId },
+          data: {
+            quantity: { decrement: item.quantity }
+          }
+        });
+      }
+    }
 
-    // ✅ MISE À JOUR DU STOCK
-    await updateStock(orderItems);
-
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Commande créée avec succès",
-      order: {
-        id: order.id,
-        orderNumber: order.orderNumber,
-        totalAmount: order.totalAmount,
-        status: order.status,
-        paymentStatus: order.paymentStatus,
-        createdAt: order.createdAt,
-        items: orderItems
-      }
+      order
     });
 
   } catch (error) {
     console.error("💥 Erreur création commande:", error);
-    
-    // Gestion spécifique des erreurs Prisma
-    if (error.code === 'P2003') {
-      console.error("❌ Erreur clé étrangère - User ou Product non trouvé");
-      return res.status(400).json({
-        success: false,
-        message: "Erreur: Utilisateur ou produit non trouvé"
-      });
-    }
-    
-    if (error.code === 'P2025') {
-      console.error("❌ Enregistrement non trouvé");
-      return res.status(400).json({
-        success: false,
-        message: "Données non trouvées"
-      });
-    }
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Erreur lors de la création de la commande",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
+
+
+
+
+
+
+
+
 
 async function updateStock(orderItems) {
   for (const item of orderItems) {
