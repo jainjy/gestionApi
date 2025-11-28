@@ -669,23 +669,23 @@ model Order {
   orderNumber     String   @unique
 
   userId          String              // client qui commande
-  prestataireId   String              // propriétaire du produit/service
+  idPrestataire   String              // propriétaire du produit/service
 
   items           Json
   totalAmount     Float
   status          String   @default("pending")
   shippingAddress Json?
-  paymentMethod   String?  // Rend optionnel
+  paymentMethod   String
   paymentStatus   String   @default("pending")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // Relations avec noms cohérents
+  // Relations CORRIGÉES - doivent correspondre aux noms dans User
   user        User @relation("OrderClient", fields: [userId], references: [id], onDelete: Cascade)
-  prestataire User @relation("OrderPrestataire", fields: [prestataireId], references: [id], onDelete: Cascade)
+  prestataire User @relation("OrderPrestataire", fields: [idPrestataire], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([prestataireId])
+  @@index([idPrestataire])
   @@index([orderNumber])
   @@index([status])
   @@index([createdAt])
