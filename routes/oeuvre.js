@@ -81,30 +81,45 @@ router.post("/new", authenticateToken, async (req, res) => {
 });
 
 // === GET /api/oeuvre ===
-// Liste des œuvres
+// Liste des œuvres du professionnel connecté
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    const categories = await prisma.category.findMany({
-      where: {
-        OR: [
-          { name: { contains: "art", mode: "insensitive" } },
-          { name: { contains: "commerce", mode: "insensitive" } },
-          { name: { contains: "peinture", mode: "insensitive" } },
-          { name: { contains: "sculptures", mode: "insensitive" } },
-          { name: { contains: "artisanat", mode: "insensitive" } },
-          { name: { contains: "boutique", mode: "insensitive" } },
-        ],
-      },
-      include: { services: true },
-    });
-    const oeuvres = [];
-    for (const category of categories) {
-      if (category.services.length > 0) {
-        category.category = { id: category.id, name: category.name };
-        oeuvres.push(...category.services);
-      }
+    const userId = req.user.id; // ID de l'utilisateur connecté
 
-    }
+    // Récupérer les services liés à l'utilisateur connecté
+    const userServices = await prisma.utilisateurService.findMany({
+      where: {
+        userId: userId
+      },
+      include: {
+        service: {
+          include: {
+            category: true,
+            metiers: true,
+            users: true
+          }
+        }
+      }
+    });
+
+    // Filtrer les catégories artistiques
+    const oeuvres = userServices
+      .map(us => us.service)
+      .filter(service => {
+        const categoryName = service.category?.name?.toLowerCase() || '';
+        return [
+          'art', 'commerce', 'peinture', 'sculptures', 
+          'artisanat', 'boutique'
+        ].some(artCategory => categoryName.includes(artCategory));
+      })
+      .map(service => ({
+        ...service,
+        category: service.category ? { 
+          id: service.category.id, 
+          name: service.category.name 
+        } : null
+      }));
+
     res.json(oeuvres);
   } catch (error) {
     console.error("Erreur lors du chargement :", error);
@@ -267,7 +282,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
 // === GET /api/oeuvre ===
 // Liste des œuvres
-router.get("/all", authenticateToken, async (req, res) => {
+router.get("/all", async (req, res) => {
   try {
     const oeuvres = await prisma.service.findMany({
       include: {

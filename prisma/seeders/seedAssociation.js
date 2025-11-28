@@ -2189,7 +2189,7 @@ async function main() {
     ];
 
     // Clean up existing associations
-    await prisma.metierService.deleteMany({});
+    //await prisma.metierService.deleteMany({});
 
     // Récupérer tous les métiers et services existants
     const metiers = await prisma.metier.findMany();

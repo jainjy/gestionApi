@@ -46,6 +46,7 @@ router.delete(
   financementController.deleteDemande
 );
 
+// Gestion des services financiers (admin)
 router.get(
   "/admin/services",
   authenticateToken,
@@ -57,6 +58,32 @@ router.put(
   authenticateToken,
   requireRole(["admin"]),
   financementController.toggleServiceStatus
+);
+
+// Gestion des partenaires (admin)
+router.get(
+  "/admin/professionals",
+  authenticateToken,
+  requireRole(["admin"]),
+  financementController.getProfessionals
+);
+router.post(
+  "/admin/partenaires",
+  authenticateToken,
+  requireRole(["admin"]),
+  financementController.createPartenaire
+);
+router.put(
+  "/admin/partenaires/:id",
+  authenticateToken,
+  requireRole(["admin"]),
+  financementController.updatePartenaire
+);
+router.delete(
+  "/admin/partenaires/:id",
+  authenticateToken,
+  requireRole(["admin"]),
+  financementController.deletePartenaire
 );
 
 // ============================================================================

@@ -128,19 +128,41 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de la catégorie" });
   }
 });
-
 // GET /api/categories/name/:name/services - Récupérer les services par nom de catégorie
 router.get("/name/:name/services", async (req, res) => {
   try {
     const { name } = req.params;
     
-    const category = await prisma.category.findFirst({
-      where: {
+    let whereCondition = {};
+
+    // Si le nom est "constructions", on cherche toutes les catégories IBR
+    if (name.toLowerCase() === "constructions") {
+      whereCondition = {
+        name: {
+          in: [
+            "Constructions",
+            "Études préalables & faisabilité",
+            "Études architecturales", 
+            "Études structurelles",
+            "Économie de la construction",
+            "Ingénierie environnementale & performance",
+            "Suivi de chantier & direction de travaux",
+            "Spécialités selon BET"
+          ]
+        }
+      };
+    } else {
+      // Recherche normale par nom
+      whereCondition = {
         name: {
           contains: name,
-          mode: 'insensitive' // Recherche insensible à la casse
+          mode: 'insensitive'
         }
-      },
+      };
+    }
+
+    const categories = await prisma.category.findMany({
+      where: whereCondition,
       include: {
         services: {
           include: {
@@ -165,14 +187,23 @@ router.get("/name/:name/services", async (req, res) => {
       }
     });
 
-    if (!category) {  
-      return res.status(404).json({ error: "Catégorie non trouvée" });
+    if (!categories || categories.length === 0) {  
+      return res.status(404).json({ error: "Catégorie(s) non trouvée(s)" });
     }
 
-    res.json({
-      category: category.name,
-      services: category.services
-    });
+    // Pour "constructions", on fusionne tous les services dans un seul tableau
+    if (name.toLowerCase() === "constructions") {
+      const allServices = categories.flatMap(cat => cat.services);
+      res.json({
+        category: "Constructions et IBR",
+        services: allServices
+      });
+    } else {
+      res.json({
+        category: categories[0].name,
+        services: categories[0].services
+      });
+    }
   } catch (error) {
     console.error("Erreur lors de la récupération des services:", error);
     res.status(500).json({ 
@@ -180,6 +211,5 @@ router.get("/name/:name/services", async (req, res) => {
     });
   }
 });
-
 
 module.exports = router;

@@ -6,6 +6,21 @@ exports.getPartenaires = async (req, res) => {
   try {
     const partenaires = await prisma.financementPartenaire.findMany({
       where: { isActive: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            email: true,
+          },
+        },
+        ServiceFinancier: {
+          where: { isActive: true },
+          select: { id: true, nom: true, type: true },
+        },
+      },
     });
     res.json(partenaires);
   } catch (error) {
@@ -21,6 +36,12 @@ exports.getPartenairesPro = async (req, res) => {
     const userId = req.user.id;
     const partenaires = await prisma.financementPartenaire.findMany({
       where: { isActive: true, userId: userId },
+      include: {
+        ServiceFinancier: {
+          where: { isActive: true },
+          select: { id: true, nom: true, type: true },
+        },
+      },
     });
     res.json(partenaires);
   } catch (error) {
@@ -38,6 +59,15 @@ exports.getPartenairesDetails = async (req, res) => {
       where: { isActive: true, id: parseInt(id) },
       include: {
         ServiceFinancier: true,
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            email: true,
+          },
+        },
       },
     });
     res.json(partenaires);
@@ -46,6 +76,159 @@ exports.getPartenairesDetails = async (req, res) => {
     res
       .status(500)
       .json({ error: "Erreur lors de la récupération du partenaires" });
+  }
+};
+
+// Créer un partenaire (admin)
+exports.createPartenaire = async (req, res) => {
+  try {
+    const {
+      nom,
+      description,
+      type,
+      avantages,
+      icon,
+      website,
+      phone,
+      email,
+      address,
+      conditions,
+      tauxMin,
+      tauxMax,
+      dureeMin,
+      dureeMax,
+      montantMin,
+      montantMax,
+      userId,
+    } = req.body;
+
+    const partenaire = await prisma.financementPartenaire.create({
+      data: {
+        nom,
+        description,
+        type,
+        avantages: avantages || [],
+        icon: icon || "",
+        website: website || null,
+        phone: phone || null,
+        email: email || null,
+        address: address || null,
+        conditions: conditions || null,
+        tauxMin: tauxMin ? parseFloat(tauxMin) : null,
+        tauxMax: tauxMax ? parseFloat(tauxMax) : null,
+        dureeMin: dureeMin ? parseInt(dureeMin) : null,
+        dureeMax: dureeMax ? parseInt(dureeMax) : null,
+        montantMin: montantMin ? parseFloat(montantMin) : null,
+        montantMax: montantMax ? parseFloat(montantMax) : null,
+        userId: userId || null,
+        isActive: true,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Partenaire créé avec succès",
+      data: partenaire,
+    });
+  } catch (error) {
+    console.error("Erreur création partenaire:", error);
+    res.status(500).json({ error: "Erreur lors de la création du partenaire" });
+  }
+};
+
+// Mettre à jour un partenaire (admin)
+exports.updatePartenaire = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const partenaire = await prisma.financementPartenaire.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Partenaire mis à jour avec succès",
+      data: partenaire,
+    });
+  } catch (error) {
+    console.error("Erreur updatePartenaire:", error);
+    res
+      .status(500)
+      .json({ error: "Erreur lors de la mise à jour du partenaire" });
+  }
+};
+
+// Supprimer un partenaire (admin)
+exports.deletePartenaire = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.financementPartenaire.delete({
+      where: { id: parseInt(id) },
+    });
+
+    res.json({
+      success: true,
+      message: "Partenaire supprimé avec succès",
+    });
+  } catch (error) {
+    console.error("Erreur deletePartenaire:", error);
+    res
+      .status(500)
+      .json({ error: "Erreur lors de la suppression du partenaire" });
+  }
+};
+
+// Récupérer tous les utilisateurs professionnels (admin)
+exports.getProfessionals = async (req, res) => {
+  try {
+    const professionals = await prisma.user.findMany({
+      where: {
+        role: "professional",
+        status: "active",
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        companyName: true,
+        email: true,
+        phone: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json(professionals);
+  } catch (error) {
+    console.error("Erreur getProfessionals:", error);
+    res
+      .status(500)
+      .json({ error: "Erreur lors de la récupération des professionnels" });
   }
 };
 
@@ -149,14 +332,11 @@ exports.getAllDemandes = async (req, res) => {
     if (type) where.type = type;
 
     if (user.role == "professional") {
-      // Récupérer les IDs des partenaires de l'utilisateur
       const partenaireIds = await prisma.financementPartenaire.findMany({
         where: { userId: user.id },
         select: { id: true },
       });
       const ids = partenaireIds.map((p) => p.id);
-
-      // Filtrer les demandes par ces IDs
       where.partenaireId = { in: ids };
     }
 
@@ -283,7 +463,6 @@ exports.getServicesFinanciersPro = async (req, res) => {
     const userId = req.user.id;
     const { type, categorie } = req.query;
 
-    // Récupérer d'abord les partenaires de l'utilisateur
     const partenaires = await prisma.financementPartenaire.findMany({
       where: { userId: userId, isActive: true },
       include: {
@@ -349,7 +528,7 @@ exports.getServiceFinancierById = async (req, res) => {
   }
 };
 
-// Créer un service financier (professionnel)
+// Créer un service financier (professionnel ou admin)
 exports.createServiceFinancier = async (req, res) => {
   try {
     const {
@@ -372,21 +551,24 @@ exports.createServiceFinancier = async (req, res) => {
       ordreAffichage,
     } = req.body;
 
-    // Vérifier que l'utilisateur a le droit de créer un service pour ce partenaire
-    const partenaire = await prisma.financementPartenaire.findUnique({
-      where: { id: parseInt(partenaireId) },
-      include: { user: true },
-    });
+    // Pour les admin, pas besoin de vérifier les permissions
+    if (req.user.role !== "admin") {
+      const partenaire = await prisma.financementPartenaire.findUnique({
+        where: { id: parseInt(partenaireId) },
+        include: { user: true },
+      });
 
-    if (!partenaire) {
-      return res.status(404).json({ error: "Partenaire non trouvé" });
-    }
+      if (!partenaire) {
+        return res.status(404).json({ error: "Partenaire non trouvé" });
+      }
 
-    // Vérifier les permissions (admin ou propriétaire du partenaire)
-    if (req.user.role !== "admin" && partenaire.userId !== req.user.id) {
-      return res
-        .status(403)
-        .json({ error: "Non autorisé à créer un service pour ce partenaire" });
+      if (partenaire.userId !== req.user.id) {
+        return res
+          .status(403)
+          .json({
+            error: "Non autorisé à créer un service pour ce partenaire",
+          });
+      }
     }
 
     const service = await prisma.serviceFinancier.create({
@@ -408,7 +590,7 @@ exports.createServiceFinancier = async (req, res) => {
         documentsRequises: documentsRequises || [],
         delaiTraitement: delaiTraitement || null,
         ordreAffichage: ordreAffichage || 0,
-        isActive: req.user.role === "admin", // Les admin peuvent activer directement
+        isActive: req.user.role === "admin",
       },
       include: {
         partenaire: {
@@ -434,13 +616,12 @@ exports.createServiceFinancier = async (req, res) => {
   }
 };
 
-// Mettre à jour un service financier (professionnel)
+// Mettre à jour un service financier (professionnel ou admin)
 exports.updateServiceFinancier = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Récupérer le service pour vérifier les permissions
     const service = await prisma.serviceFinancier.findUnique({
       where: { id },
       include: {
@@ -454,7 +635,6 @@ exports.updateServiceFinancier = async (req, res) => {
       return res.status(404).json({ error: "Service financier non trouvé" });
     }
 
-    // Vérifier les permissions
     if (
       req.user.role !== "admin" &&
       service.partenaire.userId !== req.user.id
@@ -464,7 +644,6 @@ exports.updateServiceFinancier = async (req, res) => {
         .json({ error: "Non autorisé à modifier ce service" });
     }
 
-    // Préparer les données de mise à jour
     const dataToUpdate = {};
     const numericFields = [
       "taux",
@@ -518,12 +697,11 @@ exports.updateServiceFinancier = async (req, res) => {
   }
 };
 
-// Supprimer un service financier (professionnel)
+// Supprimer un service financier (professionnel ou admin)
 exports.deleteServiceFinancier = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Récupérer le service pour vérifier les permissions
     const service = await prisma.serviceFinancier.findUnique({
       where: { id },
       include: {
@@ -537,7 +715,6 @@ exports.deleteServiceFinancier = async (req, res) => {
       return res.status(404).json({ error: "Service financier non trouvé" });
     }
 
-    // Vérifier les permissions
     if (
       req.user.role !== "admin" &&
       service.partenaire.userId !== req.user.id
@@ -567,16 +744,24 @@ exports.deleteServiceFinancier = async (req, res) => {
 // FONCTIONS ADMIN SERVICES FINANCIERS
 // ============================================================================
 
-// Récupérer tous les services financiers (admin)
+// Récupérer tous les services financiers (admin) - CORRIGÉ
 exports.getAllServicesFinanciers = async (req, res) => {
   try {
     const { page = 1, limit = 10, partenaireId, type, isActive } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
-    if (partenaireId) where.partenaireId = parseInt(partenaireId);
-    if (type) where.type = type;
-    if (isActive !== undefined) where.isActive = isActive === "true";
+    const where = { isActive: true }; // Par défaut, on montre seulement les actifs
+
+    // Appliquer les filtres seulement s'ils sont spécifiés
+    if (partenaireId && partenaireId !== "all") {
+      where.partenaireId = parseInt(partenaireId);
+    }
+    if (type && type !== "all") {
+      where.type = type;
+    }
+    if (isActive && isActive !== "all") {
+      where.isActive = isActive === "true";
+    }
 
     const services = await prisma.serviceFinancier.findMany({
       where,
