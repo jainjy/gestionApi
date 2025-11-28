@@ -84,6 +84,7 @@ model User {
   Review                    Review[]
   Appointment               Appointment[]
   orders                    Order[]
+   ordersRecues Order[] @relation("OrderPrestataire")
   messagesEnvoyes           Message[]                 @relation("MessageExpediteur")
   messagesRecus             Message[]                 @relation("MessageReceiver")
   conversationsCrees        Conversation[]            @relation("ConversationCreateur")
@@ -661,7 +662,10 @@ model Appointment {
 model Order {
   id              String   @id @default(uuid())
   orderNumber     String   @unique
-  userId          String
+
+  userId          String              // client qui commande
+  idPrestataire   String              // propriétaire du produit/service
+
   items           Json
   totalAmount     Float
   status          String   @default("pending")
@@ -671,9 +675,12 @@ model Order {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // relations
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prestataire    User @relation("OrderPrestataire", fields: [idPrestataire], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([idPrestataire])
   @@index([orderNumber])
   @@index([status])
   @@index([createdAt])
