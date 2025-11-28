@@ -34,31 +34,38 @@ async function getCategoryFromEntity(entityType, entityId) {
       case "product":
         const product = await prisma.product.findUnique({
           where: { id: entityId },
-          select: { category: true }
+          select: { category: true },
         });
         return product?.category || "products";
-      
+
       case "service":
         const service = await prisma.service.findUnique({
           where: { id: entityId },
-          select: { name: true }
+          select: {
+            libelle: true, // ← CORRECTION ICI : name → libelle
+            category: {
+              select: {
+                name: true,
+              },
+            },
+          },
         });
-        return service?.name || "services";
-      
+        return service?.category?.name || "services";
+
       case "metier":
         const metier = await prisma.metier.findUnique({
           where: { id: entityId },
-          select: { name: true }
+          select: { name: true },
         });
         return metier?.name || "metiers";
-      
+
       case "property":
         const property = await prisma.property.findUnique({
           where: { id: entityId },
-          select: { type: true }
+          select: { type: true },
         });
         return property?.type || "immobilier";
-      
+
       default:
         return entityType;
     }
@@ -496,73 +503,81 @@ router.get("/recommendations", authenticateToken, recommendationLimiter, async (
           where: {
             OR: [
               { category: { in: topCategories } },
-              { name: { contains: topCategories[0], mode: 'insensitive' } }
+              { name: { contains: topCategories[0], mode: "insensitive" } },
             ],
-            status: "active"
+            status: "active",
           },
-          take: limitPerType
+          take: limitPerType,
         });
-        
+
+        // Services - Recherche par libelle et description
         // Services - Recherche par libelle et description
         const serviceRecs = await prisma.service.findMany({
           where: {
             OR: [
-              { libelle: { contains: topCategories[0], mode: 'insensitive' } },
-              { description: { contains: topCategories[0], mode: 'insensitive' } }
-            ]
+              { libelle: { contains: topCategories[0], mode: "insensitive" } },
+              {
+                description: {
+                  contains: topCategories[0],
+                  mode: "insensitive",
+                },
+              },
+            ],
           },
-          take: limitPerType
+          take: limitPerType,
         });
-        
+
         // Métiers - Recherche par libelle
         const metierRecs = await prisma.metier.findMany({
           where: {
-            libelle: { contains: topCategories[0], mode: 'insensitive' }
+            libelle: { contains: topCategories[0], mode: "insensitive" },
           },
-          take: limitPerType
+          take: limitPerType,
         });
-        
+
         // Propriétés - Recherche par type, title et city
         const propertyRecs = await prisma.property.findMany({
           where: {
             OR: [
               { type: { in: topCategories } },
-              { title: { contains: topCategories[0], mode: 'insensitive' } },
-              { city: { contains: topCategories[0], mode: 'insensitive' } }
+              { title: { contains: topCategories[0], mode: "insensitive" } },
+              { city: { contains: topCategories[0], mode: "insensitive" } },
             ],
-            isActive: true
+            isActive: true,
           },
-          take: limitPerType
+          take: limitPerType,
         });
-        
+
         recommendations.push(
-          ...productRecs.map(item => ({ 
-            ...item, 
+          ...productRecs.map((item) => ({
+            ...item,
             entityType: "product",
             sourceType: "Produit",
-            recommendationSource: "préférences"
+            recommendationSource: "préférences",
           })),
-          ...serviceRecs.map(item => ({ 
-            ...item, 
+          ...serviceRecs.map((item) => ({
+            ...item,
             entityType: "service",
-            sourceType: "Service", 
-            recommendationSource: "préférences"
+            sourceType: "Service",
+            recommendationSource: "préférences",
           })),
-          ...metierRecs.map(item => ({ 
-            ...item, 
+          ...metierRecs.map((item) => ({
+            ...item,
             entityType: "metier",
             sourceType: "Métier",
-            recommendationSource: "préférences"
+            recommendationSource: "préférences",
           })),
-          ...propertyRecs.map(item => ({ 
-            ...item, 
+          ...propertyRecs.map((item) => ({
+            ...item,
             entityType: "property",
             sourceType: "Immobilier",
-            recommendationSource: "préférences"
+            recommendationSource: "préférences",
           }))
         );
-        
-        console.log(`❤️ Recommandations préférences - Produits: ${productRecs.length}, Services: ${serviceRecs.length}, Métiers: ${metierRecs.length}, Propriétés: ${propertyRecs.length}`);
+
+        console.log(
+          `❤️ Recommandations préférences - Produits: ${productRecs.length}, Services: ${serviceRecs.length}, Métiers: ${metierRecs.length}, Propriétés: ${propertyRecs.length}`
+        );
       } catch (error) {
         console.error("❌ Erreur recommandations préférences:", error.message);
         // Fallback sur les produits seulement
