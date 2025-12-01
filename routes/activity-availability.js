@@ -1,153 +1,199 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { prisma } = require('../lib/db');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { PrismaClient } = require("@prisma/client");
+const { authenticateToken } = require("../middleware/auth");
 
-// POST /api/activity-availability - Ajouter des disponibilités
-router.post('/', authenticateToken, requireRole(['professional']), async (req, res) => {
-  try {
-    const { activityId, dates } = req.body; // dates: [{date, startTime, endTime, slots, price}]
+const prisma = new PrismaClient();
 
-    // Vérifier que l'activité appartient au guide
-    const activity = await prisma.activity.findUnique({
-      where: { id: activityId },
-      include: { guide: true }
-    });
-
-    if (!activity) {
-      return res.status(404).json({ success: false, error: 'Activité non trouvée' });
-    }
-
-    if (activity.guide.userId !== req.user.id) {
-      return res.status(403).json({ success: false, error: 'Non autorisé' });
-    }
-
-    // Créer les disponibilités
-    const availabilities = await Promise.all(
-      dates.map(dateData => 
-        prisma.activityAvailability.create({
-          data: {
-            activityId,
-            date: new Date(dateData.date),
-            startTime: dateData.startTime,
-            endTime: dateData.endTime,
-            slots: dateData.slots || activity.maxParticipants,
-            price: dateData.price || activity.price,
-            status: 'available'
-          }
-        })
-      )
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Disponibilités ajoutées avec succès',
-      data: availabilities
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/activity-availability/:activityId - Récupérer les disponibilités d'une activité
-router.get('/:activityId', async (req, res) => {
+// GET disponibilités d'une activité
+router.get("/activity/:activityId", async (req, res) => {
   try {
     const { activityId } = req.params;
     const { startDate, endDate } = req.query;
 
-    let where = { activityId };
+    const where = { activityId };
 
     if (startDate && endDate) {
       where.date = {
         gte: new Date(startDate),
-        lte: new Date(endDate)
+        lte: new Date(endDate),
       };
     } else {
       where.date = { gte: new Date() };
     }
 
-    const availabilities = await prisma.activityAvailability.findMany({
+    const availability = await prisma.activityAvailability.findMany({
       where,
-      orderBy: { date: 'asc' },
-      include: {
-        bookings: {
-          select: {
-            id: true,
-            participants: true,
-            status: true
-          }
-        }
-      }
+      orderBy: { date: "asc" },
     });
-
-    // Formater pour afficher les places disponibles
-    const formattedAvailabilities = availabilities.map(av => ({
-      id: av.id,
-      date: av.date,
-      startTime: av.startTime,
-      endTime: av.endTime,
-      slots: av.slots,
-      bookedSlots: av.bookedSlots,
-      availableSlots: av.slots - av.bookedSlots,
-      price: av.price,
-      status: av.status,
-      bookings: av.bookings
-    }));
 
     res.json({
       success: true,
-      data: formattedAvailabilities
+      data: availability,
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("Error fetching availability:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des disponibilités",
+    });
   }
 });
 
-// DELETE /api/activity-availability/:id - Supprimer une disponibilité
-router.delete('/:id', authenticateToken, requireRole(['professional']), async (req, res) => {
+// POST créer une disponibilité (pour les guides)
+router.post("/", authenticateToken, async (req, res) => {
+  try {
+    const { activityId, date, startTime, endTime, slots, price } = req.body;
+
+    // Vérifier que l'utilisateur est le guide de cette activité
+    const activity = await prisma.activity.findUnique({
+      where: { id: activityId },
+      include: { guide: true },
+    });
+
+    if (!activity) {
+      return res.status(404).json({
+        success: false,
+        error: "Activité non trouvée",
+      });
+    }
+
+    if (activity.guide.userId !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé à modifier les disponibilités de cette activité",
+      });
+    }
+
+    const availability = await prisma.activityAvailability.create({
+      data: {
+        activityId,
+        date: new Date(date),
+        startTime,
+        endTime,
+        slots: parseInt(slots),
+        price: price ? parseFloat(price) : null,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: availability,
+    });
+  } catch (error) {
+    console.error("Error creating availability:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la création de la disponibilité",
+    });
+  }
+});
+
+// PUT mettre à jour une disponibilité
+router.put("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const updateData = req.body;
 
-    // Vérifier la disponibilité et les permissions
+    // Vérifier les permissions
     const availability = await prisma.activityAvailability.findUnique({
       where: { id },
       include: {
         activity: {
-          include: { guide: true }
+          include: { guide: true },
         },
-        bookings: {
-          where: { status: { not: 'cancelled' } }
-        }
-      }
+      },
     });
 
     if (!availability) {
-      return res.status(404).json({ success: false, error: 'Disponibilité non trouvée' });
-    }
-
-    if (availability.activity.guide.userId !== req.user.id) {
-      return res.status(403).json({ success: false, error: 'Non autorisé' });
-    }
-
-    // Vérifier s'il y a des réservations actives
-    if (availability.bookings.length > 0) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        error: 'Impossible de supprimer : il y a des réservations actives'
+        error: "Disponibilité non trouvée",
       });
     }
 
-    // Supprimer la disponibilité
-    await prisma.activityAvailability.delete({
-      where: { id }
+    if (availability.activity.guide.userId !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé à modifier cette disponibilité",
+      });
+    }
+
+    const updatedAvailability = await prisma.activityAvailability.update({
+      where: { id },
+      data: updateData,
     });
 
     res.json({
       success: true,
-      message: 'Disponibilité supprimée'
+      data: updatedAvailability,
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("Error updating availability:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la mise à jour de la disponibilité",
+    });
+  }
+});
+
+// DELETE supprimer une disponibilité
+router.delete("/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Vérifier les permissions
+    const availability = await prisma.activityAvailability.findUnique({
+      where: { id },
+      include: {
+        activity: {
+          include: { guide: true },
+        },
+        bookings: {
+          where: {
+            status: { not: "cancelled" },
+          },
+        },
+      },
+    });
+
+    if (!availability) {
+      return res.status(404).json({
+        success: false,
+        error: "Disponibilité non trouvée",
+      });
+    }
+
+    if (availability.activity.guide.userId !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé à supprimer cette disponibilité",
+      });
+    }
+
+    // Vérifier qu'il n'y a pas de réservations actives
+    if (availability.bookings.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Impossible de supprimer une disponibilité avec des réservations actives",
+      });
+    }
+
+    await prisma.activityAvailability.delete({
+      where: { id },
+    });
+
+    res.json({
+      success: true,
+      message: "Disponibilité supprimée avec succès",
+    });
+  } catch (error) {
+    console.error("Error deleting availability:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la suppression de la disponibilité",
+    });
   }
 });
 
