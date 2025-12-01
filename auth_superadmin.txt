@@ -1,0 +1,1 @@
+{"user":{"id":"3f0ce4cf-c032-4793-b709-82fb8ff5bfcd","email":"superadmin@servo.mg","firstName":"Super","lastName":"Admin","phone":"+261 34 12 345 67","role":"admin","companyName":null,"status":"active","userType":"ADMIN","avatar":null,"address":null,"siret":null,"city":null},"token":"real-jwt-token-3f0ce4cf-c032-4793-b709-82fb8ff5bfcd"}

@@ -1,4 +1,4 @@
-// server.js
+// server.js - VERSION MISE À JOUR
 require("dotenv").config();
 const path = require("path");
 const express = require("express");
@@ -244,7 +244,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes API
+// ======================
+// ROUTES API EXISTANTES
+// ======================
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/upload", require("./routes/upload"));
@@ -328,6 +330,14 @@ app.use("/api/admin/media", require("./routes/admin-media"));
 app.use("/api/pro/demandes", require("./routes/proDemandes"));
 app.use("/api/services-ibr", require("./routes/services-ibr"));
 
+// ======================
+// 🆕 NOUVELLES ROUTES ACTIVITÉS ET LOISIRS
+// ======================
+app.use("/api/activities", require("./routes/activities"));
+app.use("/api/activity-bookings", require("./routes/activity-bookings"));
+app.use("/api/activity-actions", require("./routes/activity-actions"));
+app.use("/api/guide-contact", require("./routes/guide-contact"));
+app.use("/api/activity-availability", require("./routes/activity-availability"));
 
 // Route pour l'upload de fichiers dans les messages
 app.post(
@@ -404,7 +414,7 @@ app.get("/websocket-test", (req, res) => {
   });
 });
 
-// Route de santé
+// Route de santé - MISE À JOUR
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
@@ -427,7 +437,13 @@ app.get("/health", (req, res) => {
       "notifications",
       "websocket",
       "map",
-      "investissement" // 🆕 AJOUT DU SERVICE INVESTISSEMENT
+      "investissement",
+      // 🆕 AJOUT DES SERVICES ACTIVITÉS
+      "activities",
+      "activity-bookings",
+      "activity-actions",
+      "guide-contact",
+      "activity-availability"
     ],
     websocket: {
       connectedClients: io.engine.clientsCount,
@@ -436,7 +452,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Route 404
+// Route 404 - MISE À JOUR
 app.use("*", (req, res) => {
   res.status(404).json({
     success: false,
@@ -447,7 +463,13 @@ app.use("*", (req, res) => {
       "/api/notifications/user/:userId",
       "/api/auth/*",
       "/api/users/*",
-      "/api/investissement/*" // 🆕 AJOUT DE LA ROUTE INVESTISSEMENT
+      "/api/investissement/*",
+      // 🆕 AJOUT DES ROUTES ACTIVITÉS
+      "/api/activities/*",
+      "/api/activity-bookings/*",
+      "/api/activity-actions/*",
+      "/api/guide-contact/*",
+      "/api/activity-availability/*"
     ]
   });
 });
@@ -462,12 +484,16 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Démarrage du serveur
+// Démarrage du serveur - MISE À JOUR
 server.listen(PORT, async () => {
   console.log(`🚀 Serveur démarré sur le port: ${PORT}`);
   console.log(`🔌 WebSocket disponible sur: ws://localhost:${PORT}`);
   console.log(`🏥 Route santé: http://localhost:${PORT}/health`);
   console.log(`🧪 Test WebSocket: http://localhost:${PORT}/websocket-test`);
   console.log(`📨 Notifications: http://localhost:${PORT}/api/notifications/user/:userId`);
-  console.log(`🌍 Investissement: http://localhost:${PORT}/api/investissement/demande`); // 🆕 AJOUT
+  console.log(`🌍 Investissement: http://localhost:${PORT}/api/investissement/demande`);
+  // 🆕 AJOUT DES ACTIVITÉS
+  console.log(`🎯 Activités: http://localhost:${PORT}/api/activities`);
+  console.log(`📅 Réservations: http://localhost:${PORT}/api/activity-bookings`);
+  console.log(`❤️ Actions: http://localhost:${PORT}/api/activity-actions`);
 });
