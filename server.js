@@ -281,8 +281,10 @@ app.use("/api/cart", require("./routes/cart"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/categories", require("./routes/categories"));
 app.use("/api/admin/payments", require("./routes/admin-payments"));
-app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 
+//app.use("/api/recherche", require("./routes/rechercheIntelligent"));
+app.use("/api/recherche", require("./routes/rechercheIntelligentPremium"));
+  
 // 🔥 CORRECTION: Route notifications
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/bienetre", require("./routes/reservationbien_etre"));
