@@ -1,14 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/db');
 const { authenticateToken } = require('../middleware/auth');
 
-const prisma = new PrismaClient();
-
-// POST ajouter/supprimer des favoris
-router.post('/:activityId/favorite', authenticateToken, async (req, res) => {
+// POST /api/activity-actions/favorite - Ajouter/supprimer des favoris
+router.post('/favorite', authenticateToken, async (req, res) => {
   try {
-    const { activityId } = req.params;
+    const { activityId } = req.body;
 
     const existingFavorite = await prisma.activityFavorite.findUnique({
       where: {
@@ -20,7 +18,7 @@ router.post('/:activityId/favorite', authenticateToken, async (req, res) => {
     });
 
     if (existingFavorite) {
-      // Supprimer des favoris
+      // Supprimer du favori
       await prisma.activityFavorite.delete({
         where: {
           userId_activityId: {
@@ -30,7 +28,7 @@ router.post('/:activityId/favorite', authenticateToken, async (req, res) => {
         }
       });
 
-      // Mettre à jour les statistiques
+      // Décrémenter le compteur
       await prisma.activityStatistics.update({
         where: { activityId },
         data: { totalFavorites: { decrement: 1 } }
@@ -42,7 +40,7 @@ router.post('/:activityId/favorite', authenticateToken, async (req, res) => {
         message: 'Activité retirée des favoris'
       });
     } else {
-      // Ajouter aux favoris
+      // Ajouter au favori
       await prisma.activityFavorite.create({
         data: {
           userId: req.user.id,
@@ -50,7 +48,7 @@ router.post('/:activityId/favorite', authenticateToken, async (req, res) => {
         }
       });
 
-      // Mettre à jour les statistiques
+      // Incrémenter le compteur
       await prisma.activityStatistics.update({
         where: { activityId },
         data: { totalFavorites: { increment: 1 } }
@@ -63,19 +61,14 @@ router.post('/:activityId/favorite', authenticateToken, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error toggling favorite:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la modification des favoris'
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// POST partager une activité
-router.post('/:activityId/share', authenticateToken, async (req, res) => {
+// POST /api/activity-actions/share - Enregistrer un partage
+router.post('/share', authenticateToken, async (req, res) => {
   try {
-    const { activityId } = req.params;
-    const { platform, sharedWith } = req.body;
+    const { activityId, platform, sharedWith } = req.body;
 
     const share = await prisma.activityShare.create({
       data: {
@@ -86,7 +79,7 @@ router.post('/:activityId/share', authenticateToken, async (req, res) => {
       }
     });
 
-    // Mettre à jour les statistiques
+    // Incrémenter le compteur de partages
     await prisma.activityStatistics.update({
       where: { activityId },
       data: { totalShares: { increment: 1 } }
@@ -94,30 +87,25 @@ router.post('/:activityId/share', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      data: share,
-      message: 'Activité partagée avec succès'
+      message: 'Partage enregistré',
+      data: share
     });
   } catch (error) {
-    console.error('Error sharing activity:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors du partage de l\'activité'
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// POST ajouter un avis
-router.post('/:activityId/review', authenticateToken, async (req, res) => {
+// POST /api/activity-actions/review - Ajouter un avis
+router.post('/review', authenticateToken, async (req, res) => {
   try {
-    const { activityId } = req.params;
-    const { bookingId, rating, comment, images } = req.body;
+    const { activityId, bookingId, rating, comment, images } = req.body;
 
     // Vérifier que l'utilisateur a bien réservé cette activité
     const booking = await prisma.activityBooking.findFirst({
       where: {
         id: bookingId,
-        activityId,
         userId: req.user.id,
+        activityId,
         status: 'completed'
       }
     });
@@ -125,11 +113,11 @@ router.post('/:activityId/review', authenticateToken, async (req, res) => {
     if (!booking) {
       return res.status(403).json({
         success: false,
-        error: 'Vous ne pouvez noter que les activités que vous avez réservées et terminées'
+        error: 'Vous ne pouvez noter que les activités que vous avez terminées'
       });
     }
 
-    // Vérifier si un avis existe déjà pour cette réservation
+    // Vérifier si un avis existe déjà
     const existingReview = await prisma.activityReview.findUnique({
       where: { bookingId }
     });
@@ -137,23 +125,25 @@ router.post('/:activityId/review', authenticateToken, async (req, res) => {
     if (existingReview) {
       return res.status(400).json({
         success: false,
-        error: 'Vous avez déjà noté cette réservation'
+        error: 'Vous avez déjà noté cette activité'
       });
     }
 
+    // Créer l'avis
     const review = await prisma.activityReview.create({
       data: {
         activityId,
         bookingId,
         userId: req.user.id,
-        rating: parseInt(rating),
+        rating,
         comment,
         images: images || [],
-        verified: true
+        verified: true // Vérifié car lié à une réservation
       },
       include: {
         user: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
             avatar: true
@@ -164,35 +154,40 @@ router.post('/:activityId/review', authenticateToken, async (req, res) => {
 
     // Mettre à jour la note moyenne de l'activité
     const activityReviews = await prisma.activityReview.findMany({
-      where: { activityId }
+      where: { activityId },
+      select: { rating: true }
     });
 
-    const averageRating = activityReviews.reduce((sum, review) => sum + review.rating, 0) / activityReviews.length;
+    const averageRating = activityReviews.reduce((sum, r) => sum + r.rating, 0) / activityReviews.length;
 
     await prisma.activity.update({
       where: { id: activityId },
       data: {
         rating: averageRating,
-        reviewCount: activityReviews.length
+        reviewCount: { increment: 1 }
       }
     });
 
-    res.json({
+    // Mettre à jour les statistiques
+    await prisma.activityStatistics.update({
+      where: { activityId },
+      data: {
+        completedBookings: { increment: 1 }
+      }
+    });
+
+    res.status(201).json({
       success: true,
-      data: review,
-      message: 'Avis ajouté avec succès'
+      message: 'Avis ajouté avec succès',
+      data: review
     });
   } catch (error) {
-    console.error('Error creating review:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de l\'ajout de l\'avis'
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// GET mes favoris
-router.get('/favorites/my-favorites', authenticateToken, async (req, res) => {
+// GET /api/activity-actions/favorites - Récupérer les favoris de l'utilisateur
+router.get('/favorites', authenticateToken, async (req, res) => {
   try {
     const favorites = await prisma.activityFavorite.findMany({
       where: { userId: req.user.id },
@@ -203,6 +198,7 @@ router.get('/favorites/my-favorites', authenticateToken, async (req, res) => {
               include: {
                 user: {
                   select: {
+                    id: true,
                     firstName: true,
                     lastName: true,
                     avatar: true
@@ -211,18 +207,9 @@ router.get('/favorites/my-favorites', authenticateToken, async (req, res) => {
               }
             },
             category: true,
-            availability: {
-              where: {
-                date: { gte: new Date() },
-                status: 'available'
-              },
-              take: 1
-            },
-            statistics: true,
-            _count: {
-              select: {
-                reviews: true
-              }
+            reviews: {
+              take: 3,
+              orderBy: { createdAt: 'desc' }
             }
           }
         }
@@ -232,17 +219,10 @@ router.get('/favorites/my-favorites', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      data: favorites.map(fav => ({
-        ...fav.activity,
-        favoritedAt: fav.createdAt
-      }))
+      data: favorites.map(fav => fav.activity)
     });
   } catch (error) {
-    console.error('Error fetching favorites:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la récupération des favoris'
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

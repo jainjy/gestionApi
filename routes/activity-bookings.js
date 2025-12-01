@@ -1,88 +1,48 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/db');
 const { authenticateToken } = require('../middleware/auth');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { sendEmail } = require('../utils/email');
 
-const prisma = new PrismaClient();
-
-// POST créer une réservation
+// POST /api/activity-bookings - Créer une réservation
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const {
-      activityId,
-      availabilityId,
-      participants,
-      specialRequests,
-      paymentMethod,
-      promotionCode
-    } = req.body;
+    const { activityId, availabilityId, participants, specialRequests } = req.body;
 
-    // Vérifier la disponibilité
-    const availability = await prisma.activityAvailability.findUnique({
-      where: { id: availabilityId },
-      include: { 
-        activity: {
+    // Vérifier l'activité
+    const activity = await prisma.activity.findUnique({
+      where: { id: activityId },
+      include: {
+        guide: {
           include: {
-            guide: {
-              include: {
-                user: true
-              }
-            }
+            user: true
           }
+        },
+        availability: {
+          where: { id: availabilityId }
         }
       }
     });
 
-    if (!availability) {
-      return res.status(404).json({
-        success: false,
-        error: 'Créneau non disponible'
-      });
+    if (!activity) {
+      return res.status(404).json({ success: false, error: 'Activité non trouvée' });
     }
 
-    if (availability.bookedSlots + participants > availability.slots) {
+    const availability = activity.availability[0];
+    if (!availability) {
+      return res.status(404).json({ success: false, error: 'Disponibilité non trouvée' });
+    }
+
+    // Vérifier les places disponibles
+    const availableSlots = availability.slots - availability.bookedSlots;
+    if (participants > availableSlots) {
       return res.status(400).json({
         success: false,
-        error: 'Plus assez de places disponibles'
+        error: `Il ne reste que ${availableSlots} places disponibles`
       });
     }
 
-    let totalAmount = (availability.price || availability.activity.price) * participants;
-    let discountApplied = 0;
-
-    // Appliquer une promotion si fournie
-    if (promotionCode) {
-      const promotion = await prisma.activityPromotion.findFirst({
-        where: { 
-          code: promotionCode,
-          activityId,
-          isActive: true,
-          validFrom: { lte: new Date() },
-          validUntil: { gte: new Date() },
-          OR: [
-            { usageLimit: null },
-            { usageLimit: { gt: { usedCount: 0 } } }
-          ]
-        }
-      });
-
-      if (promotion) {
-        if (promotion.discountType === 'percentage') {
-          discountApplied = totalAmount * (promotion.discountValue / 100);
-        } else {
-          discountApplied = promotion.discountValue;
-        }
-        totalAmount = Math.max(0, totalAmount - discountApplied);
-
-        // Incrémenter le compteur d'utilisation
-        await prisma.activityPromotion.update({
-          where: { id: promotion.id },
-          data: { usedCount: { increment: 1 } }
-        });
-      }
-    }
+    // Calculer le montant total
+    const totalAmount = activity.price ? activity.price * participants : 0;
 
     // Créer la réservation
     const booking = await prisma.activityBooking.create({
@@ -90,10 +50,11 @@ router.post('/', authenticateToken, async (req, res) => {
         activityId,
         availabilityId,
         userId: req.user.id,
-        participants: parseInt(participants),
+        participants,
         totalAmount,
         specialRequests,
-        paymentMethod
+        status: 'pending',
+        paymentStatus: 'pending'
       },
       include: {
         activity: {
@@ -102,6 +63,7 @@ router.post('/', authenticateToken, async (req, res) => {
               include: {
                 user: {
                   select: {
+                    id: true,
                     firstName: true,
                     lastName: true,
                     email: true,
@@ -115,78 +77,52 @@ router.post('/', authenticateToken, async (req, res) => {
         availability: true,
         user: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            phone: true
           }
         }
       }
     });
 
-    // Mettre à jour les slots réservés
+    // Mettre à jour les places réservées
     await prisma.activityAvailability.update({
       where: { id: availabilityId },
-      data: { bookedSlots: { increment: participants } }
+      data: {
+        bookedSlots: { increment: participants }
+      }
     });
 
-    // Créer un paiement Stripe
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount * 100), // Convertir en centimes
-      currency: 'eur',
-      metadata: {
-        bookingId: booking.id,
-        activityId,
-        userId: req.user.id,
-        discountApplied: discountApplied.toString()
-      },
-      automatic_payment_methods: {
-        enabled: true,
-      },
-    });
-
-    // Mettre à jour la réservation avec l'ID de paiement
-    await prisma.activityBooking.update({
-      where: { id: booking.id },
-      data: { stripePaymentIntent: paymentIntent.id }
-    });
-
-    // Notifier le guide
-    if (req.io) {
-      req.io.to(`user:${booking.activity.guide.userId}`).emit('new-booking', {
-        type: 'NEW_BOOKING',
-        booking,
-        message: `Nouvelle réservation pour ${booking.activity.title}`
+    // Créer une notification pour le guide (via WebSocket)
+    if (req.io && activity.guide.user) {
+      req.io.to(`user:${activity.guide.userId}`).emit('new-notification', {
+        title: 'Nouvelle réservation',
+        message: `${req.user.firstName} ${req.user.lastName} a réservé "${activity.title}"`,
+        type: 'booking',
+        relatedEntity: 'activity',
+        relatedEntityId: activityId,
+        timestamp: new Date().toISOString()
       });
     }
 
-    res.json({
+    res.status(201).json({
       success: true,
-      data: {
-        booking,
-        clientSecret: paymentIntent.client_secret,
-        discountApplied
-      }
+      message: 'Réservation créée avec succès',
+      data: booking
     });
   } catch (error) {
     console.error('Error creating booking:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la création de la réservation'
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// GET mes réservations
+// GET /api/activity-bookings/my-bookings - Réservations de l'utilisateur
 router.get('/my-bookings', authenticateToken, async (req, res) => {
   try {
-    const { status, page = 1, limit = 10 } = req.query;
-    const skip = (page - 1) * limit;
-
-    const where = { userId: req.user.id };
-    if (status) where.status = status;
-
     const bookings = await prisma.activityBooking.findMany({
-      where,
+      where: { userId: req.user.id },
       include: {
         activity: {
           include: {
@@ -194,248 +130,139 @@ router.get('/my-bookings', authenticateToken, async (req, res) => {
               include: {
                 user: {
                   select: {
+                    id: true,
                     firstName: true,
                     lastName: true,
-                    avatar: true,
-                    phone: true
+                    email: true,
+                    avatar: true
+                  }
+                }
+              }
+            },
+            category: true
+          }
+        },
+        availability: true,
+        review: true
+      },
+      orderBy: { bookedAt: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      data: bookings
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/activity-bookings/guide-bookings - Réservations pour le guide
+router.get('/guide-bookings', authenticateToken, async (req, res) => {
+  try {
+    const guide = await prisma.activityGuide.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    if (!guide) {
+      return res.status(404).json({ success: false, error: 'Guide non trouvé' });
+    }
+
+    const bookings = await prisma.activityBooking.findMany({
+      where: {
+        activity: {
+          guideId: guide.id
+        }
+      },
+      include: {
+        activity: {
+          include: {
+            category: true
+          }
+        },
+        availability: true,
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        },
+        review: true
+      },
+      orderBy: { bookedAt: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      data: bookings
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PATCH /api/activity-bookings/:id/status - Changer le statut d'une réservation
+router.patch('/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Vérifier la réservation
+    const booking = await prisma.activityBooking.findUnique({
+      where: { id },
+      include: {
+        activity: {
+          include: {
+            guide: true
+          }
+        }
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ success: false, error: 'Réservation non trouvée' });
+    }
+
+    // Vérifier les permissions
+    const isOwner = booking.userId === req.user.id;
+    const isGuide = booking.activity.guide.userId === req.user.id;
+
+    if (!isOwner && !isGuide) {
+      return res.status(403).json({ success: false, error: 'Non autorisé' });
+    }
+
+    // Mettre à jour le statut
+    const updatedBooking = await prisma.activityBooking.update({
+      where: { id },
+      data: { 
+        status,
+        ...(status === 'confirmed' && { confirmedAt: new Date() }),
+        ...(status === 'cancelled' && { cancelledAt: new Date() }),
+        ...(status === 'completed' && { completedAt: new Date() })
+      },
+      include: {
+        activity: {
+          include: {
+            guide: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
                   }
                 }
               }
             }
           }
         },
-        availability: true,
-        review: true
-      },
-      orderBy: { bookedAt: 'desc' },
-      skip,
-      take: parseInt(limit)
-    });
-
-    const total = await prisma.activityBooking.count({ where });
-
-    res.json({
-      success: true,
-      data: bookings,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching bookings:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la récupération des réservations'
-    });
-  }
-});
-
-// GET réservations d'un guide
-router.get('/guide/my-bookings', authenticateToken, async (req, res) => {
-  try {
-    const { status, page = 1, limit = 10 } = req.query;
-    const skip = (page - 1) * limit;
-
-    // Vérifier que l'utilisateur est un guide
-    const guide = await prisma.activityGuide.findUnique({
-      where: { userId: req.user.id }
-    });
-
-    if (!guide) {
-      return res.status(403).json({
-        success: false,
-        error: 'Accès réservé aux guides'
-      });
-    }
-
-    const where = {
-      activity: { guideId: guide.id }
-    };
-    if (status) where.status = status;
-
-    const bookings = await prisma.activityBooking.findMany({
-      where,
-      include: {
-        activity: true,
-        availability: true,
         user: {
           select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            avatar: true
-          }
-        },
-        review: true
-      },
-      orderBy: { bookedAt: 'desc' },
-      skip,
-      take: parseInt(limit)
-    });
-
-    const total = await prisma.activityBooking.count({ where });
-
-    res.json({
-      success: true,
-      data: bookings,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching guide bookings:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la récupération des réservations'
-    });
-  }
-});
-
-// PUT annuler une réservation
-router.put('/:id/cancel', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { reason } = req.body;
-
-    const booking = await prisma.activityBooking.findUnique({
-      where: { id },
-      include: { 
-        availability: true,
-        activity: {
-          include: {
-            guide: {
-              include: {
-                user: true
-              }
-            }
-          }
-        }
-      }
-    });
-
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        error: 'Réservation non trouvée'
-      });
-    }
-
-    if (booking.userId !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: 'Non autorisé à annuler cette réservation'
-      });
-    }
-
-    if (booking.status === 'cancelled') {
-      return res.status(400).json({
-        success: false,
-        error: 'Réservation déjà annulée'
-      });
-    }
-
-    // Libérer les slots
-    await prisma.activityAvailability.update({
-      where: { id: booking.availabilityId },
-      data: { bookedSlots: { decrement: booking.participants } }
-    });
-
-    // Annuler la réservation
-    const updatedBooking = await prisma.activityBooking.update({
-      where: { id },
-      data: {
-        status: 'cancelled',
-        cancellationReason: reason,
-        cancelledAt: new Date()
-      }
-    });
-
-    // Remboursement Stripe si payé
-    if (booking.paymentStatus === 'paid') {
-      try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(booking.stripePaymentIntent);
-        if (paymentIntent.status === 'succeeded') {
-          await stripe.refunds.create({
-            payment_intent: booking.stripePaymentIntent,
-          });
-        }
-      } catch (stripeError) {
-        console.error('Stripe refund error:', stripeError);
-      }
-    }
-
-    // Notifier le guide
-    if (req.io) {
-      req.io.to(`user:${booking.activity.guide.userId}`).emit('booking-cancelled', {
-        type: 'BOOKING_CANCELLED',
-        booking: updatedBooking,
-        message: `Réservation annulée pour ${booking.activity.title}`
-      });
-    }
-
-    res.json({
-      success: true,
-      data: updatedBooking,
-      message: 'Réservation annulée avec succès'
-    });
-  } catch (error) {
-    console.error('Error cancelling booking:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de l\'annulation de la réservation'
-    });
-  }
-});
-
-// PUT confirmer une réservation (pour les guides)
-router.put('/:id/confirm', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const booking = await prisma.activityBooking.findUnique({
-      where: { id },
-      include: { 
-        activity: {
-          include: {
-            guide: true
-          }
-        },
-        user: true
-      }
-    });
-
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        error: 'Réservation non trouvée'
-      });
-    }
-
-    // Vérifier que l'utilisateur est le guide
-    if (booking.activity.guide.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Non autorisé à confirmer cette réservation'
-      });
-    }
-
-    const updatedBooking = await prisma.activityBooking.update({
-      where: { id },
-      data: {
-        status: 'confirmed',
-        confirmedAt: new Date()
-      },
-      include: {
-        activity: true,
-        user: {
-          select: {
+            id: true,
             firstName: true,
             lastName: true,
             email: true
@@ -444,33 +271,30 @@ router.put('/:id/confirm', authenticateToken, async (req, res) => {
       }
     });
 
-    // Envoyer un email de confirmation
-    await sendEmail({
-      to: updatedBooking.user.email,
-      subject: 'Confirmation de votre réservation',
-      template: 'booking-confirmation',
-      data: {
-        userName: `${updatedBooking.user.firstName} ${updatedBooking.user.lastName}`,
-        activityTitle: updatedBooking.activity.title,
-        bookingDate: updatedBooking.availability.date.toLocaleDateString('fr-FR'),
-        bookingTime: updatedBooking.availability.startTime,
-        participants: updatedBooking.participants,
-        meetingPoint: updatedBooking.activity.meetingPoint,
-        totalAmount: updatedBooking.totalAmount
-      }
-    });
+    // Notifier l'autre partie via WebSocket
+    if (req.io) {
+      const targetUserId = isOwner ? booking.activity.guide.userId : booking.userId;
+      const message = isOwner 
+        ? `Vous avez ${status} votre réservation pour "${booking.activity.title}"`
+        : `${req.user.firstName} ${req.user.lastName} a ${status} la réservation`;
+
+      req.io.to(`user:${targetUserId}`).emit('new-notification', {
+        title: 'Réservation mise à jour',
+        message,
+        type: 'booking',
+        relatedEntity: 'activity',
+        relatedEntityId: booking.activityId,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     res.json({
       success: true,
-      data: updatedBooking,
-      message: 'Réservation confirmée avec succès'
+      message: `Statut mis à jour: ${status}`,
+      data: updatedBooking
     });
   } catch (error) {
-    console.error('Error confirming booking:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la confirmation de la réservation'
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
