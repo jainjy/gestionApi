@@ -284,6 +284,9 @@ app.use("/api/orders", require("./routes/orders"));
 app.use("/api/categories", require("./routes/categories"));
 app.use("/api/admin/payments", require("./routes/admin-payments"));
 
+app.use('/api/suggestions', require('./routes/Recherchesuggestions'));
+
+
 //app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 app.use("/api/recherche", require("./routes/rechercheIntelligentPremium"));
   
