@@ -9,7 +9,6 @@ datasource db {
   directUrl    = env("DIRECT_DATABASE_URL")
   relationMode = "prisma"
 }
-
 //===================
 //BLOG ARTICLES
 //===================
@@ -33,7 +32,66 @@ model BlogArticle {
   views       Int                    @default(0)
   embedding   Unsupported("vector")?
 
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  // Relations CORRIGÉES
+  author      User                   @relation(name: "BlogArticleAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  articleLikes BlogArticleLike[]     @relation(name: "BlogArticleLikeArticle")
+  blogComments BlogComment[]         @relation(name: "BlogCommentArticle")
+
+  @@index([authorId])
+  @@index([slug])
+}
+
+model BlogArticleLike {
+  id         String   @id @default(uuid())
+  articleId  String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  // Relations CORRIGÉES
+  article    BlogArticle @relation(name: "BlogArticleLikeArticle", fields: [articleId], references: [id], onDelete: Cascade)
+  user       User        @relation(name: "BlogArticleLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, userId])
+  @@index([articleId])
+  @@index([userId])
+}
+
+model BlogComment {
+  id         String   @id @default(uuid())
+  articleId  String
+  userId     String
+  content    String
+  parentId   String?  // Pour les réponses aux commentaires
+  likes      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isEdited   Boolean  @default(false)
+
+  // Relations CORRIGÉES
+  article    BlogArticle @relation(name: "BlogCommentArticle", fields: [articleId], references: [id], onDelete: Cascade)
+  user       User        @relation(name: "BlogCommentUser", fields: [userId], references: [id], onDelete: Cascade)
+  parent     BlogComment? @relation(name: "CommentReplies", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replies    BlogComment[] @relation(name: "CommentReplies")
+  commentLikes BlogCommentLike[] @relation(name: "BlogCommentLikeComment")
+
+  @@index([articleId])
+  @@index([parentId])
+  @@index([userId])
+}
+
+model BlogCommentLike {
+  id         String   @id @default(uuid())
+  commentId  String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  // Relations CORRIGÉES
+  comment    BlogComment @relation(name: "BlogCommentLikeComment", fields: [commentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user       User        @relation(name: "BlogCommentLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([commentId])
+  @@index([userId])
 }
 
 //===================
@@ -73,7 +131,10 @@ model User {
   demandesFinancement FinancementDemande[]
 
   // Relations existantes
-  blogArticles              BlogArticle[]
+  blogArticles      BlogArticle[]        @relation("BlogArticleAuthor")
+  blogArticleLikes  BlogArticleLike[]    @relation("BlogArticleLikeUser")
+  blogComments      BlogComment[]        @relation("BlogCommentUser")
+  blogCommentLikes  BlogCommentLike[]    @relation("BlogCommentLikeUser")
   properties                Property[]
   favorites                 Favorite[]
   metiers                   UtilisateurMetier[]
