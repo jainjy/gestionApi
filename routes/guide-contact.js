@@ -1,40 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/db');
 const { authenticateToken } = require('../middleware/auth');
-const { sendEmail } = require('../utils/email');
 
-const prisma = new PrismaClient();
-
-// POST contacter un guide
+// POST /api/guide-contact - Contacter un guide
 router.post('/', async (req, res) => {
   try {
-    const {
-      guideId,
-      activityId,
-      name,
-      email,
-      phone,
-      message
-    } = req.body;
+    const { guideId, activityId, name, email, phone, message } = req.body;
 
-    const userId = req.user?.id;
+    // Vérifier le guide
+    const guide = await prisma.activityGuide.findUnique({
+      where: { id: guideId },
+      include: { user: true }
+    });
 
+    if (!guide) {
+      return res.status(404).json({ success: false, error: 'Guide non trouvé' });
+    }
+
+    // Créer le message de contact
     const contact = await prisma.guideContact.create({
       data: {
         guideId,
-        activityId,
-        userId,
-        name,
-        email,
+        activityId: activityId || null,
+        userId: req.user?.id || null,
+        name: name || (req.user ? `${req.user.firstName} ${req.user.lastName}` : 'Anonyme'),
+        email: email || (req.user ? req.user.email : ''),
         phone,
-        message
+        message,
+        status: 'new'
       },
       include: {
         guide: {
           include: {
             user: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
                 email: true
@@ -44,64 +45,46 @@ router.post('/', async (req, res) => {
         },
         activity: {
           select: {
+            id: true,
             title: true
           }
         }
       }
     });
 
-    // Envoyer un email au guide
-    await sendEmail({
-      to: contact.guide.user.email,
-      subject: 'Nouveau contact via votre activité',
-      template: 'guide-contact',
-      data: {
-        guideName: `${contact.guide.user.firstName} ${contact.guide.user.lastName}`,
-        userName: name,
-        userEmail: email,
-        userPhone: phone,
-        message,
-        activityTitle: contact.activity?.title,
-        contactDate: new Date().toLocaleDateString('fr-FR')
-      }
-    });
-
     // Notifier le guide via WebSocket
-    if (req.io) {
-      req.io.to(`user:${contact.guide.userId}`).emit('new-contact', {
-        type: 'NEW_CONTACT',
-        contact,
-        message: `Nouveau message de ${name}`
+    if (req.io && guide.user) {
+      req.io.to(`user:${guide.userId}`).emit('new-notification', {
+        title: 'Nouveau message de contact',
+        message: `${contact.name} vous a contacté${activityId ? ' pour votre activité' : ''}`,
+        type: 'contact',
+        relatedEntity: 'guide',
+        relatedEntityId: guideId,
+        timestamp: new Date().toISOString()
       });
     }
 
     res.status(201).json({
       success: true,
-      data: contact,
-      message: 'Message envoyé au guide avec succès'
+      message: 'Message envoyé avec succès',
+      data: contact
     });
   } catch (error) {
-    console.error('Error creating contact:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de l\'envoi du message'
-    });
+    console.error('Error creating guide contact:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// GET messages reçus (pour les guides)
+// GET /api/guide-contact/my-contacts - Messages reçus par le guide
 router.get('/my-contacts', authenticateToken, async (req, res) => {
   try {
-    // Vérifier que l'utilisateur est un guide
+    // Vérifier si l'utilisateur est un guide
     const guide = await prisma.activityGuide.findUnique({
       where: { userId: req.user.id }
     });
 
     if (!guide) {
-      return res.status(403).json({
-        success: false,
-        error: 'Accès réservé aux guides'
-      });
+      return res.status(403).json({ success: false, error: 'Non autorisé' });
     }
 
     const contacts = await prisma.guideContact.findMany({
@@ -109,14 +92,17 @@ router.get('/my-contacts', authenticateToken, async (req, res) => {
       include: {
         activity: {
           select: {
+            id: true,
             title: true,
             image: true
           }
         },
         user: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
+            email: true,
             avatar: true
           }
         }
@@ -129,63 +115,61 @@ router.get('/my-contacts', authenticateToken, async (req, res) => {
       data: contacts
     });
   } catch (error) {
-    console.error('Error fetching contacts:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la récupération des messages'
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// PUT marquer un message comme répondu
-router.put('/:id/respond', authenticateToken, async (req, res) => {
+// PATCH /api/guide-contact/:id/status - Mettre à jour le statut d'un contact
+router.patch('/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const { status } = req.body;
 
+    // Vérifier que le message appartient au guide
     const contact = await prisma.guideContact.findUnique({
       where: { id },
-      include: { 
-        guide: {
-          include: {
-            user: true
-          }
-        } 
-      }
+      include: { guide: true }
     });
 
     if (!contact) {
-      return res.status(404).json({
-        success: false,
-        error: 'Message non trouvé'
-      });
+      return res.status(404).json({ success: false, error: 'Message non trouvé' });
     }
 
     if (contact.guide.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Non autorisé à modifier ce message'
-      });
+      return res.status(403).json({ success: false, error: 'Non autorisé' });
     }
 
     const updatedContact = await prisma.guideContact.update({
       where: { id },
-      data: {
-        status: 'responded',
-        respondedAt: new Date()
+      data: { 
+        status,
+        respondedAt: status === 'responded' ? new Date() : null
+      },
+      include: {
+        activity: {
+          select: {
+            id: true,
+            title: true
+          }
+        },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
       }
     });
 
     res.json({
       success: true,
-      data: updatedContact,
-      message: 'Message marqué comme répondu'
+      message: 'Statut mis à jour',
+      data: updatedContact
     });
   } catch (error) {
-    console.error('Error updating contact:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la mise à jour du message'
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
