@@ -479,7 +479,7 @@ model Service {
   duration    Int?
   price       Float?
   embedding   Unsupported("vector")?
-  type        String? //pour facilites le filtres de selection que ce soit art,bien etre ou simplement service
+  type        String?   @default("general") //pour facilites le filtres de selection que ce soit art,bien etre ou simplement service
   // Nouveaux champs pour les services personnalisés
   createdById String?               // ID du professionnel qui a créé le service
   isCustom    Boolean   @default(false) // Si c'est un service personnalisé

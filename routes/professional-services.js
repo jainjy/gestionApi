@@ -16,7 +16,8 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Récupérer les services directement associés au professionnel
     const userServices = await prisma.utilisateurService.findMany({
-      where: { userId },
+      where: { userId,service:{some:{type:"general",}}
+       },
       include: {
         service: {
           select: {
@@ -183,6 +184,7 @@ router.get('/available', authenticateToken, async (req, res) => {
     // Récupérer les services liés à ses métiers mais pas encore associés
     const availableServices = await prisma.service.findMany({
       where: {
+        type: "general", // AJOUT: Filtrer par type general
         OR: [
           {
             metiers: {
@@ -248,7 +250,12 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     // Services associés
     const associatedServices = await prisma.utilisateurService.count({
-      where: { userId }
+      where: { 
+        userId,
+        service: {
+          type: "general" // AJOUT: Filtrer par type general
+        }
+      }
     })
 
     // Métiers du professionnel
@@ -266,6 +273,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     const availableServicesCount = await prisma.service.count({
       where: {
+        type: "general", // AJOUT: Filtrer par type general
         metiers: {
           some: {
             metierId: {
