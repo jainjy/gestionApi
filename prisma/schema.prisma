@@ -496,7 +496,7 @@ model MetierService {
   metierId  Int
   serviceId Int
   metier    Metier  @relation(fields: [metierId], references: [id])
-  service   Service @relation(fields: [serviceId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@id([metierId, serviceId])
 }
@@ -520,7 +520,7 @@ model UtilisateurService {
   userId    String
   serviceId Int
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service   Service @relation(fields: [serviceId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id],onDelete: Cascade)
   
   // Nouveaux champs pour personnaliser le service par utilisateur
   customPrice    Float?   // Prix personnalisé pour ce professionnel

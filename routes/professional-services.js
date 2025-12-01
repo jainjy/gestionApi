@@ -303,35 +303,42 @@ router.get('/stats', authenticateToken, async (req, res) => {
 // POST /api/professional/services/custom - Créer un service personnalisé
 router.post('/custom', authenticateToken, upload.array('images', 5), async (req, res) => {
   try {
-    const userId = req.user.id
+    const userId = req.user.id;
     const {
       libelle,
       description,
       categoryId,
       duration,
       price,
-      tags = '[]',
-      metierIds = '[]'
-    } = req.body
+      tags = "[]",
+      metierIds = "[]",
+    } = req.body;
 
     // Validation des données requises
     if (!libelle) {
-      return res.status(400).json({ error: 'Le nom du service est obligatoire' })
+      return res
+        .status(400)
+        .json({ error: "Le nom du service est obligatoire" });
     }
 
     // Parser les tableaux JSON
-    const parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags
-    const parsedMetierIds = typeof metierIds === 'string' ? JSON.parse(metierIds) : metierIds
+    const parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
+    let parsedMetierIds = typeof metierIds === "string" ? JSON.parse(metierIds) : metierIds;
+    
+    // Valider que parsedMetierIds est un tableau
+    if (!Array.isArray(parsedMetierIds)) {
+      parsedMetierIds = [];
+    }
 
     // Upload des images vers Supabase
-    const uploadedImages = []
+    const uploadedImages = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         try {
-          const uploadedImage = await uploadToSupabase(file, 'services')
-          uploadedImages.push(uploadedImage.url)
+          const uploadedImage = await uploadToSupabase(file, "services");
+          uploadedImages.push(uploadedImage.url);
         } catch (uploadError) {
-          console.error('Erreur upload image:', uploadError)
+          console.error("Erreur upload image:", uploadError);
           // Continuer même si une image échoue
         }
       }
@@ -349,28 +356,39 @@ router.post('/custom', authenticateToken, upload.array('images', 5), async (req,
         tags: parsedTags,
         createdById: userId,
         isCustom: true,
-        isActive: true
+        isActive: true,
       },
       include: {
         category: true,
         metiers: {
-          include: { metier: true }
-        }
-      }
-    })
+          include: { metier: true },
+        },
+      },
+    });
 
     // Associer les métiers si spécifiés
-    if (metierIds && metierIds.length > 0) {
-      const metierServiceConnections = metierIds.map(metierId => ({
+    if (parsedMetierIds && parsedMetierIds.length > 0) {
+      const metierServiceConnections = parsedMetierIds.map((metierId) => ({
         metierId: parseInt(metierId),
-        serviceId: customService.id
-      }))
+        serviceId: customService.id,
+      }));
 
       await prisma.metierService.createMany({
-        data: metierServiceConnections
-      })
+        data: metierServiceConnections,
+      });
     }
 
+    // Associer automatiquement le service au professionnel qui l'a créé
+    await prisma.utilisateurService.create({
+      data: {
+        userId,
+        serviceId: customService.id,
+        customPrice: price ? parseFloat(price) : null,
+        customDuration: duration ? parseInt(duration) : null,
+        isAvailable: true,
+        description: description || null,
+      },
+    });
     // Récupérer le service complet avec ses relations
     const completeService = await prisma.service.findUnique({
       where: { id: customService.id },
@@ -386,51 +404,51 @@ router.post('/custom', authenticateToken, upload.array('images', 5), async (req,
         isCustom: true,
         isActive: true,
         category: true,
-        metiers: { 
-          include: { metier: true } 
+        metiers: {
+          include: { metier: true },
         },
-        users: { 
-          include: { 
-            user: { 
-              select: { 
-                id: true, 
-                firstName: true, 
-                lastName: true, 
-                companyName: true 
-              } 
-            } 
-          } 
-        }
-      }
-    })
+        users: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                companyName: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
     res.json({
       success: true,
-      message: 'Service personnalisé créé avec succès',
+      message: "Service personnalisé créé avec succès",
       service: {
         id: completeService.id.toString(),
         name: completeService.libelle,
         description: completeService.description,
-        category: completeService.category?.name || 'Non catégorisé',
+        category: completeService.category?.name || "Non catégorisé",
         images: completeService.images,
         price: completeService.price,
         duration: completeService.duration,
         tags: completeService.tags,
-        metiers: completeService.metiers.map(m => ({
+        metiers: completeService.metiers.map((m) => ({
           id: m.metier.id,
-          libelle: m.metier.libelle
+          libelle: m.metier.libelle,
         })),
-        vendors: completeService.users.map(u => ({
+        vendors: completeService.users.map((u) => ({
           id: u.user.id,
           name: u.user.companyName || `${u.user.firstName} ${u.user.lastName}`,
-          isCurrentUser: u.user.id === userId
+          isCurrentUser: u.user.id === userId,
         })),
         isAssociated: true,
         isFromMetier: false,
         isCustom: true,
-        status: 'active'
-      }
-    })
+        status: "active",
+      },
+    });
   } catch (error) {
     console.error('Erreur lors de la création du service personnalisé:', error)
     res.status(500).json({ error: 'Erreur serveur lors de la création du service' })
