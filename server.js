@@ -283,16 +283,14 @@ app.use("/api/cart", require("./routes/cart"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/categories", require("./routes/categories"));
 app.use("/api/admin/payments", require("./routes/admin-payments"));
-app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 
+//app.use("/api/recherche", require("./routes/rechercheIntelligent"));
+app.use("/api/recherche", require("./routes/rechercheIntelligentPremium"));
+  
 // 🔥 CORRECTION: Route notifications
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/bienetre", require("./routes/reservationbien_etre"));
-
-
-//recherhce pro premium
-app.use("/api/recherhcepremium", require("./routes/Recherhcepremium"));
-
+ 
 app.use("/api/Vol", require("./routes/Vol"));
 app.use("/api/notificationadmin", require("./routes/AllNotifications"));
 app.use("/api/demandes-history", require("./routes/demandes-history"));
