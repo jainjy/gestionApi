@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../lib/db');
-const { authenticateToken } = require('./auth');
+const { authenticateToken } = require('../middleware/auth');
+
 
 // GET /api/articles - Récupérer tous les articles avec filtres
 router.get('/', async (req, res) => {

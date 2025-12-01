@@ -16,8 +16,12 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Récupérer les services directement associés au professionnel
     const userServices = await prisma.utilisateurService.findMany({
-      where: { userId,service:{some:{type:"general",}}
-       },
+      where: { 
+        userId,
+        service: {
+          type: "general"
+        }
+      },
       include: {
         service: {
           select: {
