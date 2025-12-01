@@ -36,7 +36,9 @@ router.post("/new", authenticateToken, async (req, res) => {
     // ➕ Création de l'œuvre (service)
     const newOeuvre = await prisma.service.create({
       data: {
+        createdById: req.user.id,
         libelle,
+        type:"art",
         description: description || "",
         price: price ? parseFloat(price) : null,
         duration: duration ? parseInt(duration) : null,
@@ -44,12 +46,6 @@ router.post("/new", authenticateToken, async (req, res) => {
         images: images || [],
       },
     });
-    const liaison=await prisma.utilisateurService.create({
-      data:{
-        userId:req.user.id,
-        serviceId:newOeuvre.id,
-      }
-    })
 
     // 🔔 Création automatique d’une notification
     await createNotification({

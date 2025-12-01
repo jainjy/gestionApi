@@ -1,8 +1,13 @@
 const express = require('express')
 const router = express.Router()
 const { authenticateToken } = require('../middleware/auth')
+const multer = require('multer')
+const { uploadToSupabase } = require('../middleware/upload')
 
 const { prisma } = require('../lib/db')
+
+// Ajouter la configuration multer
+const upload = multer({ storage: multer.memoryStorage() })
 
 // GET /api/professional/services - Récupérer tous les services du professionnel (associés + personnalisés)
 router.get('/', authenticateToken, async (req, res) => {
@@ -296,23 +301,40 @@ router.get('/stats', authenticateToken, async (req, res) => {
   }
 })
 // POST /api/professional/services/custom - Créer un service personnalisé
-router.post('/custom', authenticateToken, async (req, res) => {
+router.post('/custom', authenticateToken, upload.array('images', 5), async (req, res) => {
   try {
     const userId = req.user.id
     const {
       libelle,
       description,
       categoryId,
-      images = [],
       duration,
       price,
-      tags = [],
-      metierIds = []
+      tags = '[]',
+      metierIds = '[]'
     } = req.body
 
     // Validation des données requises
     if (!libelle) {
       return res.status(400).json({ error: 'Le nom du service est obligatoire' })
+    }
+
+    // Parser les tableaux JSON
+    const parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags
+    const parsedMetierIds = typeof metierIds === 'string' ? JSON.parse(metierIds) : metierIds
+
+    // Upload des images vers Supabase
+    const uploadedImages = []
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          const uploadedImage = await uploadToSupabase(file, 'services')
+          uploadedImages.push(uploadedImage.url)
+        } catch (uploadError) {
+          console.error('Erreur upload image:', uploadError)
+          // Continuer même si une image échoue
+        }
+      }
     }
 
     // Créer le service personnalisé
@@ -321,10 +343,10 @@ router.post('/custom', authenticateToken, async (req, res) => {
         libelle,
         description,
         categoryId: categoryId ? parseInt(categoryId) : null,
-        images,
+        images: uploadedImages,
         duration: duration ? parseInt(duration) : null,
         price: price ? parseFloat(price) : null,
-        tags,
+        tags: parsedTags,
         createdById: userId,
         isCustom: true,
         isActive: true
@@ -348,18 +370,6 @@ router.post('/custom', authenticateToken, async (req, res) => {
         data: metierServiceConnections
       })
     }
-
-    // Associer automatiquement le service au professionnel qui l'a créé
-    await prisma.utilisateurService.create({
-      data: {
-        userId,
-        serviceId: customService.id,
-        customPrice: price ? parseFloat(price) : null,
-        customDuration: duration ? parseInt(duration) : null,
-        isAvailable: true,
-        description: description || null
-      }
-    })
 
     // Récupérer le service complet avec ses relations
     const completeService = await prisma.service.findUnique({
