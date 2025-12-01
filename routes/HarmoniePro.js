@@ -354,6 +354,7 @@ router.get("/services", authenticateToken, async (req, res) => {
 
     const services = await prisma.service.findMany({
       where: {
+        createdById: req.user.id,
         metiers: {
           some: {
             metier: {
