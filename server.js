@@ -295,6 +295,7 @@ app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/bienetre", require("./routes/reservationbien_etre"));
  
 app.use("/api/Vol", require("./routes/Vol"));
+app.use("/api/ActivityCategory", require("./routes/ActivityCategory"));
 app.use("/api/notificationadmin", require("./routes/AllNotifications"));
 app.use("/api/demandes-history", require("./routes/demandes-history"));
 app.use("/api/cookies", require("./routes/cookies"));
