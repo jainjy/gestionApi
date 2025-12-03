@@ -1628,6 +1628,7 @@ model ActivityCategory {
   description String?
   icon        String?
   color       String?
+  image       String? 
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
@@ -1637,7 +1638,6 @@ model ActivityCategory {
   @@index([isActive])
   @@index([sortOrder])
 }
-
 // Guides spécialisés
 model ActivityGuide {
   id             String   @id @default(uuid())
