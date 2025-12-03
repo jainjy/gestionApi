@@ -202,7 +202,8 @@ model User {
   activityReviews   ActivityReview[]
   activityGuide     ActivityGuide?
   guideContacts     GuideContact[] // AJOUT: Relation manquante
-
+  messagesRecusContact    ContactMessage[] @relation("ContactMessageRecipient")
+  messagesEnvoyesContact  ContactMessage[] @relation("ContactMessageSender")
   servicesCrees     Service[]  // ✅ AJOUT: Relation avec les services créés par le professionnel
 
   @@index([userType]) // Pour filtrer facilement les professionnels
@@ -1583,7 +1584,6 @@ model ActivityCategory {
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
-  image       String?
   activities Activity[]
 
   @@index([isActive])
@@ -1887,4 +1887,62 @@ model GuideContact {
   @@index([activityId])
   @@index([status])
   @@index([createdAt])
+}
+// ======================
+// MESSAGES DE CONTACT POUR SERVICES/MÉTIERS/PROFESSIONNELS
+// ======================
+model ContactMessage {
+  id           String   @id @default(uuid())
+  
+  // Expéditeur (peut être anonyme ou utilisateur connecté)
+  senderName   String
+  senderEmail  String
+  senderPhone  String?
+  userId       String?  // Si l'utilisateur est connecté
+  
+  // Destinataire
+  recipientId  String?  // ID du professionnel destinataire
+  serviceId    Int?     // Si lié à un service spécifique
+  metierId     Int?     // Si lié à un métier spécifique
+  
+  // Contenu
+  subject      String
+  message      String
+  messageType  String   @default("general") // "service", "metier", "professional", "general"
+  
+  // Métadonnées
+  isRead       Boolean  @default(false)
+  isReplied    Boolean  @default(false)
+  replyMessage String?
+  repliedAt    DateTime?
+  
+  // Pièces jointes
+  attachments  Json?    // URLs des fichiers joints
+  
+  // Statut
+  status       String   @default("pending") // "pending", "read", "replied", "archived"
+  priority     String   @default("normal")  // "low", "normal", "high", "urgent"
+  
+  // Relations
+  sender       User?    @relation("ContactMessageSender", fields: [userId], references: [id], onDelete: SetNull)
+  recipient    User?    @relation("ContactMessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  service      Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  metier       Metier?  @relation(fields: [metierId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  readAt       DateTime?
+  
+  // Index
+  @@index([userId])
+  @@index([recipientId])
+  @@index([serviceId])
+  @@index([metierId])
+  @@index([senderEmail])
+  @@index([status])
+  @@index([messageType])
+  @@index([createdAt])
+  @@index([priority])
+  @@index([isRead])
 }
