@@ -128,155 +128,89 @@ const getNotificationsForUser = async (req, res) => {
 const markAsRead = async (req, res) => {
     try {
         const { userId, notificationId } = req.params;
-        
-        console.log(`📨 Marquer comme lu: ${notificationId} pour user: ${userId}`);
 
-        // Gérer les deux types d'IDs
-        if (notificationId.startsWith('demande_')) {
-            const demandeId = parseInt(notificationId.replace('demande_', ''));
-            await prisma.demande.update({
-                where: { 
-                    id: demandeId, 
-                    createdById: userId 
-                },
-                data: { isRead: true }
-            });
-            console.log(`✅ Demande ${demandeId} marquée comme lue`);
-        } else if (notificationId.startsWith('notification_')) {
-            const notifId = parseInt(notificationId.replace('notification_', ''));
-            await prisma.notification.update({
-                where: { 
-                    id: notifId,
-                    OR: [
-                        { userProprietaireId: userId },
-                        { userId: userId }
-                    ]
-                },
-                data: { isRead: true }
-            });
-            console.log(`✅ Notification ${notifId} marquée comme lue`);
-        } else {
-            console.log(`❌ Format ID invalide: ${notificationId}`);
-            return res.status(400).json({ 
-                success: false,
-                error: 'Format ID de notification invalide' 
-            });
-        }
+        console.log(`📩 Mark read: ${notificationId} for user ${userId}`);
 
-        // Mettre à jour le compteur via WebSocket
+        const notifId = parseInt(notificationId.replace("notification_", ""));
+
+        await prisma.notification.updateMany({
+            where: {
+                id: notifId,
+                OR: [
+                    { userId },
+                    { userProprietaireId: userId }
+                ]
+            },
+            data: { read: true }
+        });
+
         const unreadCount = await getUnreadCount(userId);
         await updateNotificationCount(userId, unreadCount);
 
-        res.json({ 
-            success: true,
-            message: 'Notification marquée comme lue'
-        });
+        res.json({ success: true, message: "Notification marquée comme lue" });
+
     } catch (error) {
-        console.error('❌ Erreur lors du marquage comme lu:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Erreur serveur' 
-        });
+        console.error("❌ markAsRead:", error);
+        res.status(500).json({ success: false, error: "Erreur serveur" });
     }
 };
+
 
 const markAsUnread = async (req, res) => {
     try {
         const { userId, notificationId } = req.params;
-        
-        console.log(`📨 Marquer comme non lu: ${notificationId} pour user: ${userId}`);
 
-        if (notificationId.startsWith('demande_')) {
-            const demandeId = parseInt(notificationId.replace('demande_', ''));
-            await prisma.demande.update({
-                where: { 
-                    id: demandeId, 
-                    createdById: userId 
-                },
-                data: { isRead: false }
-            });
-        } else if (notificationId.startsWith('notification_')) {
-            const notifId = parseInt(notificationId.replace('notification_', ''));
-            await prisma.notification.update({
-                where: { 
-                    id: notifId,
-                    OR: [
-                        { userProprietaireId: userId },
-                        { userId: userId }
-                    ]
-                },
-                data: { isRead: false }
-            });
-        } else {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Format ID de notification invalide' 
-            });
-        }
+        console.log(`📩 Mark unread: ${notificationId} for user ${userId}`);
 
-        // Mettre à jour le compteur via WebSocket
+        const notifId = parseInt(notificationId.replace("notification_", ""));
+
+        await prisma.notification.updateMany({
+            where: {
+                id: notifId,
+                OR: [
+                    { userId },
+                    { userProprietaireId: userId }
+                ]
+            },
+            data: { read: false }
+        });
+
         const unreadCount = await getUnreadCount(userId);
         await updateNotificationCount(userId, unreadCount);
 
-        res.json({ 
-            success: true,
-            message: 'Notification marquée comme non lue'
-        });
+        res.json({ success: true, message: "Notification marquée comme non lue" });
+
     } catch (error) {
-        console.error('❌ Erreur lors du marquage comme non lu:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Erreur serveur' 
-        });
+        console.error("❌ markAsUnread:", error);
+        res.status(500).json({ success: false, error: "Erreur serveur" });
     }
 };
+
 
 const markAllAsRead = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        console.log(`📨 Marquer toutes comme lues pour user: ${userId}`);
+        console.log(`📩 Mark ALL as read for user ${userId}`);
 
-        // Marquer toutes les notifications de la table comme lues
         await prisma.notification.updateMany({
             where: {
+                read: false,
                 OR: [
-                    { userProprietaireId: userId },
-                    { userId: userId }
-                ],
-                isRead: false
+                    { userId },
+                    { userProprietaireId: userId }
+                ]
             },
-            data: {
-                isRead: true
-            }
+            data: { read: true }
         });
 
-        // Marquer toutes les demandes comme lues
-        await prisma.demande.updateMany({
-            where: {
-                createdById: userId,
-                isRead: false
-            },
-            data: {
-                isRead: true
-            }
-        });
-
-        // Mettre à jour le compteur via WebSocket
         await updateNotificationCount(userId, 0);
 
-        console.log(`✅ Toutes les notifications marquées comme lues pour user: ${userId}`);
+        res.json({ success: true, message: "Toutes les notifications sont lues" });
 
-        res.json({ 
-            success: true,
-            message: 'Toutes les notifications ont été marquées comme lues'
-        });
     } catch (error) {
-        console.error('❌ Erreur marquage tout comme lu:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Erreur serveur' 
-        });
+        console.error("❌ markAllAsRead:", error);
+        res.status(500).json({ success: false, error: "Erreur serveur" });
     }
 };
 
@@ -379,6 +313,34 @@ const clearAllNotifications = async (req, res) => {
 };
 
 // Fonction utilitaire pour obtenir le nombre de notifications non lues
+// const getUnreadCount = async (userId) => {
+//     try {
+//         const demandesCount = await prisma.demande.count({
+//             where: {
+//                 createdById: userId,
+//                 statut: { in: ['validée', 'refusée', 'validee'] },
+//                 propertyId: { not: null },
+//                 isRead: false
+//             }
+//         });
+
+//         const notificationsCount = await prisma.notification.count({
+//             where: {
+//                 OR: [
+//                     { userProprietaireId: userId },
+//                     { userId: userId }
+//                 ],
+//                 isRead: false
+//             }
+//         });
+
+//         return demandesCount + notificationsCount;
+//     } catch (error) {
+//         console.error('❌ Erreur calcul compteur non lus:', error);
+//         return 0;
+//     }
+// };
+
 const getUnreadCount = async (userId) => {
     try {
         const demandesCount = await prisma.demande.count({
@@ -386,7 +348,7 @@ const getUnreadCount = async (userId) => {
                 createdById: userId,
                 statut: { in: ['validée', 'refusée', 'validee'] },
                 propertyId: { not: null },
-                isRead: false
+                isRead: false   // ⚠ OK pour la table demande (elle utilise isRead)
             }
         });
 
@@ -396,7 +358,7 @@ const getUnreadCount = async (userId) => {
                     { userProprietaireId: userId },
                     { userId: userId }
                 ],
-                isRead: false
+                read: false  // 🔥 CORRECT (champ exact dans Notification)
             }
         });
 
@@ -406,6 +368,7 @@ const getUnreadCount = async (userId) => {
         return 0;
     }
 };
+
 
 // Fonction pour créer une nouvelle notification
 const createNotification = async (req, res) => {
