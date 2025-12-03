@@ -96,7 +96,7 @@ router.post("/", async (req, res) => {
           *,
           embedding::text AS embedding,
           (embedding <=> '${vector}'::vector) AS distance,
-          '${table.name}' AS source,
+          '${table.name}' AS source_table,
           ${table.ownerField ? `"${table.ownerField}"` : "NULL"} AS ownerId
         FROM "${table.name}"
         WHERE embedding IS NOT NULL
