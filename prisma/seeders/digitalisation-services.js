@@ -30,7 +30,7 @@ async function seedDigitalisationServices() {
 
     // 2. Créer un utilisateur professionnel pour les services (si inexistant)
     const existingUser = await prisma.user.findFirst({
-      where: { email: "contact@ariamada.com" },
+      where: { email: "aria.madacom@gmail.com" },
     });
 
     let professionalUser;
@@ -38,18 +38,18 @@ async function seedDigitalisationServices() {
       const hashedPassword = await bcrypt.hash("Ariamada2024!", 10);
       professionalUser = await prisma.user.create({
         data: {
-          email: "contact@ariamada.com",
+          email: "aria.madacom@gmail.com",
           firstName: "Aria",
           lastName: "communication",
           commercialName: "Aria",
           companyName: "Aria communication",
           status: "active",
           role: "professional",
-          userType: "professional",
+          userType: "PRESTATAIRE",
           address: "Lot II M 23 Andrainarivo",
           city: "Antsirabe",
           zipCode: "110",
-          phone: "+261340000000",
+          phone: "+262 693 52 16 26",
           avatar:
             "https://www.ariamada.com/wp-content/uploads/2024/01/logo-ariamada.png",
           passwordHash: hashedPassword,

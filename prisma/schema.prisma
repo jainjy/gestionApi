@@ -9,6 +9,7 @@ datasource db {
   directUrl    = env("DIRECT_DATABASE_URL")
   relationMode = "prisma"
 }
+
 //===================
 //BLOG ARTICLES
 //===================
@@ -33,23 +34,23 @@ model BlogArticle {
   embedding   Unsupported("vector")?
 
   // Relations CORRIGÉES
-  author      User                   @relation(name: "BlogArticleAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  articleLikes BlogArticleLike[]     @relation(name: "BlogArticleLikeArticle")
-  blogComments BlogComment[]         @relation(name: "BlogCommentArticle")
+  author       User              @relation(name: "BlogArticleAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  articleLikes BlogArticleLike[] @relation(name: "BlogArticleLikeArticle")
+  blogComments BlogComment[]     @relation(name: "BlogCommentArticle")
 
   @@index([authorId])
   @@index([slug])
 }
 
 model BlogArticleLike {
-  id         String   @id @default(uuid())
-  articleId  String
-  userId     String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  articleId String
+  userId    String
+  createdAt DateTime @default(now())
 
   // Relations CORRIGÉES
-  article    BlogArticle @relation(name: "BlogArticleLikeArticle", fields: [articleId], references: [id], onDelete: Cascade)
-  user       User        @relation(name: "BlogArticleLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+  article BlogArticle @relation(name: "BlogArticleLikeArticle", fields: [articleId], references: [id], onDelete: Cascade)
+  user    User        @relation(name: "BlogArticleLikeUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([articleId, userId])
   @@index([articleId])
@@ -57,21 +58,21 @@ model BlogArticleLike {
 }
 
 model BlogComment {
-  id         String   @id @default(uuid())
-  articleId  String
-  userId     String
-  content    String
-  parentId   String?  // Pour les réponses aux commentaires
-  likes      Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  isEdited   Boolean  @default(false)
+  id        String   @id @default(uuid())
+  articleId String
+  userId    String
+  content   String
+  parentId  String? // Pour les réponses aux commentaires
+  likes     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isEdited  Boolean  @default(false)
 
   // Relations CORRIGÉES
-  article    BlogArticle @relation(name: "BlogCommentArticle", fields: [articleId], references: [id], onDelete: Cascade)
-  user       User        @relation(name: "BlogCommentUser", fields: [userId], references: [id], onDelete: Cascade)
-  parent     BlogComment? @relation(name: "CommentReplies", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  replies    BlogComment[] @relation(name: "CommentReplies")
+  article      BlogArticle       @relation(name: "BlogCommentArticle", fields: [articleId], references: [id], onDelete: Cascade)
+  user         User              @relation(name: "BlogCommentUser", fields: [userId], references: [id], onDelete: Cascade)
+  parent       BlogComment?      @relation(name: "CommentReplies", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replies      BlogComment[]     @relation(name: "CommentReplies")
   commentLikes BlogCommentLike[] @relation(name: "BlogCommentLikeComment")
 
   @@index([articleId])
@@ -80,14 +81,14 @@ model BlogComment {
 }
 
 model BlogCommentLike {
-  id         String   @id @default(uuid())
-  commentId  String
-  userId     String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
 
   // Relations CORRIGÉES
-  comment    BlogComment @relation(name: "BlogCommentLikeComment", fields: [commentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  user       User        @relation(name: "BlogCommentLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+  comment BlogComment @relation(name: "BlogCommentLikeComment", fields: [commentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user    User        @relation(name: "BlogCommentLikeUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, userId])
   @@index([commentId])
@@ -132,26 +133,26 @@ model User {
   websiteUrl          String?
 
   // Relations existantes
-  blogArticles      BlogArticle[]        @relation("BlogArticleAuthor")
-  blogArticleLikes  BlogArticleLike[]    @relation("BlogArticleLikeUser")
-  blogComments      BlogComment[]        @relation("BlogCommentUser")
-  blogCommentLikes  BlogCommentLike[]    @relation("BlogCommentLikeUser")
-  properties                Property[]
-  favorites                 Favorite[]
-  metiers                   UtilisateurMetier[]
-  services                  UtilisateurService[]
-  demandesCrees             Demande[]                 @relation("DemandeCreePar")
-  demandesArtisan           DemandeArtisan[]          @relation("DemandeArtisanUser")
-  Product                   Product[]
-  Transaction               Transaction[]
-  Review                    Review[]
-  Appointment               Appointment[]
-  
+  blogArticles     BlogArticle[]        @relation("BlogArticleAuthor")
+  blogArticleLikes BlogArticleLike[]    @relation("BlogArticleLikeUser")
+  blogComments     BlogComment[]        @relation("BlogCommentUser")
+  blogCommentLikes BlogCommentLike[]    @relation("BlogCommentLikeUser")
+  properties       Property[]
+  favorites        Favorite[]
+  metiers          UtilisateurMetier[]
+  services         UtilisateurService[]
+  demandesCrees    Demande[]            @relation("DemandeCreePar")
+  demandesArtisan  DemandeArtisan[]     @relation("DemandeArtisanUser")
+  Product          Product[]
+  Transaction      Transaction[]
+  Review           Review[]
+  Appointment      Appointment[]
+
   // RELATIONS ORDER CORRIGÉES
-  ordersClient      Order[] @relation("OrderClient") // Commandes passées en tant que client
-  ordersPrestataire Order[] @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
-  locationsClient LocationSaisonniere[] @relation("clientLocations")
-  
+  ordersClient      Order[]               @relation("OrderClient") // Commandes passées en tant que client
+  ordersPrestataire Order[]               @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
+  locationsClient   LocationSaisonniere[] @relation("clientLocations")
+
   messagesEnvoyes           Message[]                 @relation("MessageExpediteur")
   messagesRecus             Message[]                 @relation("MessageReceiver")
   conversationsCrees        Conversation[]            @relation("ConversationCreateur")
@@ -197,22 +198,21 @@ model User {
   // ======================
   // NOUVELLES RELATIONS POUR ACTIVITÉS - VERSION CORRIGÉE
   // ======================
-  activityBookings  ActivityBooking[]
-  activityFavorites ActivityFavorite[]
-  activityShares    ActivityShare[]
-  activityReviews   ActivityReview[]
-  activityGuide     ActivityGuide?
-  guideContacts     GuideContact[] // AJOUT: Relation manquante
-  messagesRecusContact    ContactMessage[] @relation("ContactMessageRecipient")
-  messagesEnvoyesContact  ContactMessage[] @relation("ContactMessageSender")
-  servicesCrees     Service[]  // ✅ AJOUT: Relation avec les services créés par le professionnel
+  activityBookings       ActivityBooking[]
+  activityFavorites      ActivityFavorite[]
+  activityShares         ActivityShare[]
+  activityReviews        ActivityReview[]
+  activityGuide          ActivityGuide?
+  guideContacts          GuideContact[] // AJOUT: Relation manquante
+  messagesRecusContact   ContactMessage[]        @relation("ContactMessageRecipient")
+  messagesEnvoyesContact ContactMessage[]        @relation("ContactMessageSender")
+  servicesCrees          Service[] // ✅ AJOUT: Relation avec les services créés par le professionnel
 
   @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
   @@index([role])
   @@index([status])
 }
-
 
 // ======================
 // PARAMÈTRES PROFESSIONNELS
@@ -374,51 +374,51 @@ model Message {
 // PROPRIÉTÉS
 // ======================
 model Property {
-  id              String                 @id @default(uuid())
-  title           String
-  description     String?
-  type            String
-  status          String?
-  price           Float?
-  surface         Int?
-  rooms           Int?
-  bedrooms        Int?
-  bathrooms       Int?
-  address         String?
-  city            String
-  zipCode         String?
-  latitude        Float?
-  longitude       Float?
-  features        String[]
-  images          String[]
-  isFeatured      Boolean?               @default(false)
-  isActive        Boolean?               @default(true)
-  views           Int?                   @default(0)
-  ownerId         String
-  createdAt       DateTime?              @default(now())
-  updatedAt       DateTime?              @updatedAt
-  publishedAt     DateTime?
-  energyClass     String?
-  expiresAt       DateTime?
-  floor           Int?
-  hasBalcony      Boolean?               @default(false)
-  hasElevator     Boolean?               @default(false)
-  hasGarden       Boolean?               @default(false)
-  hasParking      Boolean?               @default(false)
-  hasPool         Boolean?               @default(false)
-  hasTerrace      Boolean?               @default(false)
-  listingType     String?                @default("sale")
-  isPSLA          Boolean?               @default(false)
-  isSHLMR          Boolean?               @default(false)
-  metaDescription String?
-  metaTitle       String?
-  slug            String?                @unique
-  totalFloors     Int?
-  yearBuilt       Int?
-  rentType        String?                @default("longue_duree")
-  embedding       Unsupported("vector")?
-  locationSaisonnieres  LocationSaisonniere[]
-  
+  id                   String                 @id @default(uuid())
+  title                String
+  description          String?
+  type                 String
+  status               String?
+  price                Float?
+  surface              Int?
+  rooms                Int?
+  bedrooms             Int?
+  bathrooms            Int?
+  address              String?
+  city                 String
+  zipCode              String?
+  latitude             Float?
+  longitude            Float?
+  features             String[]
+  images               String[]
+  isFeatured           Boolean?               @default(false)
+  isActive             Boolean?               @default(true)
+  views                Int?                   @default(0)
+  ownerId              String
+  createdAt            DateTime?              @default(now())
+  updatedAt            DateTime?              @updatedAt
+  publishedAt          DateTime?
+  energyClass          String?
+  expiresAt            DateTime?
+  floor                Int?
+  hasBalcony           Boolean?               @default(false)
+  hasElevator          Boolean?               @default(false)
+  hasGarden            Boolean?               @default(false)
+  hasParking           Boolean?               @default(false)
+  hasPool              Boolean?               @default(false)
+  hasTerrace           Boolean?               @default(false)
+  listingType          String?                @default("sale")
+  isPSLA               Boolean?               @default(false)
+  isSHLMR              Boolean?               @default(false)
+  metaDescription      String?
+  metaTitle            String?
+  slug                 String?                @unique
+  totalFloors          Int?
+  yearBuilt            Int?
+  rentType             String?                @default("longue_duree")
+  embedding            Unsupported("vector")?
+  locationSaisonnieres LocationSaisonniere[]
+
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   favorites Favorite[]
   demandes  Demande[]
@@ -516,12 +516,13 @@ model Product {
 //LES METIERS
 //===================
 model Metier {
-  id        Int                    @id @default(autoincrement())
-  libelle   String
-  embedding Unsupported("vector")?
-  services  MetierService[]
-  users     UtilisateurMetier[]
-  demandes  Demande[]
+  id             Int                    @id @default(autoincrement())
+  libelle        String
+  embedding      Unsupported("vector")?
+  services       MetierService[]
+  users          UtilisateurMetier[]
+  demandes       Demande[]
+  ContactMessage ContactMessage[]
 }
 
 // ======================
@@ -545,21 +546,22 @@ model Service {
   duration    Int?
   price       Float?
   embedding   Unsupported("vector")?
-  type        String?   @default("general") //pour facilites le filtres de selection que ce soit art,bien etre ou simplement service
+  type        String?                @default("general") //pour facilites le filtres de selection que ce soit art,bien etre ou simplement service
   // Nouveaux champs pour les services personnalisés
-  createdById String?               // ID du professionnel qui a créé le service
-  isCustom    Boolean   @default(false) // Si c'est un service personnalisé
-  isActive    Boolean   @default(true)  // Si le service est actif
-  tags        String[]               // Tags personnalisés
-  
-  category    Category?              @relation(fields: [categoryId], references: [id])
-  createdBy   User?                  @relation(fields: [createdById], references: [id], onDelete: Cascade) // Relation avec le créateur
-  metiers     MetierService[]
-  users       UtilisateurService[]
-  demandes    Demande[]
+  createdById String? // ID du professionnel qui a créé le service
+  isCustom    Boolean                @default(false) // Si c'est un service personnalisé
+  isActive    Boolean                @default(true) // Si le service est actif
+  tags        String[] // Tags personnalisés
 
-  Review      Review[]
-  Appointment Appointment[]
+  category  Category?            @relation(fields: [categoryId], references: [id])
+  createdBy User?                @relation(fields: [createdById], references: [id], onDelete: Cascade) // Relation avec le créateur
+  metiers   MetierService[]
+  users     UtilisateurService[]
+  demandes  Demande[]
+
+  Review         Review[]
+  Appointment    Appointment[]
+  ContactMessage ContactMessage[]
 
   @@index([createdById])
   @@index([isCustom])
@@ -597,63 +599,64 @@ model UtilisateurService {
   userId    String
   serviceId Int
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service   Service @relation(fields: [serviceId], references: [id],onDelete: Cascade)
-  
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
   // Nouveaux champs pour personnaliser le service par utilisateur
-  customPrice    Float?   // Prix personnalisé pour ce professionnel
-  customDuration Int?     // Durée personnalisée
-  isAvailable    Boolean  @default(true) // Si le service est disponible
-  description    String?  // Description personnalisée
+  customPrice    Float? // Prix personnalisé pour ce professionnel
+  customDuration Int? // Durée personnalisée
+  isAvailable    Boolean @default(true) // Si le service est disponible
+  description    String? // Description personnalisée
 
   @@id([userId, serviceId])
   @@index([isAvailable])
 }
+
 // ======================
 // LOCATIONS SAISONNIÈRES - VERSION CORRIGÉE
 // ======================
 model LocationSaisonniere {
-  id               Int       @id @default(autoincrement())
-  propertyId       String    // String pour correspondre à Property.id
-  clientId         String
-  dateDebut        DateTime
-  dateFin          DateTime
-  prixTotal        Float
-  nombreAdultes    Int       @default(1)
-  nombreEnfants    Int       @default(0)
-  remarques        String?
-  statut           String    @default("en_attente")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  
-  property        Property  @relation(fields: [propertyId], references: [id])
-  client          User      @relation(fields: [clientId], references: [id], name: "clientLocations")
-  paiements       PaiementLocation[]
-  
-  @@map("locations_saisonniere")
+  id            Int      @id @default(autoincrement())
+  propertyId    String // String pour correspondre à Property.id
+  clientId      String
+  dateDebut     DateTime
+  dateFin       DateTime
+  prixTotal     Float
+  nombreAdultes Int      @default(1)
+  nombreEnfants Int      @default(0)
+  remarques     String?
+  statut        String   @default("en_attente")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property  Property           @relation(fields: [propertyId], references: [id])
+  client    User               @relation(fields: [clientId], references: [id], name: "clientLocations")
+  paiements PaiementLocation[]
+
   @@index([propertyId])
   @@index([clientId])
   @@index([statut])
   @@index([dateDebut])
   @@index([dateFin])
+  @@map("locations_saisonniere")
 }
 
 model PaiementLocation {
-  id          Int       @id @default(autoincrement())
-  locationId  Int
-  montant     Float
-  methode     String
-  reference   String    @unique
-  statut      String    @default("en_attente")
+  id           Int       @id @default(autoincrement())
+  locationId   Int
+  montant      Float
+  methode      String
+  reference    String    @unique
+  statut       String    @default("en_attente")
   datePaiement DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  location    LocationSaisonniere @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  
-  @@map("paiements_location")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  location LocationSaisonniere @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
   @@index([locationId])
   @@index([statut])
   @@index([reference])
+  @@map("paiements_location")
 }
 
 //===================
@@ -810,11 +813,11 @@ model Appointment {
 // COMMANDES
 // ======================
 model Order {
-  id              String   @id @default(uuid())
-  orderNumber     String   @unique
+  id          String @id @default(uuid())
+  orderNumber String @unique
 
-  userId          String              // client qui commande
-  idPrestataire   String              // propriétaire du produit/service
+  userId        String // client qui commande
+  idPrestataire String // propriétaire du produit/service
 
   items           Json
   totalAmount     Float
@@ -1624,20 +1627,21 @@ model ReservationFlight {
 
 // Catégories organisées
 model ActivityCategory {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id          String     @id @default(uuid())
+  name        String     @unique
   description String?
   icon        String?
   color       String?
-  image       String? 
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  activities Activity[]
+  image       String?
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  activities  Activity[]
 
   @@index([isActive])
   @@index([sortOrder])
 }
+
 // Guides spécialisés
 model ActivityGuide {
   id             String   @id @default(uuid())
@@ -1937,52 +1941,53 @@ model GuideContact {
   @@index([status])
   @@index([createdAt])
 }
+
 // ======================
 // MESSAGES DE CONTACT POUR SERVICES/MÉTIERS/PROFESSIONNELS
 // ======================
 model ContactMessage {
-  id           String   @id @default(uuid())
-  
+  id String @id @default(uuid())
+
   // Expéditeur (peut être anonyme ou utilisateur connecté)
-  senderName   String
-  senderEmail  String
-  senderPhone  String?
-  userId       String?  // Si l'utilisateur est connecté
-  
+  senderName  String
+  senderEmail String
+  senderPhone String?
+  userId      String? // Si l'utilisateur est connecté
+
   // Destinataire
-  recipientId  String?  // ID du professionnel destinataire
-  serviceId    Int?     // Si lié à un service spécifique
-  metierId     Int?     // Si lié à un métier spécifique
-  
+  recipientId String? // ID du professionnel destinataire
+  serviceId   Int? // Si lié à un service spécifique
+  metierId    Int? // Si lié à un métier spécifique
+
   // Contenu
-  subject      String
-  message      String
-  messageType  String   @default("general") // "service", "metier", "professional", "general"
-  
+  subject     String
+  message     String
+  messageType String @default("general") // "service", "metier", "professional", "general"
+
   // Métadonnées
-  isRead       Boolean  @default(false)
-  isReplied    Boolean  @default(false)
+  isRead       Boolean   @default(false)
+  isReplied    Boolean   @default(false)
   replyMessage String?
   repliedAt    DateTime?
-  
+
   // Pièces jointes
-  attachments  Json?    // URLs des fichiers joints
-  
+  attachments Json? // URLs des fichiers joints
+
   // Statut
-  status       String   @default("pending") // "pending", "read", "replied", "archived"
-  priority     String   @default("normal")  // "low", "normal", "high", "urgent"
-  
+  status   String @default("pending") // "pending", "read", "replied", "archived"
+  priority String @default("normal") // "low", "normal", "high", "urgent"
+
   // Relations
-  sender       User?    @relation("ContactMessageSender", fields: [userId], references: [id], onDelete: SetNull)
-  recipient    User?    @relation("ContactMessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  service      Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  metier       Metier?  @relation(fields: [metierId], references: [id], onDelete: Cascade)
-  
+  sender    User?    @relation("ContactMessageSender", fields: [userId], references: [id], onDelete: SetNull)
+  recipient User?    @relation("ContactMessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  metier    Metier?  @relation(fields: [metierId], references: [id], onDelete: Cascade)
+
   // Timestamps
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  readAt       DateTime?
-  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  readAt    DateTime?
+
   // Index
   @@index([userId])
   @@index([recipientId])
