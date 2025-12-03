@@ -150,6 +150,7 @@ model User {
   // RELATIONS ORDER CORRIGÉES
   ordersClient      Order[] @relation("OrderClient") // Commandes passées en tant que client
   ordersPrestataire Order[] @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
+  locationsClient LocationSaisonniere[] @relation("clientLocations")
   
   messagesEnvoyes           Message[]                 @relation("MessageExpediteur")
   messagesRecus             Message[]                 @relation("MessageReceiver")
@@ -416,7 +417,8 @@ model Property {
   yearBuilt       Int?
   rentType        String?                @default("longue_duree")
   embedding       Unsupported("vector")?
-
+  locationSaisonnieres  LocationSaisonniere[]
+  
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   favorites Favorite[]
   demandes  Demande[]
@@ -605,6 +607,53 @@ model UtilisateurService {
 
   @@id([userId, serviceId])
   @@index([isAvailable])
+}
+// ======================
+// LOCATIONS SAISONNIÈRES - VERSION CORRIGÉE
+// ======================
+model LocationSaisonniere {
+  id               Int       @id @default(autoincrement())
+  propertyId       String    // String pour correspondre à Property.id
+  clientId         String
+  dateDebut        DateTime
+  dateFin          DateTime
+  prixTotal        Float
+  nombreAdultes    Int       @default(1)
+  nombreEnfants    Int       @default(0)
+  remarques        String?
+  statut           String    @default("en_attente")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  property        Property  @relation(fields: [propertyId], references: [id])
+  client          User      @relation(fields: [clientId], references: [id], name: "clientLocations")
+  paiements       PaiementLocation[]
+  
+  @@map("locations_saisonniere")
+  @@index([propertyId])
+  @@index([clientId])
+  @@index([statut])
+  @@index([dateDebut])
+  @@index([dateFin])
+}
+
+model PaiementLocation {
+  id          Int       @id @default(autoincrement())
+  locationId  Int
+  montant     Float
+  methode     String
+  reference   String    @unique
+  statut      String    @default("en_attente")
+  datePaiement DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  location    LocationSaisonniere @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  
+  @@map("paiements_location")
+  @@index([locationId])
+  @@index([statut])
+  @@index([reference])
 }
 
 //===================

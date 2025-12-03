@@ -330,6 +330,7 @@ app.use("/api/conversations", require("./routes/conversations"));
 app.use("/api/admin/media", require("./routes/admin-media"));
 app.use("/api/pro/demandes", require("./routes/proDemandes"));
 app.use("/api/services-ibr", require("./routes/services-ibr"));
+app.use("/api/locations-saisonnieres", require("./routes/locations-saisonniere"));
 
 // ======================
 // 🆕 NOUVELLES ROUTES ACTIVITÉS ET LOISIRS
