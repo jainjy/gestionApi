@@ -1632,7 +1632,6 @@ model ActivityCategory {
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
-  image       String?
   activities Activity[]
 
   @@index([isActive])
