@@ -129,6 +129,7 @@ model User {
   DevisClientToUser   String?              @map("_DevisClientToUser")
   DevisProviderToUser String?              @map("_DevisProviderToUser")
   demandesFinancement FinancementDemande[]
+  websiteUrl          String?
 
   // Relations existantes
   blogArticles      BlogArticle[]        @relation("BlogArticleAuthor")
@@ -202,7 +203,7 @@ model User {
   activityGuide     ActivityGuide?
   guideContacts     GuideContact[] // AJOUT: Relation manquante
 
-  servicesCrees Service[]
+  servicesCrees     Service[]  // ✅ AJOUT: Relation avec les services créés par le professionnel
 
   @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
@@ -549,7 +550,7 @@ model Service {
   tags        String[]               // Tags personnalisés
   
   category    Category?              @relation(fields: [categoryId], references: [id])
-  createdBy   User?                  @relation(fields: [createdById], references: [id]) // Relation avec le créateur
+  createdBy   User?                  @relation(fields: [createdById], references: [id], onDelete: Cascade) // Relation avec le créateur
   metiers     MetierService[]
   users       UtilisateurService[]
   demandes    Demande[]

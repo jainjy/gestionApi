@@ -263,8 +263,7 @@ app.use("/api/anonce", require("./routes/anonce"));
 app.use('/api/produits-naturels', require("./routes/produits-naturels"));
 app.use('/api/courses', require("./routes/courses"));
 app.use('/api/reservation-cours', require("./routes/reservationCours"));
-
-// AJOUT: Route investissement international
+app.use("/api/digitalisation-services", require("./routes/digitalisation-services"));
 app.use("/api/investissement", require("./routes/investment"));
 
 //rapport 
