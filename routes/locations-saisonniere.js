@@ -9,41 +9,56 @@ router.get("/client/:userId", authenticateToken, async (req, res) => {
     const { userId } = req.params;
     const { statut } = req.query;
 
-    console.log(`🔄 Recherche réservations pour client: ${userId}`);
+    console.log(`🔄 [BACKEND] Recherche réservations pour client: ${userId}`);
+    console.log(`🔑 [BACKEND] Headers auth:`, req.headers.authorization);
+    console.log(`👤 [BACKEND] User from token:`, req.user);
 
     // Vérifier si userId est un UUID ou un nombre
     let clientId;
     
     // Vérifier si c'est un UUID (format avec tirets)
     if (userId.includes('-')) {
-      // C'est un UUID, on doit trouver l'utilisateur par son UUID
+      console.log(`🔍 [BACKEND] UUID détecté: ${userId}`);
+      
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true }
+        select: { id: true, email: true, firstName: true, lastName: true }
       });
       
       if (!user) {
-        console.log(`❌ Utilisateur non trouvé avec UUID: ${userId}`);
-        return res.status(404).json({ error: "Utilisateur non trouvé" });
+        console.log(`❌ [BACKEND] Utilisateur non trouvé avec UUID: ${userId}`);
+        return res.status(404).json({ 
+          error: "Utilisateur non trouvé"
+        });
       }
       
       clientId = user.id;
-      console.log(`✅ UUID ${userId} correspond à l'utilisateur ID: ${clientId}`);
+      console.log(`✅ [BACKEND] UUID ${userId} correspond à l'utilisateur:`, {
+        id: user.id,
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`
+      });
     } else {
-      // C'est un ID numérique
+      console.log(`🔍 [BACKEND] ID numérique détecté: ${userId}`);
       clientId = parseInt(userId);
-      // Vérifier si l'utilisateur existe
+      
       const user = await prisma.user.findUnique({
         where: { id: clientId },
-        select: { id: true }
+        select: { id: true, email: true, firstName: true, lastName: true }
       });
       
       if (!user) {
-        console.log(`❌ Utilisateur non trouvé avec ID numérique: ${clientId}`);
-        return res.status(404).json({ error: "Utilisateur non trouvé" });
+        console.log(`❌ [BACKEND] Utilisateur non trouvé avec ID numérique: ${clientId}`);
+        return res.status(404).json({ 
+          error: "Utilisateur non trouvé"
+        });
       }
       
-      console.log(`✅ Utilisateur trouvé avec ID: ${clientId}`);
+      console.log(`✅ [BACKEND] Utilisateur trouvé:`, {
+        id: user.id,
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`
+      });
     }
 
     let whereClause = {
@@ -55,7 +70,7 @@ router.get("/client/:userId", authenticateToken, async (req, res) => {
       whereClause.statut = statut;
     }
 
-    console.log(`🔍 Recherche réservations avec clause:`, whereClause);
+    console.log(`🔍 [BACKEND] Clause de recherche:`, JSON.stringify(whereClause));
 
     const reservations = await prisma.locationSaisonniere.findMany({
       where: whereClause,
@@ -94,7 +109,23 @@ router.get("/client/:userId", authenticateToken, async (req, res) => {
       },
     });
 
-    console.log(`✅ ${reservations.length} réservations trouvées pour le client`);
+    console.log(`✅ [BACKEND] ${reservations.length} réservations trouvées pour le client`);
+    
+    if (reservations.length > 0) {
+      reservations.forEach((res, index) => {
+        console.log(`📋 [BACKEND] Réservation ${index + 1}:`, {
+          id: res.id,
+          clientId: res.clientId,
+          propertyId: res.propertyId,
+          statut: res.statut,
+          prixTotal: res.prixTotal,
+          client: res.client ? `${res.client.firstName} ${res.client.lastName}` : 'N/A',
+          property: res.property?.title
+        });
+      });
+    } else {
+      console.log(`⚠️ [BACKEND] Aucune réservation trouvée pour clientId: ${clientId}`);
+    }
 
     // Calculer le nombre de nuits pour chaque réservation
     const reservationsAvecDetails = reservations.map((reservation) => {
@@ -110,8 +141,13 @@ router.get("/client/:userId", authenticateToken, async (req, res) => {
 
     res.json(reservationsAvecDetails);
   } catch (error) {
-    console.error("❌ Erreur lors de la récupération des réservations client:", error);
-    res.status(500).json({ error: "Erreur serveur", details: error.message });
+    console.error("❌ [BACKEND] Erreur lors de la récupération des réservations client:", error);
+    console.error("📝 [BACKEND] Stack trace:", error.stack);
+    res.status(500).json({ 
+      error: "Erreur serveur", 
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
@@ -121,44 +157,38 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
     const { userId } = req.params;
     const { statut } = req.query;
 
-    console.log(`🔄 Recherche réservations pour propriétaire: ${userId}`);
+    console.log(`🔄 [BACKEND] Recherche réservations pour propriétaire: ${userId}`);
 
-    // Vérifier si userId est un UUID ou un nombre
     let ownerId;
     
     if (userId.includes('-')) {
-      // C'est un UUID, on doit trouver l'utilisateur par son UUID
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { id: true }
       });
       
       if (!user) {
-        console.log(`❌ Utilisateur non trouvé avec UUID: ${userId}`);
+        console.log(`❌ [BACKEND] Utilisateur non trouvé avec UUID: ${userId}`);
         return res.status(404).json({ error: "Utilisateur non trouvé" });
       }
       
       ownerId = user.id;
-      console.log(`✅ UUID ${userId} correspond à l'utilisateur ID: ${ownerId}`);
+      console.log(`✅ [BACKEND] UUID ${userId} correspond à l'utilisateur ID: ${ownerId}`);
     } else {
-      // C'est un ID numérique
       ownerId = parseInt(userId);
-      // Vérifier si l'utilisateur existe
       const user = await prisma.user.findUnique({
         where: { id: ownerId },
         select: { id: true }
       });
       
       if (!user) {
-        console.log(`❌ Utilisateur non trouvé avec ID numérique: ${ownerId}`);
+        console.log(`❌ [BACKEND] Utilisateur non trouvé avec ID numérique: ${ownerId}`);
         return res.status(404).json({ error: "Utilisateur non trouvé" });
       }
       
-      console.log(`✅ Utilisateur trouvé avec ID: ${ownerId}`);
+      console.log(`✅ [BACKEND] Utilisateur trouvé avec ID: ${ownerId}`);
     }
 
-    // Récupérer les propriétés du propriétaire
-    console.log(`🔍 Recherche propriétés pour ownerId: ${ownerId}`);
     const properties = await prisma.property.findMany({
       where: {
         ownerId: ownerId,
@@ -168,12 +198,12 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
       select: { id: true },
     });
 
-    console.log(`✅ ${properties.length} propriétés trouvées pour le propriétaire`);
+    console.log(`✅ [BACKEND] ${properties.length} propriétés trouvées pour le propriétaire`);
 
     const propertyIds = properties.map((p) => p.id);
 
     if (propertyIds.length === 0) {
-      console.log(`ℹ️  Aucune propriété en location saisonnière pour ce propriétaire`);
+      console.log(`ℹ️ [BACKEND] Aucune propriété en location saisonnière pour ce propriétaire`);
       return res.json([]);
     }
 
@@ -181,12 +211,11 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
       propertyId: { in: propertyIds },
     };
 
-    // Filtre par statut si fourni
     if (statut) {
       whereClause.statut = statut;
     }
 
-    console.log(`🔍 Recherche réservations pour propriétés:`, propertyIds);
+    console.log(`🔍 [BACKEND] Recherche réservations pour propriétés:`, propertyIds);
 
     const reservations = await prisma.locationSaisonniere.findMany({
       where: whereClause,
@@ -212,9 +241,8 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
       },
     });
 
-    console.log(`✅ ${reservations.length} réservations trouvées pour le propriétaire`);
+    console.log(`✅ [BACKEND] ${reservations.length} réservations trouvées pour le propriétaire`);
 
-    // Calculer le nombre de nuits pour chaque réservation
     const reservationsAvecDetails = reservations.map((reservation) => {
       const dateDebut = new Date(reservation.dateDebut);
       const dateFin = new Date(reservation.dateFin);
@@ -228,7 +256,7 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
 
     res.json(reservationsAvecDetails);
   } catch (error) {
-    console.error("❌ Erreur lors de la récupération des réservations propriétaire:", error);
+    console.error("❌ [BACKEND] Erreur lors de la récupération des réservations propriétaire:", error);
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
@@ -247,7 +275,7 @@ router.post("/", authenticateToken, async (req, res) => {
       clientId,
     } = req.body;
 
-    console.log(`🔄 Création réservation pour client: ${clientId}, propriété: ${propertyId}`);
+    console.log(`🔄 [BACKEND] Création réservation pour client: ${clientId}, propriété: ${propertyId}`);
 
     // Validation
     if (!propertyId || !dateDebut || !dateFin || !prixTotal || !clientId) {
@@ -256,9 +284,8 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    // Vérifier si la propriété existe et est en location saisonnière
     const property = await prisma.property.findUnique({
-      where: { id: parseInt(propertyId) },
+      where: { id: propertyId },
     });
 
     if (!property) {
@@ -269,10 +296,8 @@ router.post("/", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Cette propriété n'est pas en location saisonnière" });
     }
 
-    // Vérifier si clientId est un UUID ou un nombre
     let clientIdNum;
     if (clientId.includes('-')) {
-      // C'est un UUID
       const user = await prisma.user.findUnique({
         where: { id: clientId },
         select: { id: true }
@@ -284,7 +309,6 @@ router.post("/", authenticateToken, async (req, res) => {
       
       clientIdNum = user.id;
     } else {
-      // C'est un ID numérique
       clientIdNum = parseInt(clientId);
       const user = await prisma.user.findUnique({
         where: { id: clientIdNum },
@@ -299,7 +323,7 @@ router.post("/", authenticateToken, async (req, res) => {
     // Vérifier les conflits de dates
     const conflits = await prisma.locationSaisonniere.findMany({
       where: {
-        propertyId: parseInt(propertyId),
+        propertyId: propertyId,
         statut: { in: ["confirmee", "en_cours", "en_attente"] },
         OR: [
           {
@@ -324,7 +348,7 @@ router.post("/", authenticateToken, async (req, res) => {
     // Créer la réservation
     const reservation = await prisma.locationSaisonniere.create({
       data: {
-        propertyId: parseInt(propertyId),
+        propertyId: propertyId,
         clientId: clientIdNum,
         dateDebut: new Date(dateDebut),
         dateFin: new Date(dateFin),
@@ -360,13 +384,13 @@ router.post("/", authenticateToken, async (req, res) => {
       },
     });
 
-    console.log(`✅ Réservation créée avec ID: ${reservation.id}`);
+    console.log(`✅ [BACKEND] Réservation créée avec ID: ${reservation.id}`);
 
     // Créer un paiement initial (acompte)
     const paiement = await prisma.paiementLocation.create({
       data: {
         locationId: reservation.id,
-        montant: parseFloat(prixTotal) * 0.3, // 30% d'acompte
+        montant: parseFloat(prixTotal) * 0.3,
         methode: "en_attente",
         reference: `RES-${reservation.id}-${Date.now()}`,
         statut: "en_attente",
@@ -381,7 +405,7 @@ router.post("/", authenticateToken, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Erreur lors de la création de la réservation:", error);
+    console.error("❌ [BACKEND] Erreur lors de la création de la réservation:", error);
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
@@ -396,9 +420,8 @@ router.patch("/:id/statut", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Le statut est requis" });
     }
 
-    console.log(`🔄 Mise à jour statut réservation ${id} -> ${statut}`);
+    console.log(`🔄 [BACKEND] Mise à jour statut réservation ${id} -> ${statut}`);
 
-    // Vérifier si la réservation existe
     const reservation = await prisma.locationSaisonniere.findUnique({
       where: { id: parseInt(id) },
       include: {
@@ -410,7 +433,6 @@ router.patch("/:id/statut", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Réservation non trouvée" });
     }
 
-    // Mettre à jour le statut
     const updatedReservation = await prisma.locationSaisonniere.update({
       where: { id: parseInt(id) },
       data: { statut },
@@ -441,14 +463,14 @@ router.patch("/:id/statut", authenticateToken, async (req, res) => {
       },
     });
 
-    console.log(`✅ Statut mis à jour pour réservation ${id}`);
+    console.log(`✅ [BACKEND] Statut mis à jour pour réservation ${id}`);
 
     res.json({
       message: "Statut mis à jour avec succès",
       reservation: updatedReservation,
     });
   } catch (error) {
-    console.error("❌ Erreur lors de la mise à jour du statut:", error);
+    console.error("❌ [BACKEND] Erreur lors de la mise à jour du statut:", error);
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
@@ -458,9 +480,8 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log(`🔄 Suppression réservation ${id}`);
+    console.log(`🔄 [BACKEND] Suppression réservation ${id}`);
 
-    // Vérifier si la réservation existe
     const reservation = await prisma.locationSaisonniere.findUnique({
       where: { id: parseInt(id) },
       include: {
@@ -472,7 +493,6 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Réservation non trouvée" });
     }
 
-    // Seul le client peut supprimer une réservation en attente
     if (reservation.statut !== "en_attente") {
       return res.status(403).json({
         error: "Seules les réservations en attente peuvent être supprimées",
@@ -489,11 +509,11 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       where: { id: parseInt(id) },
     });
 
-    console.log(`✅ Réservation ${id} supprimée`);
+    console.log(`✅ [BACKEND] Réservation ${id} supprimée`);
 
     res.json({ message: "Réservation supprimée avec succès" });
   } catch (error) {
-    console.error("❌ Erreur lors de la suppression de la réservation:", error);
+    console.error("❌ [BACKEND] Erreur lors de la suppression de la réservation:", error);
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
@@ -503,7 +523,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log(`🔍 Détails réservation ${id}`);
+    console.log(`🔍 [BACKEND] Détails réservation ${id}`);
 
     const reservation = await prisma.locationSaisonniere.findUnique({
       where: { id: parseInt(id) },
@@ -544,11 +564,11 @@ router.get("/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Réservation non trouvée" });
     }
 
-    console.log(`✅ Détails réservation ${id} trouvés`);
+    console.log(`✅ [BACKEND] Détails réservation ${id} trouvés`);
 
     res.json(reservation);
   } catch (error) {
-    console.error("❌ Erreur lors de la récupération de la réservation:", error);
+    console.error("❌ [BACKEND] Erreur lors de la récupération de la réservation:", error);
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
@@ -563,9 +583,8 @@ router.post("/:id/paiement", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Montant et méthode sont requis" });
     }
 
-    console.log(`💰 Ajout paiement pour réservation ${id}`);
+    console.log(`💰 [BACKEND] Ajout paiement pour réservation ${id}`);
 
-    // Vérifier si la réservation existe
     const reservation = await prisma.locationSaisonniere.findUnique({
       where: { id: parseInt(id) },
     });
@@ -584,14 +603,14 @@ router.post("/:id/paiement", authenticateToken, async (req, res) => {
       },
     });
 
-    console.log(`✅ Paiement ajouté avec référence: ${paiement.reference}`);
+    console.log(`✅ [BACKEND] Paiement ajouté avec référence: ${paiement.reference}`);
 
     res.status(201).json({
       message: "Paiement ajouté avec succès",
       paiement,
     });
   } catch (error) {
-    console.error("❌ Erreur lors de l'ajout du paiement:", error);
+    console.error("❌ [BACKEND] Erreur lors de l'ajout du paiement:", error);
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
@@ -601,13 +620,11 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
   try {
     const { userId } = req.params;
 
-    console.log(`📊 Statistiques pour propriétaire: ${userId}`);
+    console.log(`📊 [BACKEND] Statistiques pour propriétaire: ${userId}`);
 
-    // Vérifier si userId est un UUID ou un nombre
     let ownerId;
     
     if (userId.includes('-')) {
-      // C'est un UUID
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { id: true }
@@ -619,7 +636,6 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       
       ownerId = user.id;
     } else {
-      // C'est un ID numérique
       ownerId = parseInt(userId);
       const user = await prisma.user.findUnique({
         where: { id: ownerId },
@@ -631,7 +647,6 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       }
     }
 
-    // Récupérer les propriétés du propriétaire
     const properties = await prisma.property.findMany({
       where: {
         ownerId: ownerId,
@@ -657,7 +672,6 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       });
     }
 
-    // Récupérer toutes les réservations
     const reservations = await prisma.locationSaisonniere.findMany({
       where: {
         propertyId: { in: propertyIds },
@@ -667,7 +681,6 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       },
     });
 
-    // Calculer les statistiques
     const stats = {
       total: reservations.length,
       en_attente: reservations.filter(r => r.statut === "en_attente").length,
@@ -680,7 +693,6 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
         .reduce((sum, r) => sum + r.prixTotal, 0),
     };
 
-    // Calculer le taux d'occupation (pour les 30 derniers jours)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -697,7 +709,7 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
 
     const occupationRate = Math.round((joursOccupes / (propertyIds.length * 30)) * 100);
 
-    console.log(`✅ Statistiques calculées pour ${propertyIds.length} propriétés`);
+    console.log(`✅ [BACKEND] Statistiques calculées pour ${propertyIds.length} propriétés`);
 
     res.json({
       ...stats,
@@ -705,8 +717,130 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       propertiesCount: propertyIds.length,
     });
   } catch (error) {
-    console.error("❌ Erreur lors du calcul des statistiques:", error);
+    console.error("❌ [BACKEND] Erreur lors du calcul des statistiques:", error);
     res.status(500).json({ error: "Erreur serveur", details: error.message });
+  }
+});
+
+// POST /api/locations-saisonnieres/from-demande - Créer réservation automatique depuis demande
+router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    
+    console.log(`🏠 [BACKEND] Création réservation automatique depuis demande: ${demandeId}`);
+
+    const demande = await prisma.demande.findUnique({
+      where: { id: parseInt(demandeId) },
+      include: {
+        property: {
+          include: {
+            owner: true
+          }
+        },
+        user: true
+      }
+    });
+
+    if (!demande) {
+      return res.status(404).json({ error: "Demande non trouvée" });
+    }
+
+    if (!demande.propertyId) {
+      return res.status(400).json({ error: "Cette demande n'est pas liée à une propriété" });
+    }
+
+    // Vérifier si la propriété est en location saisonnière
+    if (demande.property.locationType !== "saisonnier") {
+      return res.status(400).json({ 
+        error: "Cette propriété n'est pas en location saisonnière",
+        propertyType: demande.property.locationType
+      });
+    }
+
+    // Vérifier si une réservation existe déjà
+    const existingReservation = await prisma.locationSaisonniere.findFirst({
+      where: {
+        propertyId: demande.propertyId,
+        clientId: demande.userId,
+        statut: { in: ['en_attente', 'confirmee', 'en_cours'] }
+      }
+    });
+
+    if (existingReservation) {
+      console.log(`ℹ️ [BACKEND] Réservation existante déjà: ${existingReservation.id}`);
+      return res.json({
+        message: "Une réservation existe déjà pour cette demande",
+        reservation: existingReservation
+      });
+    }
+
+    // Calculer les dates (début dans 7 jours, durée 7 nuits par défaut)
+    const dateDebut = new Date();
+    dateDebut.setDate(dateDebut.getDate() + 7);
+    
+    const dateFin = new Date(dateDebut);
+    dateFin.setDate(dateFin.getDate() + 7);
+
+    // Calculer le prix
+    const nuits = 7; // par défaut
+    const prixTotal = (demande.property?.price || 0) * nuits;
+
+    // Créer la réservation
+    const reservation = await prisma.locationSaisonniere.create({
+      data: {
+        propertyId: demande.propertyId,
+        clientId: demande.userId,
+        dateDebut,
+        dateFin,
+        prixTotal,
+        nombreAdultes: 2,
+        nombreEnfants: 0,
+        statut: 'confirmee', // Directement confirmée car la visite a eu lieu
+        remarques: `Réservation créée automatiquement suite à la visite (Demande #${demande.id})`
+      },
+      include: {
+        property: true,
+        client: true
+      }
+    });
+
+    console.log(`✅ [BACKEND] Réservation créée: ${reservation.id}`);
+
+    // Créer un paiement associé
+    await prisma.paiementLocation.create({
+      data: {
+        locationId: reservation.id,
+        montant: prixTotal * 0.3, // 30% d'acompte
+        methode: 'virement',
+        reference: `AUTO-RES-${reservation.id}-${Date.now()}`,
+        statut: 'en_attente',
+        datePaiement: new Date()
+      }
+    });
+
+    // Créer une notification pour le client
+    await prisma.notification.create({
+      data: {
+        type: 'reservation_created',
+        title: 'Nouvelle réservation',
+        message: `Votre réservation pour "${demande.property?.title}" a été créée`,
+        relatedEntity: 'locationSaisonniere',
+        relatedEntityId: String(reservation.id),
+        userId: demande.userId,
+        read: false
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Réservation créée avec succès',
+      reservation: reservation,
+      notification: 'Le client a été notifié'
+    });
+
+  } catch (error) {
+    console.error('❌ [BACKEND] Erreur création réservation depuis demande:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

@@ -398,97 +398,169 @@ router.get("/owner/:userId", authenticateToken, async (req, res) => {
   }
 });
 
-// PATCH /api/demandes/immobilier/:id/statut - Mettre à jour le statut d'une demande
-router.patch("/:id/statut", authenticateToken, async (req, res) => {
+// PATCH /api/demandes/:id/statut
+router.patch('/:id/statut', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { statut } = req.body;
-    if (!statut) {
-      return res.status(400).json({ error: "Le champ statut est requis." });
-    }
 
-    // D'abord récupérer la demande existante pour avoir le propertyId
-    const existing = await prisma.demande.findUnique({
-      where: { id: parseInt(id, 10) },
+    console.log(`🔄 [BACKEND] Changement statut demande ${id} -> ${statut}`);
+
+    const demande = await prisma.demande.findUnique({
+      where: { id: parseInt(id) },
       include: {
-        property: true,
-      },
-    });
-
-    if (!existing)
-      return res.status(404).json({ error: "Demande introuvable" });
-
-    if (statut.toLowerCase() === "annulée") {
-      try {
-        await prisma.demandeHistory.create({
-          data: {
-            demandeId: existing.id,
-            title: "Demande annulée",
-            message: "La demande a été annulée et archivée.",
-            snapshot: existing,
-          },
-        });
-      } catch (e) {
-        console.error("Impossible de créer historique", e);
+        property: {
+          include: {
+            owner: true
+          }
+        },
+        user: true
       }
-
-      await prisma.demande.update({
-        where: { id: existing.id },
-        data: {
-          statut: "archivée",
-          isRead: true,
-        },
-      });
-      return res.json({ message: "Demande annulée et archivée" });
-    }
-
-    // Récupérer la propriété avec son propriétaire
-    const property = await prisma.property.findUnique({
-      where: { id: existing.propertyId },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            companyName: true,
-          },
-        },
-      },
     });
 
-    const updated = await prisma.demande.update({
-      where: { id: parseInt(id, 10) },
+    if (!demande) {
+      return res.status(404).json({ error: 'Demande non trouvée' });
+    }
+
+    // Mettre à jour le statut
+    const updatedDemande = await prisma.demande.update({
+      where: { id: parseInt(id) },
       data: { statut },
       include: {
         property: true,
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
+        user: true
+      }
     });
 
-    // Enrichir la demande avec les informations du propriétaire
-    const enrichedDemande = {
-      ...updated,
-      property: {
-        ...updated.property,
-        owner: property?.owner,
-      },
-    };
+    console.log(`✅ [BACKEND] Demande ${id} mise à jour: ${statut}`);
 
-    res.json({ message: "Statut mis à jour", demande: enrichedDemande });
+    // Si le statut est "loué" et qu'il y a une propriété, créer une réservation SAISONNIÈRE
+    const statutLower = statut.toLowerCase();
+    const statutsLoue = ['loué', 'loue', 'rented', 'location confirmée'];
+    
+    if (statutsLoue.includes(statutLower) && demande.propertyId) {
+      console.log(`🏠 [BACKEND] Déclenchement création réservation pour demande ${id}`);
+      
+      // Vérifier si la propriété est en location saisonnière
+      if (demande.property.locationType === 'saisonnier') {
+        
+        // Vérifier si une réservation existe déjà
+        const existingReservation = await prisma.locationSaisonniere.findFirst({
+          where: {
+            propertyId: demande.propertyId,
+            clientId: demande.userId,
+            statut: { in: ['en_attente', 'confirmee', 'en_cours'] }
+          }
+        });
+
+        if (!existingReservation) {
+          // Calculer les dates
+          const dateDebut = new Date();
+          dateDebut.setDate(dateDebut.getDate() + 7); // Début dans 7 jours
+          
+          const dateFin = new Date(dateDebut);
+          dateFin.setDate(dateFin.getDate() + 7); // 7 nuits
+
+          // Calculer le prix total
+          const nuits = 7;
+          const prixTotal = (demande.property?.price || 0) * nuits;
+
+          // Créer la réservation
+          const reservation = await prisma.locationSaisonniere.create({
+            data: {
+              propertyId: demande.propertyId,
+              clientId: demande.userId,
+              dateDebut,
+              dateFin,
+              prixTotal,
+              nombreAdultes: 2,
+              nombreEnfants: 0,
+              statut: 'confirmee',
+              remarques: `Réservation créée automatiquement suite à la visite du ${new Date().toLocaleDateString('fr-FR')} (Demande #${demande.id})`
+            },
+            include: {
+              property: true,
+              client: true
+            }
+          });
+
+          console.log(`✅ [BACKEND] Réservation créée: ${reservation.id}`);
+
+          // Créer un paiement associé
+          await prisma.paiementLocation.create({
+            data: {
+              locationId: reservation.id,
+              montant: prixTotal * 0.3,
+              methode: 'virement',
+              reference: `AUTO-RES-${reservation.id}-${Date.now()}`,
+              statut: 'en_attente',
+              datePaiement: new Date()
+            }
+          });
+
+          // Ajouter à l'historique
+          await prisma.demandeHistory.create({
+            data: {
+              demandeId: demande.id,
+              title: 'Réservation créée',
+              message: `Une réservation saisonnière (#${reservation.id}) a été créée automatiquement`,
+              metadata: {
+                reservationId: reservation.id,
+                dates: `${dateDebut.toLocaleDateString('fr-FR')} - ${dateFin.toLocaleDateString('fr-FR')}`,
+                nuits: nuits,
+                prixTotal: prixTotal
+              }
+            }
+          });
+
+          // Notifier le client
+          await prisma.notification.create({
+            data: {
+              type: 'reservation_created',
+              title: 'Nouvelle réservation',
+              message: `Votre réservation pour "${demande.property?.title}" a été créée. Dates: ${dateDebut.toLocaleDateString('fr-FR')} - ${dateFin.toLocaleDateString('fr-FR')}`,
+              relatedEntity: 'locationSaisonniere',
+              relatedEntityId: String(reservation.id),
+              userId: demande.userId,
+              read: false
+            }
+          });
+
+          return res.json({
+            message: 'Statut mis à jour et réservation saisonnière créée',
+            demande: updatedDemande,
+            reservation: reservation,
+            notification: 'Le client a été notifié'
+          });
+
+        } else {
+          console.log(`ℹ️ [BACKEND] Réservation existante déjà: ${existingReservation.id}`);
+          
+          // Mettre à jour le statut de la réservation existante
+          await prisma.locationSaisonniere.update({
+            where: { id: existingReservation.id },
+            data: { statut: 'confirmee' }
+          });
+
+          return res.json({
+            message: 'Statut mis à jour et réservation existante confirmée',
+            demande: updatedDemande,
+            reservation: existingReservation
+          });
+        }
+      } else {
+        console.log(`⚠️ [BACKEND] La propriété n'est pas en location saisonnière (type: ${demande.property?.locationType})`);
+      }
+    }
+
+    res.json({
+      message: 'Statut mis à jour',
+      demande: updatedDemande
+    });
+
   } catch (error) {
-    console.error("Erreur lors de la mise à jour du statut:", error);
-    res.status(500).json({ error: "Erreur serveur" });
+    console.error('❌ [BACKEND] Erreur mise à jour statut:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
