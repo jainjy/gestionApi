@@ -406,6 +406,7 @@ model Property {
   hasTerrace      Boolean?               @default(false)
   listingType     String?                @default("sale")
   isPSLA          Boolean?               @default(false)
+  isSHLMR          Boolean?               @default(false)
   metaDescription String?
   metaTitle       String?
   slug            String?                @unique
