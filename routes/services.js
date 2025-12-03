@@ -8,7 +8,7 @@ const { createNotification } = require("../services/notificationService");
 router.get('/', async (req, res) => {
   try {
     const services = await prisma.service.findMany({
-      // Select explicit scalar fields and nested relations to avoid selecting non-existent DB columns
+      where: {type:{not:"art"}  },
       select: {
         id: true,
         libelle: true,
@@ -20,8 +20,8 @@ router.get('/', async (req, res) => {
         category: true,
         metiers: {
           include: {
-            metier: true
-          }
+            metier: true,
+          },
         },
         users: {
           include: {
@@ -30,16 +30,16 @@ router.get('/', async (req, res) => {
                 id: true,
                 firstName: true,
                 lastName: true,
-                companyName: true
-              }
-            }
-          }
-        }
+                companyName: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
-        id: 'asc'
-      }
-    })
+        id: "asc",
+      },
+    });
 
     // Transformer les données pour le frontend
     const transformedServices = services.map(service => ({
@@ -321,7 +321,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // GET /api/services/stats - Statistiques des services
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
-    const totalServices = await prisma.service.count()
+    const totalServices = await prisma.service.count({where:{type:{not:"art"}}})
     const totalCategories = await prisma.category.count()
     const totalMetiers = await prisma.metier.count()
     
