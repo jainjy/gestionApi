@@ -43,7 +43,6 @@ router.post("/", authenticateToken, async (req, res) => {
 
     let service = null;
     if (isDemandeService) {
-      // Récupérer les informations du service pour la conversation
       service = await prisma.service.findUnique({
         where: { id: parseInt(serviceId) },
         select: {
@@ -138,15 +137,12 @@ router.post("/", authenticateToken, async (req, res) => {
     let conversation = null;
 
     if (isDemandeService) {
-      // Déterminer les participants initiaux
-      const participants = [{ userId: createdById }]; // Le créateur de la demande
+      const participants = [{ userId: createdById }];
 
-      // Si un artisan spécifique est ciblé, l'ajouter comme participant
       if (artisanId) {
         participants.push({ userId: artisanId });
       }
 
-      // Créer la conversation seulement pour les services
       conversation = await prisma.conversation.create({
         data: {
           titre: `Demande ${service.libelle}`,
@@ -173,7 +169,6 @@ router.post("/", authenticateToken, async (req, res) => {
         },
       });
 
-      // Ajouter un message système pour la création de la demande
       await prisma.message.create({
         data: {
           conversationId: conversation.id,
@@ -184,7 +179,6 @@ router.post("/", authenticateToken, async (req, res) => {
         },
       });
 
-      // Si un artisan spécifique est ciblé, ajouter un message spécial
       if (artisanId) {
         await prisma.message.create({
           data: {
@@ -203,7 +197,6 @@ router.post("/", authenticateToken, async (req, res) => {
       demande: nouvelleDemande,
     };
 
-    // Ajouter les infos de conversation seulement pour les services
     if (isDemandeService && conversation) {
       response.conversation = {
         id: conversation.id,
@@ -229,11 +222,10 @@ router.get("/user/:userId", authenticateToken, async (req, res) => {
       createdById: userId,
       NOT: {
         propertyId: null,
-        statut: "archivée", // Ne pas montrer les demandes archivées pour l'utilisateur
+        statut: "archivée",
       },
     };
 
-    // Filtre par statut si fourni
     if (status) {
       whereClause.statut = status;
     }
@@ -304,7 +296,6 @@ router.get("/owner/:userId", authenticateToken, async (req, res) => {
     const { userId } = req.params;
     const { status } = req.query;
 
-    // D'abord, récupérer toutes les propriétés de l'utilisateur avec leurs propriétaires
     const userProperties = await prisma.property.findMany({
       where: { ownerId: userId },
       include: {
@@ -322,8 +313,6 @@ router.get("/owner/:userId", authenticateToken, async (req, res) => {
     });
 
     const propertyIds = userProperties.map((p) => p.id);
-
-    // Créer un map des propriétés pour un accès facile plus tard
     const propertiesMap = new Map(userProperties.map((p) => [p.id, p]));
 
     let whereClause = {
@@ -332,7 +321,6 @@ router.get("/owner/:userId", authenticateToken, async (req, res) => {
       },
     };
 
-    // Filtre par statut si fourni
     if (status) {
       whereClause.statut = status;
     }
@@ -356,7 +344,6 @@ router.get("/owner/:userId", authenticateToken, async (req, res) => {
       },
     });
 
-    // Enrichir les demandes avec les informations du propriétaire
     const enrichedDemandes = demandes.map((demande) => {
       const property = propertiesMap.get(demande.propertyId);
       return {
@@ -398,7 +385,7 @@ router.get("/owner/:userId", authenticateToken, async (req, res) => {
   }
 });
 
-// PATCH /api/demandes/:id/statut
+// PATCH /api/demandes/immobilier/:id/statut - CORRIGÉ
 router.patch('/:id/statut', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -406,6 +393,7 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
 
     console.log(`🔄 [BACKEND] Changement statut demande ${id} -> ${statut}`);
 
+    // CORRECTION: Utiliser 'createdBy' au lieu de 'user'
     const demande = await prisma.demande.findUnique({
       where: { id: parseInt(id) },
       include: {
@@ -414,7 +402,7 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
             owner: true
           }
         },
-        user: true
+        createdBy: true  // CORRIGÉ
       }
     });
 
@@ -428,138 +416,85 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
       data: { statut },
       include: {
         property: true,
-        user: true
+        createdBy: true  // CORRIGÉ
       }
     });
 
     console.log(`✅ [BACKEND] Demande ${id} mise à jour: ${statut}`);
 
-    // Si le statut est "loué" et qu'il y a une propriété, créer une réservation SAISONNIÈRE
-    const statutLower = statut.toLowerCase();
-    const statutsLoue = ['loué', 'loue', 'rented', 'location confirmée'];
-    
-    if (statutsLoue.includes(statutLower) && demande.propertyId) {
-      console.log(`🏠 [BACKEND] Déclenchement création réservation pour demande ${id}`);
-      
-      // Vérifier si la propriété est en location saisonnière
-      if (demande.property.locationType === 'saisonnier') {
-        
-        // Vérifier si une réservation existe déjà
-        const existingReservation = await prisma.locationSaisonniere.findFirst({
-          where: {
-            propertyId: demande.propertyId,
-            clientId: demande.userId,
-            statut: { in: ['en_attente', 'confirmee', 'en_cours'] }
-          }
-        });
-
-        if (!existingReservation) {
-          // Calculer les dates
-          const dateDebut = new Date();
-          dateDebut.setDate(dateDebut.getDate() + 7); // Début dans 7 jours
-          
-          const dateFin = new Date(dateDebut);
-          dateFin.setDate(dateFin.getDate() + 7); // 7 nuits
-
-          // Calculer le prix total
-          const nuits = 7;
-          const prixTotal = (demande.property?.price || 0) * nuits;
-
-          // Créer la réservation
-          const reservation = await prisma.locationSaisonniere.create({
-            data: {
-              propertyId: demande.propertyId,
-              clientId: demande.userId,
-              dateDebut,
-              dateFin,
-              prixTotal,
-              nombreAdultes: 2,
-              nombreEnfants: 0,
-              statut: 'confirmee',
-              remarques: `Réservation créée automatiquement suite à la visite du ${new Date().toLocaleDateString('fr-FR')} (Demande #${demande.id})`
-            },
-            include: {
-              property: true,
-              client: true
-            }
-          });
-
-          console.log(`✅ [BACKEND] Réservation créée: ${reservation.id}`);
-
-          // Créer un paiement associé
-          await prisma.paiementLocation.create({
-            data: {
-              locationId: reservation.id,
-              montant: prixTotal * 0.3,
-              methode: 'virement',
-              reference: `AUTO-RES-${reservation.id}-${Date.now()}`,
-              statut: 'en_attente',
-              datePaiement: new Date()
-            }
-          });
-
-          // Ajouter à l'historique
-          await prisma.demandeHistory.create({
-            data: {
-              demandeId: demande.id,
-              title: 'Réservation créée',
-              message: `Une réservation saisonnière (#${reservation.id}) a été créée automatiquement`,
-              metadata: {
-                reservationId: reservation.id,
-                dates: `${dateDebut.toLocaleDateString('fr-FR')} - ${dateFin.toLocaleDateString('fr-FR')}`,
-                nuits: nuits,
-                prixTotal: prixTotal
-              }
-            }
-          });
-
-          // Notifier le client
-          await prisma.notification.create({
-            data: {
-              type: 'reservation_created',
-              title: 'Nouvelle réservation',
-              message: `Votre réservation pour "${demande.property?.title}" a été créée. Dates: ${dateDebut.toLocaleDateString('fr-FR')} - ${dateFin.toLocaleDateString('fr-FR')}`,
-              relatedEntity: 'locationSaisonniere',
-              relatedEntityId: String(reservation.id),
-              userId: demande.userId,
-              read: false
-            }
-          });
-
-          return res.json({
-            message: 'Statut mis à jour et réservation saisonnière créée',
-            demande: updatedDemande,
-            reservation: reservation,
-            notification: 'Le client a été notifié'
-          });
-
-        } else {
-          console.log(`ℹ️ [BACKEND] Réservation existante déjà: ${existingReservation.id}`);
-          
-          // Mettre à jour le statut de la réservation existante
-          await prisma.locationSaisonniere.update({
-            where: { id: existingReservation.id },
-            data: { statut: 'confirmee' }
-          });
-
-          return res.json({
-            message: 'Statut mis à jour et réservation existante confirmée',
-            demande: updatedDemande,
-            reservation: existingReservation
-          });
-        }
-      } else {
-        console.log(`⚠️ [BACKEND] La propriété n'est pas en location saisonnière (type: ${demande.property?.locationType})`);
-      }
-    }
+    // NOTE: La création de réservation se fait dans ListingsPage.jsx
+    // quand le prestataire marque le bien comme "loué"
+    // Cette route gère seulement la validation/refus de la demande
 
     res.json({
-      message: 'Statut mis à jour',
+      message: 'Statut mis à jour avec succès',
       demande: updatedDemande
     });
 
   } catch (error) {
     console.error('❌ [BACKEND] Erreur mise à jour statut:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la mise à jour du statut',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/demandes/immobilier/property/:propertyId - CORRIGÉ
+router.get("/property/:propertyId", authenticateToken, async (req, res) => {
+  try {
+    const { propertyId } = req.params;
+    
+    console.log(`🔍 [BACKEND] Recherche demandes pour propriété: ${propertyId}`);
+    
+    // NE PAS utiliser parseInt() car propertyId est un UUID (string)
+    const demandes = await prisma.demande.findMany({
+      where: {
+        propertyId: propertyId,  // ✅ Utiliser directement le string
+        statut: { in: ['validée', 'en attente'] }
+      },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        },
+        property: {
+          select: {
+            id: true,
+            title: true,
+            rentType: true  // ✅ CORRIGÉ: utiliser rentType au lieu de locationType
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    
+    console.log(`✅ [BACKEND] ${demandes.length} demandes trouvées`);
+    
+    const formattedDemandes = demandes.map(demande => ({
+      id: demande.id,
+      statut: demande.statut,
+      clientId: demande.createdById,
+      contactEmail: demande.contactEmail,
+      contactPrenom: demande.contactPrenom,
+      contactNom: demande.contactNom,
+      contactTel: demande.contactTel,
+      dateSouhaitee: demande.dateSouhaitee,
+      createdAt: demande.createdAt,
+      property: demande.property
+    }));
+    
+    res.json(formattedDemandes);
+    
+  } catch (error) {
+    console.error('❌ [BACKEND] Erreur récupération demandes:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -569,7 +504,6 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // D'abord récupérer la demande avec toutes les informations nécessaires
     const demande = await prisma.demande.findUnique({
       where: { id: parseInt(id, 10) },
       include: {
@@ -582,18 +516,15 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Demande introuvable" });
     }
 
-    // Vérifier si l'utilisateur est le propriétaire de la demande ou le propriétaire du bien
     const isRequestCreator = demande.createdById === req.user.id;
     const isPropertyOwner = demande.property?.ownerId === req.user.id;
 
     if (isRequestCreator) {
-      // Si c'est l'utilisateur qui a créé la demande, vraie suppression
       await prisma.demande.delete({
         where: { id: parseInt(id, 10) },
       });
       res.json({ message: "Demande supprimée définitivement" });
     } else if (isPropertyOwner) {
-      // Pour le professionnel, juste marquer comme archivée
       await prisma.demandeHistory.create({
         data: {
           demandeId: demande.id,
@@ -603,7 +534,6 @@ router.delete("/:id", authenticateToken, async (req, res) => {
         },
       });
 
-      // Mettre à jour le statut comme archivée
       await prisma.demande.update({
         where: { id: parseInt(id, 10) },
         data: {
@@ -614,7 +544,6 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       });
       res.json({ message: "Demande archivée avec succès" });
     } else {
-      // Si l'utilisateur n'est ni le créateur ni le propriétaire
       res.status(403).json({ error: "Non autorisé à supprimer cette demande" });
     }
   } catch (error) {
@@ -646,7 +575,6 @@ router.get("/user/:userId/history", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Récupérer toutes les demandes de l'utilisateur
     const demandes = await prisma.demande.findMany({
       where: {
         createdById: userId,
@@ -657,7 +585,6 @@ router.get("/user/:userId/history", authenticateToken, async (req, res) => {
 
     const demandeIds = demandes.map((d) => d.id);
 
-    // Récupérer l'historique pour toutes ces demandes
     const history = await prisma.demandeHistory.findMany({
       where: {
         demandeId: { in: demandeIds },
