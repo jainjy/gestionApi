@@ -4,6 +4,163 @@ const { authenticateToken } = require('../middleware/auth')
 const { prisma } = require('../lib/db')
 const { createNotification } = require("../services/notificationService");
 
+// ✅ Routes spécifiques (AVANT les routes paramétrées)
+
+// GET /api/services/stats - Statistiques des services
+router.get('/stats', authenticateToken, async (req, res) => {
+  try {
+    const totalServices = await prisma.service.count({where:{type:{not:"art"}}})
+    const totalCategories = await prisma.category.count()
+    const totalMetiers = await prisma.metier.count()
+    
+    // Services par catégorie
+    const servicesByCategory = await prisma.category.findMany({
+      include: {
+        _count: {
+          select: { services: true }
+        }
+      }
+    })
+
+    res.json({
+      totalServices,
+      totalCategories,
+      totalMetiers,
+      servicesByCategory: servicesByCategory.map(cat => ({
+        category: cat.name,
+        count: cat._count.services
+      }))
+    })
+  } catch (error) {
+    console.error('Erreur lors de la récupération des stats:', error)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// GET /api/services/categories - Récupérer toutes les catégories
+router.get('/categories', authenticateToken, async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({
+      include: {
+        services: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    })
+
+    res.json(categories)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des catégories:', error)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// GET /api/services/metiers - Récupérer tous les métiers
+router.get('/metiers', authenticateToken, async (req, res) => {
+  try {
+    const metiers = await prisma.metier.findMany({
+      include: {
+        services: {
+          include: {
+            service: true
+          }
+        }
+      },
+      orderBy: {
+        libelle: 'asc'
+      }
+    })
+
+    res.json(metiers)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des métiers:', error)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+router.get("/without-category", async (req, res) => {
+  try {
+    const services = await prisma.service.findMany({
+      where: {
+        categoryId: null,
+      },
+      include: {
+        _count: {
+          select: {
+            metiers: true,
+            users: true,
+          },
+        },
+      },
+      orderBy: {
+        libelle: "asc",
+      },
+    });
+    res.json(services);
+  } catch (error) {
+    console.error(
+      "Erreur lors de la récupération des services sans catégorie:",
+      error
+    );
+    res
+      .status(500)
+      .json({
+        error: "Erreur lors de la récupération des services sans catégorie",
+      });
+  }
+});
+
+// POST /api/services/bulk-assign-category - Assigner une catégorie à plusieurs services
+router.post("/bulk-assign-category", async (req, res) => {
+  try {
+    const { categoryId, serviceIds } = req.body;
+
+    if (!categoryId) {
+      return res.status(400).json({ error: "L'ID de la catégorie est requis" });
+    }
+
+    if (!serviceIds || !Array.isArray(serviceIds) || serviceIds.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "La liste des services est requise" });
+    }
+
+    // Vérifier que la catégorie existe
+    const category = await prisma.category.findUnique({
+      where: { id: parseInt(categoryId) },
+    });
+
+    if (!category) {
+      return res.status(404).json({ error: "Catégorie non trouvée" });
+    }
+
+    // Mettre à jour les services
+    const result = await prisma.service.updateMany({
+      where: {
+        id: {
+          in: serviceIds,
+        },
+      },
+      data: {
+        categoryId: parseInt(categoryId),
+      },
+    });
+
+    res.json({
+      message: `${result.count} service(s) mis à jour avec succès`,
+      updatedCount: result.count,
+    });
+  } catch (error) {
+    console.error("Erreur lors de l'assignation en masse:", error);
+    res
+      .status(500)
+      .json({ error: "Erreur lors de l'assignation en masse des catégories" });
+  }
+});
+
+// ✅ Routes génériques (APRÈS les routes spécifiques)
+
 // GET /api/services - Récupérer tous les services avec leurs catégories
 router.get('/', async (req, res) => {
   try {
@@ -56,10 +213,10 @@ router.get('/', async (req, res) => {
       vendors: service.users.map(u => ({
         id: u.user.id,
         name: u.user.companyName || `${u.user.firstName} ${u.user.lastName}`,
-        rating: 4.5, // À calculer depuis vos données
-        bookings: 0 // À calculer depuis vos données
+        rating: 4.5,
+        bookings: 0
       })),
-      status: 'active' // À adapter selon vos besoins
+      status: 'active'
     }))
 
     res.json(transformedServices)
@@ -69,7 +226,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// ✅ GET service  select par ID
+// ✅ GET service select par ID
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   
@@ -114,53 +271,11 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// GET /api/services/categories - Récupérer toutes les catégories
-router.get('/categories', authenticateToken, async (req, res) => {
-  try {
-    const categories = await prisma.category.findMany({
-      include: {
-        services: true
-      },
-      orderBy: {
-        name: 'asc'
-      }
-    })
-
-    res.json(categories)
-  } catch (error) {
-    console.error('Erreur lors de la récupération des catégories:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
-  }
-})
-
-// GET /api/services/metiers - Récupérer tous les métiers
-router.get('/metiers', authenticateToken, async (req, res) => {
-  try {
-    const metiers = await prisma.metier.findMany({
-      include: {
-        services: {
-          include: {
-            service: true
-          }
-        }
-      },
-      orderBy: {
-        libelle: 'asc'
-      }
-    })
-
-    res.json(metiers)
-  } catch (error) {
-    console.error('Erreur lors de la récupération des métiers:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
-  }
-})
-
 // POST /api/services - Créer un nouveau service
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { name, description, categoryId, metierIds, images } = req.body;
-    const io = req.app.get("io"); // WebSocket
+    const io = req.app.get("io");
 
     // ➕ Création du service
     const newService = await prisma.service.create({
@@ -317,121 +432,5 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
-
-// GET /api/services/stats - Statistiques des services
-router.get('/stats', authenticateToken, async (req, res) => {
-  try {
-    const totalServices = await prisma.service.count({where:{type:{not:"art"}}})
-    const totalCategories = await prisma.category.count()
-    const totalMetiers = await prisma.metier.count()
-    
-    // Services par catégorie
-    const servicesByCategory = await prisma.category.findMany({
-      include: {
-        _count: {
-          select: { services: true }
-        }
-      }
-    })
-
-    res.json({
-      totalServices,
-      totalCategories,
-      totalMetiers,
-      servicesByCategory: servicesByCategory.map(cat => ({
-        category: cat.name,
-        count: cat._count.services
-      }))
-    })
-  } catch (error) {
-    console.error('Erreur lors de la récupération des stats:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
-  }
-})
-
-router.get("/without-category", async (req, res) => {
-  try {
-    const services = await prisma.service.findMany({
-      where: {
-        categoryId: null,
-      },
-      include: {
-        _count: {
-          select: {
-            metiers: true,
-            users: true,
-          },
-        },
-      },
-      orderBy: {
-        libelle: "asc",
-      },
-    });
-    res.json(services);
-  } catch (error) {
-    console.error(
-      "Erreur lors de la récupération des services sans catégorie:",
-      error
-    );
-    res
-      .status(500)
-      .json({
-        error: "Erreur lors de la récupération des services sans catégorie",
-      });
-  }
-});
-
-// POST /api/services/bulk-assign-category - Assigner une catégorie à plusieurs services
-router.post("/bulk-assign-category", async (req, res) => {
-  try {
-    const { categoryId, serviceIds } = req.body;
-
-    if (!categoryId) {
-      return res.status(400).json({ error: "L'ID de la catégorie est requis" });
-    }
-
-    if (!serviceIds || !Array.isArray(serviceIds) || serviceIds.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "La liste des services est requise" });
-    }
-
-
-
-
-
-
-    // Vérifier que la catégorie existe
-    const category = await prisma.category.findUnique({
-      where: { id: parseInt(categoryId) },
-    });
-
-    if (!category) {
-      return res.status(404).json({ error: "Catégorie non trouvée" });
-    }
-
-    // Mettre à jour les services
-    const result = await prisma.service.updateMany({
-      where: {
-        id: {
-          in: serviceIds,
-        },
-      },
-      data: {
-        categoryId: parseInt(categoryId),
-      },
-    });
-
-    res.json({
-      message: `${result.count} service(s) mis à jour avec succès`,
-      updatedCount: result.count,
-    });
-  } catch (error) {
-    console.error("Erreur lors de l'assignation en masse:", error);
-    res
-      .status(500)
-      .json({ error: "Erreur lors de l'assignation en masse des catégories" });
-  }
-});
 
 module.exports = router;
