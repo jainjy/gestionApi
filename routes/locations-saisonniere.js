@@ -843,6 +843,499 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
+// GET /api/locations-saisonnieres/client/:userId/dashboard - Dashboard complet client
+router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { month, year } = req.query;
+
+    console.log(`📊 [BACKEND] Dashboard client pour: ${userId}`);
+
+    let clientId;
+    if (userId.includes('-')) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, firstName: true, lastName: true }
+      });
+      if (!user) return res.status(404).json({ error: "Client non trouvé" });
+      clientId = user.id;
+    } else {
+      clientId = parseInt(userId);
+      const user = await prisma.user.findUnique({
+        where: { id: clientId },
+        select: { id: true, firstName: true, lastName: true }
+      });
+      if (!user) return res.status(404).json({ error: "Client non trouvé" });
+    }
+
+    // 1. Récupérer toutes les réservations du client
+    const reservations = await prisma.locationSaisonniere.findMany({
+      where: { clientId: clientId },
+      include: {
+        property: {
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            price: true,
+            images: true
+          }
+        },
+        paiements: {
+          orderBy: { createdAt: "desc" }
+        }
+      },
+      orderBy: { dateDebut: "desc" }
+    });
+
+    // 2. Statistiques générales
+    const totalReservations = reservations.length;
+    const reservationsActives = reservations.filter(r => 
+      ['en_attente', 'confirmee', 'en_cours'].includes(r.statut)
+    ).length;
+    
+    const montantTotalDepense = reservations.reduce((sum, r) => sum + (r.prixTotal || 0), 0);
+    const montantTotalPaye = reservations.reduce((sum, r) => {
+      const paiementsPayes = r.paiements.filter(p => p.statut === 'paye');
+      return sum + paiementsPayes.reduce((pSum, p) => pSum + (p.montant || 0), 0);
+    }, 0);
+    
+    const montantRestantAPayer = montantTotalDepense - montantTotalPaye;
+
+    // 3. Statistiques mensuelles
+    const currentDate = new Date();
+    const currentMonth = month || currentDate.getMonth() + 1;
+    const currentYear = year || currentDate.getFullYear();
+
+    const reservationsMois = reservations.filter(r => {
+      const dateDebut = new Date(r.dateDebut);
+      return dateDebut.getMonth() + 1 === parseInt(currentMonth) && 
+             dateDebut.getFullYear() === parseInt(currentYear);
+    });
+
+    const depenseMois = reservationsMois.reduce((sum, r) => sum + (r.prixTotal || 0), 0);
+
+    // 4. Prochaines réservations (7 jours)
+    const septJours = new Date();
+    septJours.setDate(septJours.getDate() + 7);
+    
+    const prochainesReservations = reservations
+      .filter(r => {
+        const dateDebut = new Date(r.dateDebut);
+        return dateDebut >= new Date() && dateDebut <= septJours && 
+               ['confirmee', 'en_attente'].includes(r.statut);
+      })
+      .sort((a, b) => new Date(a.dateDebut) - new Date(b.dateDebut))
+      .slice(0, 5);
+
+    // 5. Répartition par statut
+    const repartitionStatut = {
+      en_attente: reservations.filter(r => r.statut === 'en_attente').length,
+      confirmee: reservations.filter(r => r.statut === 'confirmee').length,
+      en_cours: reservations.filter(r => r.statut === 'en_cours').length,
+      terminee: reservations.filter(r => r.statut === 'terminee').length,
+      annulee: reservations.filter(r => r.statut === 'annulee').length
+    };
+
+    // 6. Évolution des dépenses (6 derniers mois)
+    const sixMois = [];
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const mois = date.getMonth() + 1;
+      const annee = date.getFullYear();
+      
+      const reservationsMois = reservations.filter(r => {
+        const dateResa = new Date(r.dateDebut);
+        return dateResa.getMonth() + 1 === mois && 
+               dateResa.getFullYear() === annee;
+      });
+      
+      const depense = reservationsMois.reduce((sum, r) => sum + (r.prixTotal || 0), 0);
+      
+      sixMois.push({
+        mois: date.toLocaleDateString('fr-FR', { month: 'short' }),
+        annee: annee,
+        depense: depense,
+        count: reservationsMois.length
+      });
+    }
+
+    // 7. Top destinations
+    const destinations = {};
+    reservations.forEach(r => {
+      const ville = r.property?.city || 'Inconnu';
+      if (!destinations[ville]) {
+        destinations[ville] = { count: 0, montant: 0 };
+      }
+      destinations[ville].count++;
+      destinations[ville].montant += r.prixTotal || 0;
+    });
+
+    const topDestinations = Object.entries(destinations)
+      .map(([ville, data]) => ({ ville, ...data }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    // 8. Paiements en attente
+    const paiementsEnAttente = reservations
+      .filter(r => ['en_attente', 'confirmee'].includes(r.statut))
+      .flatMap(r => r.paiements.filter(p => p.statut === 'en_attente'))
+      .sort((a, b) => new Date(a.datePaiement || a.createdAt) - new Date(b.datePaiement || b.createdAt));
+
+    res.json({
+      success: true,
+      dashboard: {
+        // Résumé
+        resume: {
+          totalReservations,
+          reservationsActives,
+          montantTotalDepense,
+          montantTotalPaye,
+          montantRestantAPayer,
+          depenseMois,
+          reservationsMois: reservationsMois.length
+        },
+        
+        // Prochaines réservations
+        prochainesReservations: prochainesReservations.map(r => ({
+          id: r.id,
+          titre: r.property?.title,
+          ville: r.property?.city,
+          dateDebut: r.dateDebut,
+          dateFin: r.dateFin,
+          statut: r.statut,
+          prixTotal: r.prixTotal,
+          image: r.property?.images?.[0]
+        })),
+        
+        // Statistiques
+        statistiques: {
+          repartitionStatut,
+          evolutionDepenses: sixMois,
+          topDestinations
+        },
+        
+        // Paiements
+        paiements: {
+          enAttente: paiementsEnAttente.map(p => ({
+            id: p.id,
+            montant: p.montant,
+            methode: p.methode,
+            reference: p.reference,
+            dateEcheance: p.datePaiement || p.createdAt
+          })),
+          totalEnAttente: paiementsEnAttente.reduce((sum, p) => sum + p.montant, 0)
+        },
+        
+        // Détails complets
+        reservations: reservations.map(r => ({
+          id: r.id,
+          propertyId: r.propertyId,
+          titre: r.property?.title,
+          ville: r.property?.city,
+          dateDebut: r.dateDebut,
+          dateFin: r.dateFin,
+          nuits: Math.ceil((new Date(r.dateFin) - new Date(r.dateDebut)) / (1000 * 60 * 60 * 24)),
+          prixTotal: r.prixTotal,
+          statut: r.statut,
+          paiements: r.paiements.map(p => ({
+            id: p.id,
+            montant: p.montant,
+            methode: p.methode,
+            statut: p.statut,
+            datePaiement: p.datePaiement,
+            reference: p.reference
+          })),
+          montantPaye: r.paiements.filter(p => p.statut === 'paye').reduce((sum, p) => sum + p.montant, 0),
+          montantRestant: r.prixTotal - r.paiements.filter(p => p.statut === 'paye').reduce((sum, p) => sum + p.montant, 0),
+          image: r.property?.images?.[0]
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ [BACKEND] Erreur dashboard client:", error);
+    res.status(500).json({ error: "Erreur serveur", details: error.message });
+  }
+});
+
+// POST /api/locations-saisonnieres/:id/simuler-paiement - Simuler un paiement
+router.post("/:id/simuler-paiement", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { montant, methode, simulate = true } = req.body;
+
+    console.log(`💰 [BACKEND] Simulation paiement réservation ${id}`);
+
+    const reservation = await prisma.locationSaisonniere.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        property: true,
+        client: true,
+        paiements: true
+      }
+    });
+
+    if (!reservation) {
+      return res.status(404).json({ error: "Réservation non trouvée" });
+    }
+
+    const montantTotalPaye = reservation.paiements
+      .filter(p => p.statut === 'paye')
+      .reduce((sum, p) => sum + p.montant, 0);
+
+    const montantRestant = reservation.prixTotal - montantTotalPaye;
+    const montantPropose = montant || montantRestant;
+
+    if (montantPropose > montantRestant) {
+      return res.status(400).json({ 
+        error: "Montant supérieur au solde restant",
+        montantRestant,
+        montantPropose
+      });
+    }
+
+    if (simulate) {
+      // Simulation seulement
+      return res.json({
+        simulation: true,
+        reservationId: reservation.id,
+        montantTotal: reservation.prixTotal,
+        montantDejaPaye: montantTotalPaye,
+        montantRestant: montantRestant,
+        montantPropose: montantPropose,
+        nouveauSolde: montantRestant - montantPropose,
+        details: {
+          methode: methode || 'carte',
+          frais: methode === 'carte' ? montantPropose * 0.015 : 0,
+          totalAPayer: methode === 'carte' ? montantPropose + (montantPropose * 0.015) : montantPropose
+        }
+      });
+    } else {
+      // Réel paiement
+      const paiement = await prisma.paiementLocation.create({
+        data: {
+          locationId: parseInt(id),
+          montant: montantPropose,
+          methode: methode || 'carte',
+          reference: `PAY-${id}-${Date.now()}`,
+          statut: 'paye',
+          datePaiement: new Date(),
+          details: JSON.stringify({
+            type: 'paiement_client',
+            simulate: false,
+            timestamp: new Date().toISOString()
+          })
+        }
+      });
+
+      // Vérifier si la réservation est entièrement payée
+      const nouveauMontantPaye = montantTotalPaye + montantPropose;
+      const estEntierementPaye = nouveauMontantPaye >= reservation.prixTotal;
+
+      if (estEntierementPaye && reservation.statut === 'en_attente') {
+        await prisma.locationSaisonniere.update({
+          where: { id: parseInt(id) },
+          data: { statut: 'confirmee' }
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Paiement effectué avec succès",
+        paiement,
+        reservation: {
+          ...reservation,
+          montantTotalPaye: nouveauMontantPaye,
+          montantRestant: reservation.prixTotal - nouveauMontantPaye,
+          estEntierementPaye
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error("❌ [BACKEND] Erreur simulation paiement:", error);
+    res.status(500).json({ error: "Erreur serveur", details: error.message });
+  }
+});
+
+// GET /api/locations-saisonnieres/client/:userId/rapport-financier - Rapport financier client
+router.get("/client/:userId/rapport-financier", authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate, format = 'json' } = req.query;
+
+    console.log(`📈 [BACKEND] Rapport financier client: ${userId}`);
+
+    let clientId;
+    if (userId.includes('-')) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, firstName: true, lastName: true, email: true }
+      });
+      if (!user) return res.status(404).json({ error: "Client non trouvé" });
+      clientId = user.id;
+    } else {
+      clientId = parseInt(userId);
+      const user = await prisma.user.findUnique({
+        where: { id: clientId },
+        select: { id: true, firstName: true, lastName: true, email: true }
+      });
+      if (!user) return res.status(404).json({ error: "Client non trouvé" });
+    }
+
+    const dateDebut = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
+    const dateFin = endDate ? new Date(endDate) : new Date();
+
+    const reservations = await prisma.locationSaisonniere.findMany({
+      where: {
+        clientId: clientId,
+        dateDebut: {
+          gte: dateDebut,
+          lte: dateFin
+        }
+      },
+      include: {
+        property: {
+          select: {
+            title: true,
+            city: true,
+            type: true
+          }
+        },
+        paiements: {
+          where: {
+            statut: 'paye'
+          }
+        }
+      },
+      orderBy: { dateDebut: 'asc' }
+    });
+
+    // Calcul des statistiques financières
+    const totalDepenses = reservations.reduce((sum, r) => sum + (r.prixTotal || 0), 0);
+    const totalPaye = reservations.reduce((sum, r) => 
+      sum + r.paiements.reduce((pSum, p) => pSum + p.montant, 0), 0
+    );
+    const totalRestant = totalDepenses - totalPaye;
+
+    // Par mois
+    const depensesParMois = {};
+    const paiementsParMois = {};
+
+    reservations.forEach(r => {
+      const mois = new Date(r.dateDebut).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      
+      if (!depensesParMois[mois]) depensesParMois[mois] = 0;
+      depensesParMois[mois] += r.prixTotal || 0;
+      
+      r.paiements.forEach(p => {
+        if (!paiementsParMois[mois]) paiementsParMois[mois] = 0;
+        paiementsParMois[mois] += p.montant || 0;
+      });
+    });
+
+    // Par type de bien
+    const depensesParType = {};
+    reservations.forEach(r => {
+      const type = r.property?.type || 'Autre';
+      if (!depensesParType[type]) depensesParType[type] = 0;
+      depensesParType[type] += r.prixTotal || 0;
+    });
+
+    // Par destination
+    const depensesParDestination = {};
+    reservations.forEach(r => {
+      const destination = r.property?.city || 'Inconnu';
+      if (!depensesParDestination[destination]) depensesParDestination[destination] = 0;
+      depensesParDestination[destination] += r.prixTotal || 0;
+    });
+
+    const rapport = {
+      periode: {
+        debut: dateDebut.toISOString().split('T')[0],
+        fin: dateFin.toISOString().split('T')[0]
+      },
+      resume: {
+        totalReservations: reservations.length,
+        totalDepenses,
+        totalPaye,
+        totalRestant,
+        tauxPaiement: totalDepenses > 0 ? Math.round((totalPaye / totalDepenses) * 100) : 0
+      },
+      details: {
+        parMois: Object.entries(depensesParMois).map(([mois, depense]) => ({
+          mois,
+          depense,
+          paiement: paiementsParMois[mois] || 0,
+          solde: depense - (paiementsParMois[mois] || 0)
+        })),
+        parType: Object.entries(depensesParType).map(([type, depense]) => ({
+          type,
+          depense,
+          pourcentage: Math.round((depense / totalDepenses) * 100)
+        })),
+        parDestination: Object.entries(depensesParDestination)
+          .map(([destination, depense]) => ({
+            destination,
+            depense,
+            pourcentage: Math.round((depense / totalDepenses) * 100)
+          }))
+          .sort((a, b) => b.depense - a.depense)
+      },
+      reservations: reservations.map(r => ({
+        id: r.id,
+        titre: r.property?.title,
+        destination: r.property?.city,
+        dateDebut: r.dateDebut,
+        dateFin: r.dateFin,
+        prixTotal: r.prixTotal,
+        montantPaye: r.paiements.reduce((sum, p) => sum + p.montant, 0),
+        montantRestant: r.prixTotal - r.paiements.reduce((sum, p) => sum + p.montant, 0),
+        statut: r.statut
+      }))
+    };
+
+    if (format === 'csv') {
+      // Générer CSV
+      const csvRows = [
+        ['ID', 'Titre', 'Destination', 'Date Début', 'Date Fin', 'Prix Total', 'Payé', 'Restant', 'Statut'],
+        ...rapport.reservations.map(r => [
+          r.id,
+          r.titre,
+          r.destination,
+          r.dateDebut.split('T')[0],
+          r.dateFin.split('T')[0],
+          r.prixTotal,
+          r.montantPaye,
+          r.montantRestant,
+          r.statut
+        ])
+      ];
+
+      const csvContent = csvRows.map(row => row.join(',')).join('\n');
+      
+      res.header('Content-Type', 'text/csv');
+      res.header('Content-Disposition', `attachment; filename=rapport-financier-${userId}-${dateDebut.toISOString().split('T')[0]}-${dateFin.toISOString().split('T')[0]}.csv`);
+      res.send(csvContent);
+    } else {
+      res.json({
+        success: true,
+        client: {
+          id: clientId,
+          nom: `${res.user?.firstName || ''} ${res.user?.lastName || ''}`.trim(),
+          email: res.user?.email
+        },
+        rapport
+      });
+    }
+
+  } catch (error) {
+    console.error("❌ [BACKEND] Erreur rapport financier:", error);
+    res.status(500).json({ error: "Erreur serveur", details: error.message });
+  }
+});
 
 // POST /api/locations-saisonnieres/from-demande - Créer réservation automatique depuis demande - CORRIGÉ
 router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
