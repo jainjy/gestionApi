@@ -88,6 +88,102 @@ router.get('/', async (req, res) => {
   }
 })
 
+//filtre par rayon de positionnement de navigateur 
+
+// router.get('/', async (req, res) => {
+//   try {
+//     const { 
+//       status, 
+//       city, 
+//       minPrice, 
+//       maxPrice,
+//       type,
+//       listingType,
+//       search,
+//       userId,
+//       isSHLMR,
+//       lat,
+//       lon,
+//       radiusKm
+//     } = req.query
+
+//     const where = { isActive: true }
+
+//     // FILTRE STATUT
+//     if (status === 'all') {
+//       where.status = { in: ['for_sale', 'for_rent', 'pending', 'sold', 'rented'] }
+//     } else if (status) {
+//       where.status = status
+//     } else {
+//       where.status = { in: ['for_sale', 'for_rent'] }
+//     }
+
+//     // FILTRES CLASSIQUES
+//     if (city) where.city = { contains: city, mode: 'insensitive' }
+//     if (type) where.type = type
+//     if (listingType) where.listingType = listingType
+//     if (userId) where.ownerId = userId
+
+//     if (isSHLMR !== undefined) {
+//       where.isSHLMR = isSHLMR === 'true'
+//     }
+
+//     if (minPrice || maxPrice) {
+//       where.price = {}
+//       if (minPrice) where.price.gte = parseFloat(minPrice)
+//       if (maxPrice) where.price.lte = parseFloat(maxPrice)
+//     }
+
+//     if (search) {
+//       where.OR = [
+//         { title: { contains: search, mode: 'insensitive' } },
+//         { description: { contains: search, mode: 'insensitive' } },
+//         { address: { contains: search, mode: 'insensitive' } }
+//       ]
+//     }
+
+//     // FILTRE PAR RAYON (distance)
+//     const latitude = lat ? Number(lat) : null;
+//     const longitude = lon ? Number(lon) : null;
+//     const rayon = radiusKm ? Number(radiusKm) : null;
+
+//     let properties;
+
+//     if (latitude && longitude && rayon) {
+//       properties = await prisma.$queryRaw`
+//         SELECT *, 
+//         (6371 * acos(
+//           cos(radians(${latitude})) *
+//           cos(radians("latitude")) *
+//           cos(radians("longitude") - radians(${longitude})) +
+//           sin(radians(${latitude})) *
+//           sin(radians("latitude"))
+//         )) AS distance
+//         FROM "Property"
+//         WHERE "isActive" = true
+//         HAVING distance <= ${rayon}
+//         ORDER BY distance ASC
+//       `;
+//     } else {
+//       properties = await prisma.property.findMany({
+//         where,
+//         include: {
+//           owner: {
+//             select: { id: true, firstName: true, lastName: true, email: true }
+//           },
+//           favorites: true
+//         },
+//         orderBy: { createdAt: 'desc' }
+//       })
+//     }
+
+//     res.json(properties)
+//   } catch (error) {
+//     console.error('Failed to fetch properties:', error)
+//     res.status(500).json({ error: 'Failed to fetch properties' })
+//   }
+// })
+
 // GET /api/properties/psla - Récupérer les propriétés éligibles au Prêt Social Location Accession
 router.get('/psla', async (req, res) => {
   try {
