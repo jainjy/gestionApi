@@ -378,7 +378,7 @@ model Property {
   title                String
   description          String?
   type                 String
-  status               String?
+  status               String?                @default("pending")
   price                Float?
   surface              Int?
   rooms                Int?

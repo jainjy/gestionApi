@@ -549,12 +549,19 @@ router.get('/stats', authenticateToken, async (req, res) => {
     const where = user.role !== "admin" ? { ownerId: userId } : {}
 
     const total = await prisma.property.count({ where })
+    
     const published = await prisma.property.count({
       where: {
         ...where,
         status: { in: ['for_sale', 'for_rent'] }
       }
     })
+    const pending = await prisma.property.count({
+      where: {
+        ...where,
+        status: { in: ["pending"] },
+      },
+    });
     
     const archived = await prisma.property.count({
       where: {
