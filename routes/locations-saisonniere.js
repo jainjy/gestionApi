@@ -3,74 +3,156 @@ const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const { prisma } = require("../lib/db");
 
-// GET /api/locations-saisonnieres/client/:userId - Réservations d'un client
+// Dans routes/locations-saisonniere.js - POST /
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const {
+      propertyId,
+      clientId,
+      dateDebut,
+      dateFin,
+      prixTotal,
+      nombreAdultes = 2,
+      nombreEnfants = 0,
+      remarques,
+      statut = "confirmee"
+    } = req.body;
+    
+    // Validation de base
+    if (!propertyId || !clientId || !dateDebut || !dateFin || !prixTotal) {
+      return res.status(400).json({ 
+        error: 'Les champs propertyId, clientId, dateDebut, dateFin et prixTotal sont requis' 
+      });
+    }
+    
+    // Vérifier que la propriété existe et est une location saisonnière
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+    
+    if (!property) {
+      return res.status(404).json({ error: 'Propriété non trouvée' });
+    }
+    
+    if (property.rentType !== 'saisonniere') {
+      return res.status(400).json({ 
+        error: 'Cette propriété n\'est pas en location saisonnière' 
+      });
+    }
+    
+    // Vérifier que le client existe
+    const client = await prisma.user.findUnique({
+      where: { id: clientId }
+    });
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client non trouvé' });
+    }
+    
+    // Vérifier les conflits de dates
+    const conflits = await prisma.locationSaisonniere.findMany({
+      where: {
+        propertyId: propertyId,
+        statut: { in: ['confirmee', 'en_cours'] },
+        OR: [
+          {
+            dateDebut: { lte: new Date(dateFin) },
+            dateFin: { gte: new Date(dateDebut) }
+          }
+        ]
+      }
+    });
+    
+    if (conflits.length > 0) {
+      return res.status(400).json({ 
+        error: 'Ces dates sont déjà réservées pour cette propriété' 
+      });
+    }
+    
+    // Créer la réservation
+    const reservation = await prisma.locationSaisonniere.create({
+      data: {
+        propertyId,
+        clientId,
+        dateDebut: new Date(dateDebut),
+        dateFin: new Date(dateFin),
+        prixTotal: parseFloat(prixTotal),
+        nombreAdultes: parseInt(nombreAdultes),
+        nombreEnfants: parseInt(nombreEnfants),
+        remarques,
+        statut
+      },
+      include: {
+        property: true,
+        client: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        }
+      }
+    });
+    
+    res.status(201).json({
+      message: 'Réservation créée avec succès',
+      reservation
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur création réservation:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la création de la réservation',
+      details: error.message 
+    });
+  }
+});
+
 router.get("/client/:userId", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     const { statut } = req.query;
 
     console.log(`🔄 [BACKEND] Recherche réservations pour client: ${userId}`);
-    console.log(`🔑 [BACKEND] Headers auth:`, req.headers.authorization);
-    console.log(`👤 [BACKEND] User from token:`, req.user);
 
-    // Vérifier si userId est un UUID ou un nombre
     let clientId;
     
-    // Vérifier si c'est un UUID (format avec tirets)
     if (userId.includes('-')) {
-      console.log(`🔍 [BACKEND] UUID détecté: ${userId}`);
-      
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, email: true, firstName: true, lastName: true }
       });
       
       if (!user) {
-        console.log(`❌ [BACKEND] Utilisateur non trouvé avec UUID: ${userId}`);
         return res.status(404).json({ 
           error: "Utilisateur non trouvé"
         });
       }
       
       clientId = user.id;
-      console.log(`✅ [BACKEND] UUID ${userId} correspond à l'utilisateur:`, {
-        id: user.id,
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`
-      });
     } else {
-      console.log(`🔍 [BACKEND] ID numérique détecté: ${userId}`);
       clientId = parseInt(userId);
-      
       const user = await prisma.user.findUnique({
         where: { id: clientId },
         select: { id: true, email: true, firstName: true, lastName: true }
       });
       
       if (!user) {
-        console.log(`❌ [BACKEND] Utilisateur non trouvé avec ID numérique: ${clientId}`);
         return res.status(404).json({ 
           error: "Utilisateur non trouvé"
         });
       }
-      
-      console.log(`✅ [BACKEND] Utilisateur trouvé:`, {
-        id: user.id,
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`
-      });
     }
 
     let whereClause = {
       clientId: clientId,
     };
 
-    // Filtre par statut si fourni
     if (statut) {
       whereClause.statut = statut;
     }
-
-    console.log(`🔍 [BACKEND] Clause de recherche:`, JSON.stringify(whereClause));
 
     const reservations = await prisma.locationSaisonniere.findMany({
       where: whereClause,
@@ -110,24 +192,7 @@ router.get("/client/:userId", authenticateToken, async (req, res) => {
     });
 
     console.log(`✅ [BACKEND] ${reservations.length} réservations trouvées pour le client`);
-    
-    if (reservations.length > 0) {
-      reservations.forEach((res, index) => {
-        console.log(`📋 [BACKEND] Réservation ${index + 1}:`, {
-          id: res.id,
-          clientId: res.clientId,
-          propertyId: res.propertyId,
-          statut: res.statut,
-          prixTotal: res.prixTotal,
-          client: res.client ? `${res.client.firstName} ${res.client.lastName}` : 'N/A',
-          property: res.property?.title
-        });
-      });
-    } else {
-      console.log(`⚠️ [BACKEND] Aucune réservation trouvée pour clientId: ${clientId}`);
-    }
 
-    // Calculer le nombre de nuits pour chaque réservation
     const reservationsAvecDetails = reservations.map((reservation) => {
       const dateDebut = new Date(reservation.dateDebut);
       const dateFin = new Date(reservation.dateFin);
@@ -142,16 +207,15 @@ router.get("/client/:userId", authenticateToken, async (req, res) => {
     res.json(reservationsAvecDetails);
   } catch (error) {
     console.error("❌ [BACKEND] Erreur lors de la récupération des réservations client:", error);
-    console.error("📝 [BACKEND] Stack trace:", error.stack);
     res.status(500).json({ 
       error: "Erreur serveur", 
-      details: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: error.message
     });
   }
 });
 
-// GET /api/locations-saisonnieres/proprietaire/:userId - Réservations d'un propriétaire
+
+// GET /api/locations-saisonnieres/proprietaire/:userId - Réservations d'un propriétaire - CORRIGÉ
 router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -189,10 +253,11 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
       console.log(`✅ [BACKEND] Utilisateur trouvé avec ID: ${ownerId}`);
     }
 
+    // CORRECTION: Utiliser rentType au lieu de locationType
     const properties = await prisma.property.findMany({
       where: {
         ownerId: ownerId,
-        locationType: "saisonnier",
+        rentType: "saisonniere",  // ✅ CORRIGÉ
         listingType: { in: ["rent", "both"] },
       },
       select: { id: true },
@@ -220,7 +285,27 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
     const reservations = await prisma.locationSaisonniere.findMany({
       where: whereClause,
       include: {
-        property: true,
+        property: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            images: true,
+            address: true,
+            city: true,
+            price: true,
+            surface: true,
+            rooms: true,
+            bedrooms: true,
+            bathrooms: true,
+            features: true,
+            ownerId: true,
+            status: true,
+            rentType: true,  // ✅ Ajouter pour debug
+            listingType: true
+          }
+        },
         client: {
           select: {
             id: true,
@@ -261,7 +346,6 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/locations-saisonnieres - Créer une réservation
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const {
@@ -277,7 +361,6 @@ router.post("/", authenticateToken, async (req, res) => {
 
     console.log(`🔄 [BACKEND] Création réservation pour client: ${clientId}, propriété: ${propertyId}`);
 
-    // Validation
     if (!propertyId || !dateDebut || !dateFin || !prixTotal || !clientId) {
       return res.status(400).json({
         error: "Les champs propertyId, dateDebut, dateFin, prixTotal et clientId sont requis",
@@ -410,68 +493,88 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-// PATCH /api/locations-saisonnieres/:id/statut - Mettre à jour le statut
-router.patch("/:id/statut", authenticateToken, async (req, res) => {
+// PATCH /api/locations-saisonnieres/:id/statut - Changer le statut d'une réservation
+router.patch('/:id/statut', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { statut } = req.body;
-
-    if (!statut) {
-      return res.status(400).json({ error: "Le statut est requis" });
-    }
-
-    console.log(`🔄 [BACKEND] Mise à jour statut réservation ${id} -> ${statut}`);
-
+    
+    console.log(`🔄 [BACKEND] Changement statut réservation ${id} -> ${statut}`);
+    
+    // Vérifier que la réservation existe
     const reservation = await prisma.locationSaisonniere.findUnique({
       where: { id: parseInt(id) },
       include: {
         property: true,
-      },
+        client: true
+      }
     });
-
+    
     if (!reservation) {
-      return res.status(404).json({ error: "Réservation non trouvée" });
+      return res.status(404).json({ error: 'Réservation non trouvée' });
     }
-
+    
+    // Vérifier les permissions
+    const isOwner = reservation.property.ownerId === req.user.id;
+    const isClient = reservation.clientId === req.user.id;
+    
+    if (!isOwner && !isClient) {
+      return res.status(403).json({ error: 'Non autorisé à modifier cette réservation' });
+    }
+    
+    // Logique de validation des transitions de statut
+    const validTransitions = {
+      'en_attente': ['confirmee', 'annulee'],
+      'confirmee': ['en_cours', 'annulee'],
+      'en_cours': ['terminee'],
+      'terminee': [],
+      'annulee': []
+    };
+    
+    const currentStatut = reservation.statut;
+    const allowedTransitions = validTransitions[currentStatut] || [];
+    
+    if (!allowedTransitions.includes(statut)) {
+      return res.status(400).json({ 
+        error: `Transition de statut invalide: ${currentStatut} -> ${statut}` 
+      });
+    }
+    
+    // Mettre à jour le statut
     const updatedReservation = await prisma.locationSaisonniere.update({
       where: { id: parseInt(id) },
-      data: { statut },
-      include: {
-        property: {
-          include: {
-            owner: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
-              },
-            },
-          },
-        },
-        client: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-          },
-        },
-        paiements: true,
+      data: { 
+        statut,
+        updatedAt: new Date()
       },
+      include: {
+        property: true,
+        client: true
+      }
     });
-
-    console.log(`✅ [BACKEND] Statut mis à jour pour réservation ${id}`);
-
+    
+    console.log(`✅ [BACKEND] Réservation ${id} mise à jour: ${statut}`);
+    
+    // Si la réservation est confirmée et que la propriété n'est pas encore marquée comme louée
+    if (statut === 'confirmee' && reservation.property.status !== 'rented') {
+      await prisma.property.update({
+        where: { id: reservation.propertyId },
+        data: { status: 'rented' }
+      });
+    }
+    
+    // Émettre un événement pour le frontend
     res.json({
-      message: "Statut mis à jour avec succès",
-      reservation: updatedReservation,
+      message: 'Statut mis à jour avec succès',
+      reservation: updatedReservation
     });
+    
   } catch (error) {
-    console.error("❌ [BACKEND] Erreur lors de la mise à jour du statut:", error);
-    res.status(500).json({ error: "Erreur serveur", details: error.message });
+    console.error('❌ [BACKEND] Erreur mise à jour statut:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la mise à jour du statut',
+      details: error.message 
+    });
   }
 });
 
@@ -615,7 +718,7 @@ router.post("/:id/paiement", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/locations-saisonnieres/proprietaire/:userId/stats - Statistiques pour propriétaire
+// GET /api/locations-saisonnieres/proprietaire/:userId/stats - Statistiques pour propriétaire - CORRIGÉ
 router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -647,18 +750,20 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       }
     }
 
+    // CORRECTION: Utiliser rentType au lieu de locationType
     const properties = await prisma.property.findMany({
       where: {
         ownerId: ownerId,
-        locationType: "saisonnier",
+        rentType: "saisonniere",  // ✅ CORRIGÉ
         listingType: { in: ["rent", "both"] },
       },
-      select: { id: true },
+      select: { id: true, price: true, title: true },  // Ajouter price pour debug
     });
 
     const propertyIds = properties.map((p) => p.id);
 
     if (propertyIds.length === 0) {
+      console.log(`ℹ️ [BACKEND] Aucune propriété en location saisonnière pour le propriétaire ${ownerId}`);
       return res.json({
         total: 0,
         en_attente: 0,
@@ -669,6 +774,7 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
         revenueTotal: 0,
         occupationRate: 0,
         propertiesCount: 0,
+        properties: []
       });
     }
 
@@ -678,6 +784,12 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       },
       include: {
         paiements: true,
+        property: {
+          select: {
+            title: true,
+            price: true
+          }
+        }
       },
     });
 
@@ -690,7 +802,7 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       en_cours: reservations.filter(r => r.statut === "en_cours").length,
       revenueTotal: reservations
         .filter(r => ["confirmee", "terminee", "en_cours"].includes(r.statut))
-        .reduce((sum, r) => sum + r.prixTotal, 0),
+        .reduce((sum, r) => sum + (r.prixTotal || 0), 0),
     };
 
     const thirtyDaysAgo = new Date();
@@ -707,14 +819,24 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       return days + nuits;
     }, 0);
 
-    const occupationRate = Math.round((joursOccupes / (propertyIds.length * 30)) * 100);
+    const occupationRate = propertyIds.length > 0 
+      ? Math.round((joursOccupes / (propertyIds.length * 30)) * 100)
+      : 0;
 
     console.log(`✅ [BACKEND] Statistiques calculées pour ${propertyIds.length} propriétés`);
+    console.log(`📈 Détails:`, {
+      propertiesCount: propertyIds.length,
+      reservationsCount: reservations.length,
+      revenueTotal: stats.revenueTotal,
+      occupationRate,
+      sampleProperties: properties.slice(0, 3)
+    });
 
     res.json({
       ...stats,
       occupationRate,
       propertiesCount: propertyIds.length,
+      properties: properties.map(p => ({ id: p.id, title: p.title, price: p.price }))
     });
   } catch (error) {
     console.error("❌ [BACKEND] Erreur lors du calcul des statistiques:", error);
@@ -722,7 +844,7 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
   }
 });
 
-// POST /api/locations-saisonnieres/from-demande - Créer réservation automatique depuis demande
+// POST /api/locations-saisonnieres/from-demande - Créer réservation automatique depuis demande - CORRIGÉ
 router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
   try {
     const { demandeId } = req.params;
@@ -737,7 +859,7 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
             owner: true
           }
         },
-        user: true
+        createdBy: true  // CORRIGÉ: utilisez createdBy au lieu de user
       }
     });
 
@@ -749,11 +871,11 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Cette demande n'est pas liée à une propriété" });
     }
 
-    // Vérifier si la propriété est en location saisonnière
-    if (demande.property.locationType !== "saisonnier") {
+    // CORRECTION: Utiliser rentType au lieu de locationType
+    if (demande.property.rentType !== "saisonniere") {
       return res.status(400).json({ 
         error: "Cette propriété n'est pas en location saisonnière",
-        propertyType: demande.property.locationType
+        propertyType: demande.property.rentType
       });
     }
 
@@ -761,7 +883,7 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
     const existingReservation = await prisma.locationSaisonniere.findFirst({
       where: {
         propertyId: demande.propertyId,
-        clientId: demande.userId,
+        clientId: demande.createdById,
         statut: { in: ['en_attente', 'confirmee', 'en_cours'] }
       }
     });
@@ -789,7 +911,7 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
     const reservation = await prisma.locationSaisonniere.create({
       data: {
         propertyId: demande.propertyId,
-        clientId: demande.userId,
+        clientId: demande.createdById,  // CORRIGÉ: utiliser createdById
         dateDebut,
         dateFin,
         prixTotal,
@@ -800,7 +922,15 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
       },
       include: {
         property: true,
-        client: true
+        client: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        }
       }
     });
 
@@ -826,7 +956,7 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
         message: `Votre réservation pour "${demande.property?.title}" a été créée`,
         relatedEntity: 'locationSaisonniere',
         relatedEntityId: String(reservation.id),
-        userId: demande.userId,
+        userId: demande.createdById,
         read: false
       }
     });
@@ -843,5 +973,288 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// POST /api/locations-saisonnieres/auto-from-property/:propertyId - Création automatique
+router.post('/auto-from-property/:propertyId', authenticateToken, async (req, res) => {
+  try {
+    const { propertyId } = req.params;
+    const { clientId } = req.body;
+    
+    console.log(`🏠 [BACKEND] Création réservation automatique depuis propriété: ${propertyId}`);
+    
+    // propertyId est déjà un UUID string, ne pas utiliser parseInt()
+    const property = await prisma.property.findUnique({
+      where: {
+        id: propertyId
+      },
+      include: {
+        owner: true
+      }
+    });
+    
+    if (!property) {
+      return res.status(404).json({ error: 'Propriété non trouvée' });
+    }
+    
+    // Vérifier que c'est une location saisonnière
+    if (property.rentType !== 'saisonniere') {
+      return res.status(400).json({ 
+        error: 'Cette propriété n\'est pas en location saisonnière' 
+      });
+    }
+    
+    // Vérifier que le bien est à louer
+    if (!['rent', 'both'].includes(property.listingType)) {
+      return res.status(400).json({ 
+        error: 'Cette propriété n\'est pas disponible à la location' 
+      });
+    }
+    
+    // Vérifier que le bien n'est pas déjà loué
+    if (property.status === 'rented') {
+      return res.status(400).json({ 
+        error: 'Cette propriété est déjà marquée comme louée' 
+      });
+    }
+    
+    // Vérifier que le client existe
+    const client = await prisma.user.findUnique({
+      where: { id: clientId }
+    });
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client non trouvé' });
+    }
+    
+    // Calculer les dates (par défaut 7 jours après aujourd'hui, durée 7 nuits)
+    const dateDebut = new Date();
+    dateDebut.setDate(dateDebut.getDate() + 7);
+    
+    const dateFin = new Date(dateDebut);
+    dateFin.setDate(dateFin.getDate() + 7);
+    
+    // Calculer le prix
+    const prixNuit = property.price || 0;
+    const prixTotal = prixNuit * 7;
+    
+    // Créer la réservation
+    const reservation = await prisma.locationSaisonniere.create({
+      data: {
+        propertyId: propertyId,
+        clientId: clientId,
+        dateDebut: dateDebut,
+        dateFin: dateFin,
+        prixTotal: prixTotal,
+        nombreAdultes: 2,
+        nombreEnfants: 0,
+        remarques: `Réservation créée automatiquement suite au marquage "loué" du ${new Date().toLocaleDateString('fr-FR')}`,
+        statut: "confirmee"
+      },
+      include: {
+        property: true,
+        client: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        }
+      }
+    });
+    
+    // Mettre à jour le statut de la propriété
+    await prisma.property.update({
+      where: { id: propertyId },
+      data: { 
+        status: 'rented',
+        updatedAt: new Date()
+      }
+    });
+    
+    console.log(`✅ [BACKEND] Réservation créée: ${reservation.id}`);
+    
+    res.json({
+      message: 'Réservation créée avec succès',
+      reservation: reservation
+    });
+    
+  } catch (error) {
+    console.error('❌ [BACKEND] Erreur création réservation automatique depuis propriété:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la création de la réservation',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/locations-saisonnieres/client/:clientId - Réservations d'un client
+router.get('/client/:clientId', authenticateToken, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    
+    console.log(`👤 [BACKEND] Récupération réservations client: ${clientId}`);
+    
+    const reservations = await prisma.locationSaisonniere.findMany({
+      where: {
+        clientId: clientId
+      },
+      include: {
+        property: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            images: true,
+            address: true,
+            city: true,
+            price: true,
+            surface: true,
+            rooms: true,
+            bedrooms: true,
+            bathrooms: true,
+            features: true,
+            ownerId: true,
+            status: true,
+            rentType: true,
+            listingType: true
+          }
+        },
+        client: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    
+    console.log(`✅ [BACKEND] ${reservations.length} réservations trouvées`);
+    
+    res.json(reservations);
+    
+  } catch (error) {
+    console.error('❌ [BACKEND] Erreur récupération réservations client:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/locations-saisonnieres/owner/:ownerId - Réservations des biens d'un propriétaire
+router.get('/owner/:ownerId', authenticateToken, async (req, res) => {
+  try {
+    const { ownerId } = req.params;
+    
+    console.log(`🏠 [BACKEND] Récupération réservations propriétaire: ${ownerId}`);
+    
+    // 1. Récupérer toutes les propriétés du propriétaire
+    const properties = await prisma.property.findMany({
+      where: {
+        ownerId: ownerId,
+        rentType: 'saisonniere',
+        listingType: { in: ['rent', 'both'] }
+      },
+      select: {
+        id: true
+      }
+    });
+    
+    const propertyIds = properties.map(p => p.id);
+    
+    if (propertyIds.length === 0) {
+      return res.json([]);
+    }
+    
+    // 2. Récupérer les réservations pour ces propriétés
+    const reservations = await prisma.locationSaisonniere.findMany({
+      where: {
+        propertyId: { in: propertyIds }
+      },
+      include: {
+        property: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            images: true,
+            address: true,
+            city: true,
+            price: true,
+            surface: true,
+            rooms: true,
+            bedrooms: true,
+            bathrooms: true,
+            features: true,
+            ownerId: true,
+            status: true,
+            rentType: true,
+            listingType: true
+          }
+        },
+        client: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    
+    console.log(`✅ [BACKEND] ${reservations.length} réservations trouvées`);
+    
+    res.json(reservations);
+    
+  } catch (error) {
+    console.error('❌ [BACKEND] Erreur récupération réservations propriétaire:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+// GET /api/locations-saisonnieres/property/:propertyId/client/:clientId - Vérifier si réservation existe
+router.get("/property/:propertyId/client/:clientId", authenticateToken, async (req, res) => {
+  try {
+    const { propertyId, clientId } = req.params;
+    
+    console.log(`🔍 [BACKEND] Vérification réservation pour propriété ${propertyId} et client ${clientId}`);
+
+    const reservations = await prisma.locationSaisonniere.findMany({
+      where: {
+        propertyId: parseInt(propertyId),
+        clientId: clientId.includes('-') ? clientId : parseInt(clientId)
+      },
+      include: {
+        property: true,
+        paiements: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.json({
+      exists: reservations.length > 0,
+      count: reservations.length,
+      reservations: reservations
+    });
+
+  } catch (error) {
+    console.error('❌ [BACKEND] Erreur vérification réservation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 module.exports = router;
