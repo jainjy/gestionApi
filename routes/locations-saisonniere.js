@@ -852,23 +852,38 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
     console.log(`📊 [BACKEND] Dashboard client pour: ${userId}`);
 
     let clientId;
+    let clientInfo;
+    
+    // Identifier le client (UUID ou ID numérique)
     if (userId.includes('-')) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, firstName: true, lastName: true }
+        select: { id: true, firstName: true, lastName: true, email: true }
       });
-      if (!user) return res.status(404).json({ error: "Client non trouvé" });
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: "Client non trouvé" 
+        });
+      }
       clientId = user.id;
+      clientInfo = user;
     } else {
       clientId = parseInt(userId);
       const user = await prisma.user.findUnique({
         where: { id: clientId },
-        select: { id: true, firstName: true, lastName: true }
+        select: { id: true, firstName: true, lastName: true, email: true }
       });
-      if (!user) return res.status(404).json({ error: "Client non trouvé" });
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: "Client non trouvé" 
+        });
+      }
+      clientInfo = user;
     }
 
-    // 1. Récupérer toutes les réservations du client
+    // 1. Récupérer toutes les réservations du client avec gestion des propriétés manquantes
     const reservations = await prisma.locationSaisonniere.findMany({
       where: { clientId: clientId },
       include: {
@@ -888,45 +903,84 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
       orderBy: { dateDebut: "desc" }
     });
 
-    // 2. Statistiques générales
+    console.log(`✅ [BACKEND] ${reservations.length} réservations trouvées`);
+    
+    // Vérifier s'il y a des réservations sans propriété
+    const reservationsSansProperty = reservations.filter(r => !r.property);
+    if (reservationsSansProperty.length > 0) {
+      console.warn(`⚠️ [BACKEND] ${reservationsSansProperty.length} réservations sans propriété trouvées`);
+    }
+
+    // 2. Statistiques générales avec valeurs par défaut sécurisées
     const totalReservations = reservations.length;
     const reservationsActives = reservations.filter(r => 
-      ['en_attente', 'confirmee', 'en_cours'].includes(r.statut)
+      r.statut && ['en_attente', 'confirmee', 'en_cours'].includes(r.statut)
     ).length;
     
-    const montantTotalDepense = reservations.reduce((sum, r) => sum + (r.prixTotal || 0), 0);
+    const montantTotalDepense = reservations.reduce((sum, r) => sum + (Number(r.prixTotal) || 0), 0);
     const montantTotalPaye = reservations.reduce((sum, r) => {
-      const paiementsPayes = r.paiements.filter(p => p.statut === 'paye');
-      return sum + paiementsPayes.reduce((pSum, p) => pSum + (p.montant || 0), 0);
+      const paiementsPayes = r.paiements?.filter(p => p.statut === 'paye') || [];
+      return sum + paiementsPayes.reduce((pSum, p) => pSum + (Number(p.montant) || 0), 0);
     }, 0);
     
-    const montantRestantAPayer = montantTotalDepense - montantTotalPaye;
+    const montantRestantAPayer = Math.max(0, montantTotalDepense - montantTotalPaye);
 
     // 3. Statistiques mensuelles
     const currentDate = new Date();
-    const currentMonth = month || currentDate.getMonth() + 1;
-    const currentYear = year || currentDate.getFullYear();
+    const currentMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
+    const currentYear = year ? parseInt(year) : currentDate.getFullYear();
 
     const reservationsMois = reservations.filter(r => {
-      const dateDebut = new Date(r.dateDebut);
-      return dateDebut.getMonth() + 1 === parseInt(currentMonth) && 
-             dateDebut.getFullYear() === parseInt(currentYear);
+      try {
+        if (!r.dateDebut) return false;
+        const dateDebut = new Date(r.dateDebut);
+        return dateDebut.getMonth() + 1 === currentMonth && 
+               dateDebut.getFullYear() === currentYear;
+      } catch (e) {
+        return false;
+      }
     });
 
-    const depenseMois = reservationsMois.reduce((sum, r) => sum + (r.prixTotal || 0), 0);
+    const depenseMois = reservationsMois.reduce((sum, r) => sum + (Number(r.prixTotal) || 0), 0);
 
-    // 4. Prochaines réservations (7 jours)
+    // 4. Prochaines réservations (7 jours) avec données sécurisées
     const septJours = new Date();
     septJours.setDate(septJours.getDate() + 7);
+    const aujourdhui = new Date();
     
     const prochainesReservations = reservations
       .filter(r => {
-        const dateDebut = new Date(r.dateDebut);
-        return dateDebut >= new Date() && dateDebut <= septJours && 
-               ['confirmee', 'en_attente'].includes(r.statut);
+        try {
+          if (!r.dateDebut || !r.statut) return false;
+          const dateDebut = new Date(r.dateDebut);
+          return dateDebut >= aujourdhui && 
+                 dateDebut <= septJours && 
+                 ['confirmee', 'en_attente'].includes(r.statut);
+        } catch (e) {
+          return false;
+        }
       })
-      .sort((a, b) => new Date(a.dateDebut) - new Date(b.dateDebut))
-      .slice(0, 5);
+      .sort((a, b) => {
+        try {
+          return new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime();
+        } catch (e) {
+          return 0;
+        }
+      })
+      .slice(0, 5)
+      .map(r => {
+        const image = r.property?.images?.[0];
+        return {
+          id: r.id,
+          titre: r.property?.title || 'Propriété non disponible',
+          ville: r.property?.city || 'Ville inconnue',
+          dateDebut: r.dateDebut,
+          dateFin: r.dateFin,
+          statut: r.statut || 'inconnu',
+          prixTotal: Number(r.prixTotal) || 0,
+          image: image || null
+        };
+      });
 
     // 5. Répartition par statut
     const repartitionStatut = {
@@ -945,23 +999,28 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
       const mois = date.getMonth() + 1;
       const annee = date.getFullYear();
       
-      const reservationsMois = reservations.filter(r => {
-        const dateResa = new Date(r.dateDebut);
-        return dateResa.getMonth() + 1 === mois && 
-               dateResa.getFullYear() === annee;
+      const reservationsDuMois = reservations.filter(r => {
+        try {
+          if (!r.dateDebut) return false;
+          const dateResa = new Date(r.dateDebut);
+          return dateResa.getMonth() + 1 === mois && 
+                 dateResa.getFullYear() === annee;
+        } catch (e) {
+          return false;
+        }
       });
       
-      const depense = reservationsMois.reduce((sum, r) => sum + (r.prixTotal || 0), 0);
+      const depense = reservationsDuMois.reduce((sum, r) => sum + (Number(r.prixTotal) || 0), 0);
       
       sixMois.push({
         mois: date.toLocaleDateString('fr-FR', { month: 'short' }),
         annee: annee,
         depense: depense,
-        count: reservationsMois.length
+        count: reservationsDuMois.length
       });
     }
 
-    // 7. Top destinations
+    // 7. Top destinations avec données sécurisées
     const destinations = {};
     reservations.forEach(r => {
       const ville = r.property?.city || 'Inconnu';
@@ -969,7 +1028,7 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
         destinations[ville] = { count: 0, montant: 0 };
       }
       destinations[ville].count++;
-      destinations[ville].montant += r.prixTotal || 0;
+      destinations[ville].montant += Number(r.prixTotal) || 0;
     });
 
     const topDestinations = Object.entries(destinations)
@@ -979,84 +1038,153 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
 
     // 8. Paiements en attente
     const paiementsEnAttente = reservations
-      .filter(r => ['en_attente', 'confirmee'].includes(r.statut))
-      .flatMap(r => r.paiements.filter(p => p.statut === 'en_attente'))
-      .sort((a, b) => new Date(a.datePaiement || a.createdAt) - new Date(b.datePaiement || b.createdAt));
+      .filter(r => r.statut && ['en_attente', 'confirmee'].includes(r.statut))
+      .flatMap(r => {
+        const paiements = r.paiements || [];
+        return paiements.filter(p => p.statut === 'en_attente');
+      })
+      .sort((a, b) => {
+        const dateA = a.datePaiement || a.createdAt;
+        const dateB = b.datePaiement || b.createdAt;
+        return new Date(dateA).getTime() - new Date(dateB).getTime();
+      });
+
+    // 9. Préparer les données de réservations pour le frontend avec valeurs sécurisées
+    const reservationsFormatted = reservations.map(r => {
+      try {
+        const dateDebut = r.dateDebut ? new Date(r.dateDebut) : new Date();
+        const dateFin = r.dateFin ? new Date(r.dateFin) : new Date();
+        const nuits = Math.max(1, Math.ceil((dateFin - dateDebut) / (1000 * 60 * 60 * 24)));
+        
+        const paiements = r.paiements || [];
+        const paiementsPayes = paiements.filter(p => p.statut === 'paye');
+        const montantPaye = paiementsPayes.reduce((sum, p) => sum + (Number(p.montant) || 0), 0);
+        const prixTotal = Number(r.prixTotal) || 0;
+        const montantRestant = Math.max(0, prixTotal - montantPaye);
+        
+        return {
+          id: r.id,
+          propertyId: r.propertyId,
+          titre: r.property?.title || 'Propriété non disponible',
+          ville: r.property?.city || 'Ville inconnue',
+          dateDebut: r.dateDebut,
+          dateFin: r.dateFin,
+          nuits: nuits,
+          prixTotal: prixTotal,
+          statut: r.statut || 'inconnu',
+          paiements: paiements.map(p => ({
+            id: p.id,
+            montant: Number(p.montant) || 0,
+            methode: p.methode || 'inconnue',
+            statut: p.statut || 'inconnu',
+            datePaiement: p.datePaiement,
+            reference: p.reference || `PAY-${p.id}`
+          })),
+          montantPaye: montantPaye,
+          montantRestant: montantRestant,
+          image: r.property?.images?.[0] || null
+        };
+      } catch (error) {
+        console.error(`❌ Erreur format réservation ${r.id}:`, error);
+        // Retourner une réservation minimale en cas d'erreur
+        return {
+          id: r.id,
+          propertyId: r.propertyId,
+          titre: 'Erreur de chargement',
+          ville: 'Inconnu',
+          dateDebut: r.dateDebut || new Date(),
+          dateFin: r.dateFin || new Date(),
+          nuits: 1,
+          prixTotal: 0,
+          statut: 'erreur',
+          paiements: [],
+          montantPaye: 0,
+          montantRestant: 0,
+          image: null
+        };
+      }
+    });
+
+    // 10. Créer la réponse finale
+    const dashboardData = {
+      // Résumé
+      resume: {
+        totalReservations,
+        reservationsActives,
+        montantTotalDepense,
+        montantTotalPaye,
+        montantRestantAPayer,
+        depenseMois,
+        reservationsMois: reservationsMois.length
+      },
+      
+      // Prochaines réservations
+      prochainesReservations,
+      
+      // Statistiques
+      statistiques: {
+        repartitionStatut,
+        evolutionDepenses: sixMois,
+        topDestinations
+      },
+      
+      // Paiements
+      paiements: {
+        enAttente: paiementsEnAttente.map(p => ({
+          id: p.id,
+          montant: Number(p.montant) || 0,
+          methode: p.methode || 'inconnue',
+          reference: p.reference || `REF-${p.id}`,
+          dateEcheance: p.datePaiement || p.createdAt || new Date(),
+          reservationId: p.locationId
+        })),
+        totalEnAttente: paiementsEnAttente.reduce((sum, p) => sum + (Number(p.montant) || 0), 0)
+      },
+      
+      // Détails complets
+      reservations: reservationsFormatted
+    };
+
+    console.log(`✅ [BACKEND] Dashboard généré avec succès pour ${clientId}`);
 
     res.json({
       success: true,
-      dashboard: {
-        // Résumé
-        resume: {
-          totalReservations,
-          reservationsActives,
-          montantTotalDepense,
-          montantTotalPaye,
-          montantRestantAPayer,
-          depenseMois,
-          reservationsMois: reservationsMois.length
-        },
-        
-        // Prochaines réservations
-        prochainesReservations: prochainesReservations.map(r => ({
-          id: r.id,
-          titre: r.property?.title,
-          ville: r.property?.city,
-          dateDebut: r.dateDebut,
-          dateFin: r.dateFin,
-          statut: r.statut,
-          prixTotal: r.prixTotal,
-          image: r.property?.images?.[0]
-        })),
-        
-        // Statistiques
-        statistiques: {
-          repartitionStatut,
-          evolutionDepenses: sixMois,
-          topDestinations
-        },
-        
-        // Paiements
-        paiements: {
-          enAttente: paiementsEnAttente.map(p => ({
-            id: p.id,
-            montant: p.montant,
-            methode: p.methode,
-            reference: p.reference,
-            dateEcheance: p.datePaiement || p.createdAt
-          })),
-          totalEnAttente: paiementsEnAttente.reduce((sum, p) => sum + p.montant, 0)
-        },
-        
-        // Détails complets
-        reservations: reservations.map(r => ({
-          id: r.id,
-          propertyId: r.propertyId,
-          titre: r.property?.title,
-          ville: r.property?.city,
-          dateDebut: r.dateDebut,
-          dateFin: r.dateFin,
-          nuits: Math.ceil((new Date(r.dateFin) - new Date(r.dateDebut)) / (1000 * 60 * 60 * 24)),
-          prixTotal: r.prixTotal,
-          statut: r.statut,
-          paiements: r.paiements.map(p => ({
-            id: p.id,
-            montant: p.montant,
-            methode: p.methode,
-            statut: p.statut,
-            datePaiement: p.datePaiement,
-            reference: p.reference
-          })),
-          montantPaye: r.paiements.filter(p => p.statut === 'paye').reduce((sum, p) => sum + p.montant, 0),
-          montantRestant: r.prixTotal - r.paiements.filter(p => p.statut === 'paye').reduce((sum, p) => sum + p.montant, 0),
-          image: r.property?.images?.[0]
-        }))
-      }
+      message: "Dashboard chargé avec succès",
+      client: clientInfo,
+      dashboard: dashboardData
     });
 
   } catch (error) {
     console.error("❌ [BACKEND] Erreur dashboard client:", error);
-    res.status(500).json({ error: "Erreur serveur", details: error.message });
+    
+    // En cas d'erreur, retourner un dashboard vide mais structuré
+    res.status(500).json({ 
+      success: false,
+      error: "Erreur serveur lors du chargement du dashboard",
+      details: error.message,
+      dashboard: {
+        resume: {
+          totalReservations: 0,
+          reservationsActives: 0,
+          montantTotalDepense: 0,
+          montantTotalPaye: 0,
+          montantRestantAPayer: 0,
+          depenseMois: 0,
+          reservationsMois: 0
+        },
+        prochainesReservations: [],
+        statistiques: {
+          repartitionStatut: {},
+          evolutionDepenses: [],
+          topDestinations: []
+        },
+        paiements: {
+          enAttente: [],
+          totalEnAttente: 0
+        },
+        reservations: []
+      }
+    });
   }
 });
 
