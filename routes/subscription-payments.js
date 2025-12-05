@@ -187,19 +187,25 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
       });
     }
 
-    // Mettre à jour la transaction
-    await prisma.transaction.update({
+    // Mettre à jour la transaction - CORRIGÉ
+    const transaction = await prisma.transaction.findFirst({
       where: { providerId: paymentIntentId },
-      data: {
-        status: "completed",
-        subscriptionId: subscription.id,
-        metadata: {
-          ...paymentIntent.metadata,
-          subscriptionId: subscription.id,
-          upgraded: true,
-        },
-      },
     });
+
+    if (transaction) {
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: "completed",
+          subscriptionId: subscription.id,
+          metadata: {
+            ...paymentIntent.metadata,
+            subscriptionId: subscription.id,
+            upgraded: true,
+          },
+        },
+      });
+    }
 
     res.json({
       success: true,
