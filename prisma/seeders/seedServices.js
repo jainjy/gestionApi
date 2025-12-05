@@ -10030,6 +10030,15 @@ async function main() {
           "https://i.pinimg.com/736x/2c/3d/4e/2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f.jpg",
         ],
       },
+      {
+        id: 904,
+        libelle: "Droit de famille",
+        description:
+          "Assistance juridique en droit de la famille : mariage, divorce, filiation, adoption, succession, garde d’enfants et médiation familiale.",
+        images: [
+          "https://i.pinimg.com/736x/c8/80/4a/c8804a46e2bfa053b79dafb4a7842583.jpg"
+        ],
+      }
     ];
 
 
