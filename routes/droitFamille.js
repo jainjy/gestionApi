@@ -47,7 +47,7 @@ router.post("/", authenticateToken, async (req, res) => {
 });
 
 // GET : Récupérer les demandes d’un utilisateur connecté
-router.get("/me", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -74,6 +74,41 @@ router.get("/me", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Erreur get DroitFamille:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
+
+// CHANGER LE STATUT D'UNE DEMANDE DROIT FAMILLE
+router.put("/update/:id", authenticateToken, async (req, res) => {
+  try {
+    const demandeId = parseInt(req.params.id);
+    const { status } = req.body;
+
+    // Vérification du statut envoyé
+    const allowedStatus = ["pending", "valider", "Annuler"];
+    if (!allowedStatus.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Statut invalide. Statuts autorisés: pending, valider, Annuler"
+      });
+    }
+
+    const updated = await prisma.droitFamille.update({
+      where: { id: demandeId },
+      data: { status },
+    });
+
+    res.json({
+      success: true,
+      message: "Statut mis à jour avec succès",
+      data: updated
+    });
+
+  } catch (error) {
+    console.error("Erreur update status droitFamille:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur"
+    });
   }
 });
 

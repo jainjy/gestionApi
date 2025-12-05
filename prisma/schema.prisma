@@ -2003,16 +2003,18 @@ model ContactMessage {
 }
 
 model DroitFamille {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   userId        String
   serviceId     Int
 
-  serviceType   String? // ex: "conseil-notaire", "avocat-divorce", "huissier"
-  sousType      String? // sous catégorie : type de divorce, type d’intervention, etc.
+  serviceType   String?    // ex: "avocat-divorce", "conseil-notaire", etc.
+  sousType      String?    // ex: type de divorce, type d'intervention
   description   String?
-  createdAt     DateTime @default(now())
 
-  user    User    @relation(fields: [userId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
+  status        String     @default("pending")   // ✔ Ajouté : statut de la demande
+
+  createdAt     DateTime   @default(now())
+
+  user          User       @relation(fields: [userId], references: [id])
+  service       Service    @relation(fields: [serviceId], references: [id])
 }
-
