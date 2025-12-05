@@ -65,15 +65,55 @@ router.get("/stats", async (req, res) => {
   }
 });
 
-// GET /api/admin/payments/transactions - Liste des transactions
+// GET /api/admin/payments/transactions - Liste des transactions avec filtres
 router.get("/transactions", async (req, res) => {
   try {
-    const { page = 1, limit = 50, status } = req.query;
+    const { page = 1, limit = 50, status, type, method, dateRange } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const where = {};
+    
+    // Filtre par statut
     if (status && status !== "all") {
-      where.status = status;
+      where.status = mapFrontendStatusToDb(status);
+    }
+
+    // Filtre par type de paiement
+    if (type && type !== "all") {
+      where.referenceType = type;
+    }
+
+    // Filtre par méthode de paiement
+    if (method && method !== "all") {
+      where.provider = method;
+    }
+
+    // Filtre par plage de dates
+    if (dateRange && dateRange !== "all") {
+      const now = new Date();
+      let startDate = new Date();
+
+      switch (dateRange) {
+        case "today":
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case "week":
+          startDate.setDate(now.getDate() - now.getDay());
+          break;
+        case "month":
+          startDate.setDate(1);
+          break;
+        case "quarter":
+          startDate.setMonth(Math.floor(now.getMonth() / 3) * 3);
+          startDate.setDate(1);
+          break;
+        case "year":
+          startDate.setMonth(0);
+          startDate.setDate(1);
+          break;
+      }
+
+      where.createdAt = { gte: startDate };
     }
 
     const transactions = await prisma.transaction.findMany({
@@ -121,6 +161,7 @@ router.get("/transactions", async (req, res) => {
         taxAmount: `€${(metadata.taxAmount || 0).toFixed(2)}`,
         subtotal: `€${(metadata.subtotal || txn.amount).toFixed(2)}`,
         fees: `€${(metadata.fees || 0).toFixed(2)}`,
+        paymentType: txn.referenceType, // NOUVEAU
       };
     });
 
@@ -294,6 +335,16 @@ function mapTransactionStatus(status) {
     refunded: "refunded",
   };
   return statusMap[status] || "pending";
+}
+
+function mapFrontendStatusToDb(status) {
+  const statusMap = {
+    completed: "succeeded",
+    pending: "pending",
+    failed: "failed",
+    refunded: "refunded",
+  };
+  return statusMap[status] || status;
 }
 
 module.exports = router;
