@@ -37,16 +37,8 @@ router.get("/history", authenticateToken, async (req, res) => {
       where,
     });
 
-    res.json({
-      success: true,
-      data: transactions,
-      pagination: {
-        total,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: parseInt(offset) + parseInt(limit) < total,
-      },
-    });
+    // ✅ CORRECTION: Retourner directement le tableau
+    res.json(transactions);
   } catch (error) {
     console.error("Erreur récupération historique:", error);
     res.status(500).json({
