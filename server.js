@@ -283,6 +283,11 @@ app.use("/api/cart", require("./routes/cart"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/categories", require("./routes/categories"));
 app.use("/api/admin/payments", require("./routes/admin-payments"));
+
+
+//droit de famille
+app.use("/api/droitFamille", require("./routes/droitFamille"));
+
 app.use(
   "/api/subscription-payments",
   require("./routes/subscription-payments")

@@ -207,6 +207,7 @@ model User {
   messagesRecusContact   ContactMessage[]        @relation("ContactMessageRecipient")
   messagesEnvoyesContact ContactMessage[]        @relation("ContactMessageSender")
   servicesCrees          Service[] // ✅ AJOUT: Relation avec les services créés par le professionnel
+  demandesDroitFamille DroitFamille[]
 
   @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
@@ -558,7 +559,7 @@ model Service {
   metiers   MetierService[]
   users     UtilisateurService[]
   demandes  Demande[]
-
+  demandesDroitFamille DroitFamille[]
   Review         Review[]
   Appointment    Appointment[]
   ContactMessage ContactMessage[]
@@ -2000,3 +2001,18 @@ model ContactMessage {
   @@index([priority])
   @@index([isRead])
 }
+
+model DroitFamille {
+  id            Int      @id @default(autoincrement())
+  userId        String
+  serviceId     Int
+
+  serviceType   String? // ex: "conseil-notaire", "avocat-divorce", "huissier"
+  sousType      String? // sous catégorie : type de divorce, type d’intervention, etc.
+  description   String?
+  createdAt     DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+}
+
