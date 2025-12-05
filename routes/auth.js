@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../lib/email");
 const stripe = require("../utils/stripe");
 const { authenticateToken } = require("../middleware/auth");
+const { stat } = require("fs");
 
 // POST /api/auth/login - Connexion
 router.post("/login", async (req, res) => {
@@ -38,30 +39,56 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Générer le token
-    const token = `real-jwt-token-${user.id}`;
+    // Vérifier l'expiration de l'abonnement pour les professionnels
+    let subscriptionStatus = null;
+    if (user.role === "professional") {
+      const subscription = await prisma.subscription.findFirst({
+        where: { userId: user.id },
+      });
+
+      if (subscription && subscription.endDate < new Date() && subscription.status === "active") {
+        // Mettre à jour le statut de l'abonnement et de l'utilisateur
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { status: "expired" },
+        });
+
+        subscriptionStatus = "expired";
+      } else if (subscription) {
+        subscriptionStatus = subscription.status;
+      }
+    }
+
+    // Recharger les données de l'utilisateur si nécessaire
+    const updatedUser = user.role === "professional" ? 
+      await prisma.user.findUnique({
+        where: { id: user.id },
+      }) : user;
+
+    const token = `real-jwt-token-${updatedUser.id}`;
 
     // Préparer la réponse utilisateur
     const userResponse = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
-      role: user.role,
-      companyName: user.companyName,
-      status: user.status,
-      userType: user.userType,
-      avatar: user.avatar,
-      address: user.address,
-      siret: user.siret,
-      city: user.city,
-      status: user.status,
+      id: updatedUser.id,
+      email: updatedUser.email,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      phone: updatedUser.phone,
+      role: updatedUser.role,
+      companyName: updatedUser.companyName,
+      status: updatedUser.status,
+      userType: updatedUser.userType,
+      avatar: updatedUser.avatar,
+      address: updatedUser.address,
+      siret: updatedUser.siret,
+      city: updatedUser.city,
+      subscriptionStatus: subscriptionStatus, // AJOUT: Status de l'abonnement
     };
 
     res.json({
       user: userResponse,
       token,
+      ...(subscriptionStatus === "expired" && { message: "Votre abonnement a expiré" }),
     });
   } catch (error) {
     console.error("Login error:", error);

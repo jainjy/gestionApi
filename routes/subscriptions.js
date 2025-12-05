@@ -5,10 +5,11 @@ const { prisma } = require("../lib/db");
 
 
 
-//POST api/subscription/renew
+// Dans routes/subscriptions.js
 router.post("/renew", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    const { planId } = req.body;
     
     // Vérifier l'abonnement actuel
     const currentSubscription = await prisma.subscription.findFirst({
@@ -20,27 +21,44 @@ router.post("/renew", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Aucun abonnement trouvé" });
     }
 
-    if (currentSubscription.status !== 'expired') {
-      return res.status(400).json({ error: "L'abonnement n'est pas expiré" });
+    // Déterminer le plan à utiliser
+    const targetPlanId = planId || currentSubscription.planId;
+    
+    const plan = await prisma.subscriptionPlan.findUnique({
+      where: { id: parseInt(targetPlanId) },
+    });
+
+    if (!plan) {
+      return res.status(404).json({ error: "Plan non trouvé" });
     }
 
-    // Logique de renouvellement
-    // Cela pourrait créer un nouvel abonnement ou mettre à jour l'existant
-    const renewedSubscription = await prisma.subscription.update({
-      where: { id: currentSubscription.id },
+    // Créer une transaction de renouvellement
+    const transaction = await prisma.transaction.create({
       data: {
-        status: 'pending', // ou 'active' selon votre logique
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // +30 jours
-        autoRenew: true
+        userId: userId,
+        subscriptionId: currentSubscription.id,
+        amount: plan.price,
+        currency: "eur",
+        provider: "stripe",
+        status: "pending",
+        description: `Renouvellement abonnement: ${plan.name}`,
+        referenceType: "subscription_renewal",
+        metadata: {
+          planId: plan.id,
+          planName: plan.name,
+          renewal: true,
+        },
       },
-      include: { plan: true }
     });
 
     res.json({
       success: true,
-      message: "Abonnement renouvelé avec succès",
-      subscription: renewedSubscription
+      message: "Transaction de renouvellement créée",
+      transactionId: transaction.id,
+      planDetails: {
+        name: plan.name,
+        price: plan.price,
+      },
     });
 
   } catch (error) {
