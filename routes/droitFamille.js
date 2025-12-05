@@ -11,13 +11,13 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Vérifier le service "Droit de famille"
     const service = await prisma.service.findFirst({
-      where: { libelle: "Droit de famille" }
+      where: { libelle: "Droit de famille" },
     });
 
     if (!service) {
       return res.status(404).json({
         success: false,
-        message: "Service 'Droit de famille' introuvable."
+        message: "Service 'Droit de famille' introuvable.",
       });
     }
 
@@ -27,21 +27,21 @@ router.post("/", authenticateToken, async (req, res) => {
         serviceId: service.id,
         serviceType,
         sousType,
-        description
-      }
+        description,
+        status: "pending",
+      },
     });
 
     res.status(201).json({
       success: true,
       message: "Demande enregistrée avec succès",
-      data: demande
+      data: demande,
     });
-
   } catch (error) {
     console.error("Erreur insertion DroitFamille:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur serveur"
+      error: "Erreur serveur",
     });
   }
 });
@@ -60,17 +60,16 @@ router.get("/", authenticateToken, async (req, res) => {
             id: true,
             email: true,
             firstName: true,
-            lastName: true
-          }
-        }
-      }
+            lastName: true,
+          },
+        },
+      },
     });
 
     res.json({
       success: true,
-      data: demandes
+      data: demandes,
     });
-
   } catch (error) {
     console.error("Erreur get DroitFamille:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
@@ -88,7 +87,8 @@ router.put("/update/:id", authenticateToken, async (req, res) => {
     if (!allowedStatus.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Statut invalide. Statuts autorisés: pending, valider, Annuler"
+        message:
+          "Statut invalide. Statuts autorisés: pending, valider, Annuler",
       });
     }
 
@@ -100,14 +100,13 @@ router.put("/update/:id", authenticateToken, async (req, res) => {
     res.json({
       success: true,
       message: "Statut mis à jour avec succès",
-      data: updated
+      data: updated,
     });
-
   } catch (error) {
     console.error("Erreur update status droitFamille:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur serveur"
+      error: "Erreur serveur",
     });
   }
 });
