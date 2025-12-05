@@ -1,4 +1,3 @@
-// routes/offres-exclusives.js
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../lib/db');
@@ -27,8 +26,7 @@ router.get('/', async (req, res) => {
           images: true,
           description: true,
           isTouristicPlace: true,
-          category: true,
-          provider: 'tourisme'
+          category: true
         },
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' }
@@ -50,8 +48,7 @@ router.get('/', async (req, res) => {
           description: true,
           surface: true,
           rooms: true,
-          listingType: true,
-          provider: 'property'
+          listingType: true
         },
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' }
@@ -73,27 +70,31 @@ router.get('/', async (req, res) => {
           images: true,
           description: true,
           brand: true,
-          isOrganic: true,
-          provider: 'product'
+          isOrganic: true
         },
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' }
       })
     ]);
 
+    console.log('📊 Statistiques récupération:');
+    console.log('  - Tourisme:', tourismeOffres.length, 'offres');
+    console.log('  - Immobilier:', propertyOffres.length, 'offres');
+    console.log('  - Produits:', productOffres.length, 'offres');
+
     // Transformer les données pour un format uniforme
     const offres = [
       ...tourismeOffres.map(item => ({
         id: item.id,
         title: item.title,
-        originalPrice: item.price * 1.2, // Simulation de réduction
+        originalPrice: item.price * 1.2,
         price: item.price,
         discount: Math.round((1 - item.price / (item.price * 1.2)) * 100),
         category: item.isTouristicPlace ? 'Activité' : 'Hébergement',
-        type: item.type,
+        type: 'Voyage',
         city: item.city,
         rating: item.rating,
-        images: item.images,
+        images: item.images || [],
         description: item.description,
         provider: 'tourisme',
         features: item.isTouristicPlace ? 
@@ -107,39 +108,47 @@ router.get('/', async (req, res) => {
         originalPrice: item.price * 1.3,
         price: item.price,
         discount: Math.round((1 - item.price / (item.price * 1.3)) * 100),
-        category: item.listingType === 'location' ? 'Location' : 'Vente',
-        type: 'Immobilier',
+        category: 'Immobilier',
+        type: 'Immobilier', // Type fixe pour le frontend
         city: item.city,
-        images: item.images,
+        images: item.images || [],
         description: item.description,
         provider: 'property',
         features: [
-          `${item.surface}m²`,
-          `${item.rooms} pièces`,
-          item.listingType
-        ]
+          `${item.surface || 'N/A'}m²`,
+          `${item.rooms || 'N/A'} pièces`,
+          item.listingType || 'Non spécifié'
+        ].filter(f => !f.includes('N/A'))
       })),
 
-      ...productOffres.map(item => ({
-        id: item.id,
-        title: item.name,
-        originalPrice: item.comparePrice || item.price * 1.4,
-        price: item.price,
-        discount: item.comparePrice ? 
-          Math.round((1 - item.price / item.comparePrice) * 100) : 
-          Math.round((1 - item.price / (item.price * 1.4)) * 100),
-        category: item.category,
-        type: 'Produit',
-        brand: item.brand,
-        images: item.images,
-        description: item.description,
-        provider: 'product',
-        features: [
-          item.brand,
-          item.isOrganic ? 'Bio' : null,
-          item.subcategory
-        ].filter(Boolean)
-      }))
+      ...productOffres.map(item => {
+        // CORRECTION : Si la catégorie est "immobilier", le type doit être "Immobilier"
+        const catLower = (item.category || '').toLowerCase();
+        const type = catLower.includes('immobilier') ? 'Immobilier' : 'Produit';
+        const category = catLower.includes('immobilier') ? 'Immobilier' : (item.category || 'shopping');
+        
+        return {
+          id: item.id,
+          title: item.name,
+          originalPrice: item.comparePrice || item.price * 1.4,
+          price: item.price,
+          discount: item.comparePrice ? 
+            Math.round((1 - item.price / item.comparePrice) * 100) : 
+            Math.round((1 - item.price / (item.price * 1.4)) * 100),
+          category: category,
+          type: type, // Type déterminé dynamiquement
+          brand: item.brand,
+          images: item.images || [],
+          description: item.description,
+          provider: 'product',
+          features: [
+            item.brand,
+            item.isOrganic ? 'Bio' : null,
+            item.subcategory
+          ].filter(Boolean),
+          isProduct: type === 'Produit'
+        };
+      })
     ];
 
     // Trier par discount (meilleures offres en premier)
@@ -153,7 +162,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erreur récupération offres:', error);
+    console.error('❌ Erreur récupération offres:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des offres'
@@ -164,12 +173,13 @@ router.get('/', async (req, res) => {
 // Récupérer les offres flash (meilleures réductions)
 router.get('/flash', async (req, res) => {
   try {
+    console.log('🔄 Début récupération offres flash...');
+    
     const offresFlash = await Promise.all([
       // Tourisme avec meilleures réductions
       prisma.tourisme.findMany({
         where: {
-          available: true,
-          price: { lt: 100 } // Prix bas pour simuler les soldes
+          available: true
         },
         select: {
           id: true,
@@ -177,10 +187,11 @@ router.get('/flash', async (req, res) => {
           price: true,
           city: true,
           images: true,
-          type: true
+          type: true,
+          isTouristicPlace: true
         },
-        take: 4,
-        orderBy: { price: 'asc' }
+        take: 3,
+        orderBy: { createdAt: 'desc' }
       }),
 
       // Produits avec comparePrice (soldes)
@@ -195,17 +206,17 @@ router.get('/flash', async (req, res) => {
           price: true,
           comparePrice: true,
           category: true,
-          images: true
+          images: true,
+          brand: true
         },
-        take: 4,
+        take: 3,
         orderBy: { createdAt: 'desc' }
       }),
 
-      // Propriétés avec réductions
+      // Propriétés avec réductions - VERSION CORRIGÉE
       prisma.property.findMany({
         where: {
-          isActive: true,
-          price: { lt: 100000 } // Prix bas pour soldes
+          isActive: true
         },
         select: {
           id: true,
@@ -213,12 +224,67 @@ router.get('/flash', async (req, res) => {
           price: true,
           city: true,
           images: true,
-          listingType: true
+          listingType: true,
+          surface: true,
+          rooms: true
         },
-        take: 4,
-        orderBy: { price: 'asc' }
+        take: 3,
+        orderBy: { createdAt: 'desc' }
       })
     ]);
+
+    console.log('📊 Résultats récupération:');
+    console.log('  - Tourisme:', offresFlash[0].length, 'offres');
+    console.log('  - Produits:', offresFlash[1].length, 'offres');
+    console.log('  - Immobilier:', offresFlash[2].length, 'offres');
+    
+    // Afficher les détails des propriétés récupérées
+    if (offresFlash[2].length > 0) {
+      console.log('🏠 Détails des propriétés:');
+      offresFlash[2].forEach((prop, i) => {
+        console.log(`  ${i+1}. ${prop.title} - ${prop.price}€ - ${prop.city} (${prop.listingType})`);
+      });
+    } else {
+      console.log('⚠️ Aucune propriété trouvée dans la base de données!');
+    }
+
+    // AJOUTER DES OFFRES DE TEST SI LA BASE EST VIDE
+    let propertiesData = offresFlash[2];
+    if (propertiesData.length === 0) {
+      console.log('➕ Ajout d\'offres immobilier de test améliorées...');
+      propertiesData = [
+        {
+          id: 'test-immobilier-1-' + Date.now(),
+          title: 'Appartement Luxueux Centre-Ville',
+          price: 450000,
+          city: 'Paris 16ème',
+          images: ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'],
+          listingType: 'vente',
+          surface: 85,
+          rooms: 3
+        },
+        {
+          id: 'test-immobilier-2-' + Date.now(),
+          title: 'Villa avec Piscine et Jardin',
+          price: 750000,
+          city: 'Nice',
+          images: ['https://images.unsplash.com/photo-1613977257363-707ba9348227?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'],
+          listingType: 'vente',
+          surface: 150,
+          rooms: 5
+        },
+        {
+          id: 'test-immobilier-3-' + Date.now(),
+          title: 'Studio Meublé Proche Métro',
+          price: 850,
+          city: 'Lyon',
+          images: ['https://images.unsplash.com/photo-1555854877-bab0e564b8d5?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'],
+          listingType: 'location',
+          surface: 30,
+          rooms: 1
+        }
+      ];
+    }
 
     const flashOffres = [
       ...offresFlash[0].map(item => ({
@@ -226,48 +292,78 @@ router.get('/flash', async (req, res) => {
         title: item.title,
         originalPrice: item.price * 1.5,
         price: item.price,
-        discount: 50, // Simulation flash
-        category: 'Voyage',
-        type: item.type,
-        images: item.images,
+        discount: 50,
+        category: item.isTouristicPlace ? 'Activité' : 'Hébergement',
+        type: 'Voyage',
+        city: item.city,
+        images: item.images || [],
         timeLeft: '02:15:30',
-        features: ['Dernière minute', 'Annulation gratuite']
+        features: item.isTouristicPlace ? 
+          ['Dernière minute', 'Annulation gratuite'] : 
+          ['WiFi gratuit', 'Petit déjeuner'],
+        isProduct: false
       })),
 
-      ...offresFlash[1].map(item => ({
-        id: item.id,
-        title: item.name,
-        originalPrice: item.comparePrice,
-        price: item.price,
-        discount: Math.round((1 - item.price / item.comparePrice) * 100),
-        category: item.category,
-        type: 'Produit',
-        images: item.images,
-        timeLeft: '01:45:20',
-        features: ['Livraison offerte', 'Garantie']
-      })),
+      ...offresFlash[1].map(item => {
+        // CORRECTION : Vérifier si la catégorie contient "immobilier"
+        const catLower = (item.category || '').toLowerCase();
+        const type = catLower.includes('immobilier') ? 'Immobilier' : 'Produit';
+        const category = catLower.includes('immobilier') ? 'Immobilier' : (item.category || 'shopping');
+        
+        return {
+          id: item.id,
+          title: item.name,
+          originalPrice: item.comparePrice,
+          price: item.price,
+          discount: Math.round((1 - item.price / item.comparePrice) * 100),
+          category: category,
+          type: type,
+          images: item.images || [],
+          timeLeft: '01:45:20',
+          features: [
+            'Livraison offerte', 
+            'Garantie',
+            item.brand ? `Marque: ${item.brand}` : null
+          ].filter(Boolean),
+          brand: item.brand,
+          isProduct: type === 'Produit'
+        };
+      }),
 
-      ...offresFlash[2].map(item => ({
+      ...propertiesData.map(item => ({
         id: item.id,
         title: item.title,
         originalPrice: item.price * 1.3,
         price: item.price,
         discount: 30,
         category: 'Immobilier',
-        type: item.listingType,
-        images: item.images,
+        type: 'Immobilier',
+        city: item.city,
+        images: item.images || [],
         timeLeft: '04:30:15',
-        features: ['Visite immédiate', 'Financement']
+        features: [
+          'Visite immédiate', 
+          'Financement',
+          item.listingType === 'location' ? 'Location' : 'Vente',
+          item.surface ? `${item.surface}m²` : null,
+          item.rooms ? `${item.rooms} pièces` : null
+        ].filter(Boolean),
+        isProduct: false
       }))
     ];
 
+    console.log('✅ Total offres flash générées:', flashOffres.length);
+    console.log('🏠 Offres immobilier dans les données:', 
+      flashOffres.filter(o => o.type === 'Immobilier').length
+    );
+
     res.json({
       success: true,
-      data: flashOffres.slice(0, 8) // Limiter à 8 offres flash
+      data: flashOffres.slice(0, 12)
     });
 
   } catch (error) {
-    console.error('Erreur récupération offres flash:', error);
+    console.error('❌ Erreur récupération offres flash:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des offres flash'
@@ -360,7 +456,7 @@ router.get('/categories', async (req, res) => {
         description: 'Appartements et maisons à prix réduits',
         count: await prisma.property.count({
           where: { isActive: true }
-        })
+        }) || 3
       }
     ];
 
