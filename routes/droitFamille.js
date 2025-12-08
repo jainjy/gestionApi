@@ -27,7 +27,8 @@ router.post("/", authenticateToken, async (req, res) => {
         serviceId: service.id,
         serviceType,
         sousType,
-        description
+        description,
+         status: "pending", 
       }
     });
 
@@ -47,12 +48,9 @@ router.post("/", authenticateToken, async (req, res) => {
 });
 
 // GET : Récupérer les demandes d’un utilisateur connecté
-router.get("/", authenticateToken, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const userId = req.user.id;
-
     const demandes = await prisma.droitFamille.findMany({
-      where: { userId },
       include: {
         service: true,
         user: {
@@ -77,27 +75,35 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
+
 // CHANGER LE STATUT D'UNE DEMANDE DROIT FAMILLE
-router.put("/update/:id", authenticateToken, async (req, res) => {
+router.put("/update/:id", async (req, res) => {
   try {
-    const demandeId = parseInt(req.params.id);
+    const id = Number(req.params.id);
     const { status } = req.body;
 
-    // Vérification du statut envoyé
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "ID invalide"
+      });
+    }
+
     const allowedStatus = ["pending", "valider", "Annuler"];
+
     if (!allowedStatus.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Statut invalide. Statuts autorisés: pending, valider, Annuler"
+        message: "Statut invalide. Statuts autorisés : pending, valider, Annuler"
       });
     }
 
     const updated = await prisma.droitFamille.update({
-      where: { id: demandeId },
-      data: { status },
+      where: { id },
+      data: { status }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: "Statut mis à jour avec succès",
       data: updated
@@ -105,11 +111,13 @@ router.put("/update/:id", authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error("Erreur update status droitFamille:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: "Erreur serveur"
     });
   }
 });
+
+
 
 module.exports = router;
