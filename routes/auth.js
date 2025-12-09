@@ -398,14 +398,15 @@ router.post("/confirm-payment", async (req, res) => {
   }
 });
 
-// GET /api/auth/verify-reset-token - Vérifier le token de réinitialisation
-router.get("/verify-reset-token", async (req, res) => {
+// GET /api/auth/verify-reset-token/:token - Vérifier le token de réinitialisation (CORRIGÉ)
+router.get("/verify-reset-token/:token", async (req, res) => {
   try {
-    const { token } = req.query;
+    const { token } = req.params;
 
     if (!token) {
       return res.status(400).json({
         valid: false,
+        message: "Token manquant"
       });
     }
 
@@ -418,24 +419,29 @@ router.get("/verify-reset-token", async (req, res) => {
         },
       },
       select: {
+        id: true,
         email: true,
       },
     });
 
     if (!user) {
-      return res.json({
+      return res.status(400).json({
         valid: false,
+        message: "Token invalide ou expiré"
       });
     }
 
     res.json({
       valid: true,
       email: user.email,
+      userId: user.id,
+      message: "Token valide"
     });
   } catch (error) {
     console.error("Verify token error:", error);
     res.status(500).json({
       valid: false,
+      message: "Erreur lors de la vérification du token"
     });
   }
 });
