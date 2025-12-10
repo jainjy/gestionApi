@@ -3,7 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const { prisma } = require("../lib/db");
 
-// Dans routes/locations-saisonniere.js - POST /
+// POST / - Créer une réservation
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const {
@@ -110,6 +110,7 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /client/:userId - Réservations d'un client
 router.get("/client/:userId", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -214,8 +215,7 @@ router.get("/client/:userId", authenticateToken, async (req, res) => {
   }
 });
 
-
-// GET /api/locations-saisonnieres/proprietaire/:userId - Réservations d'un propriétaire - CORRIGÉ
+// GET /proprietaire/:userId - Réservations d'un propriétaire
 router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -253,11 +253,10 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
       console.log(`✅ [BACKEND] Utilisateur trouvé avec ID: ${ownerId}`);
     }
 
-    // CORRECTION: Utiliser rentType au lieu de locationType
     const properties = await prisma.property.findMany({
       where: {
         ownerId: ownerId,
-        rentType: "saisonniere",  // ✅ CORRIGÉ
+        rentType: "saisonniere",
         listingType: { in: ["rent", "both"] },
       },
       select: { id: true },
@@ -302,7 +301,7 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
             features: true,
             ownerId: true,
             status: true,
-            rentType: true,  // ✅ Ajouter pour debug
+            rentType: true,
             listingType: true
           }
         },
@@ -346,6 +345,7 @@ router.get("/proprietaire/:userId", authenticateToken, async (req, res) => {
   }
 });
 
+// POST / - Créer une réservation (route alternative)
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const {
@@ -375,7 +375,7 @@ router.post("/", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Propriété non trouvée" });
     }
 
-    if (property.locationType !== "saisonnier") {
+    if (property.rentType !== "saisonniere") {
       return res.status(400).json({ error: "Cette propriété n'est pas en location saisonnière" });
     }
 
@@ -493,7 +493,7 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-// PATCH /api/locations-saisonnieres/:id/statut - Changer le statut d'une réservation
+// PATCH /:id/statut - Changer le statut d'une réservation
 router.patch('/:id/statut', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -501,7 +501,6 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
     
     console.log(`🔄 [BACKEND] Changement statut réservation ${id} -> ${statut}`);
     
-    // Vérifier que la réservation existe
     const reservation = await prisma.locationSaisonniere.findUnique({
       where: { id: parseInt(id) },
       include: {
@@ -514,7 +513,6 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Réservation non trouvée' });
     }
     
-    // Vérifier les permissions
     const isOwner = reservation.property.ownerId === req.user.id;
     const isClient = reservation.clientId === req.user.id;
     
@@ -522,7 +520,6 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Non autorisé à modifier cette réservation' });
     }
     
-    // Logique de validation des transitions de statut
     const validTransitions = {
       'en_attente': ['confirmee', 'annulee'],
       'confirmee': ['en_cours', 'annulee'],
@@ -540,7 +537,6 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
       });
     }
     
-    // Mettre à jour le statut
     const updatedReservation = await prisma.locationSaisonniere.update({
       where: { id: parseInt(id) },
       data: { 
@@ -555,7 +551,6 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
     
     console.log(`✅ [BACKEND] Réservation ${id} mise à jour: ${statut}`);
     
-    // Si la réservation est confirmée et que la propriété n'est pas encore marquée comme louée
     if (statut === 'confirmee' && reservation.property.status !== 'rented') {
       await prisma.property.update({
         where: { id: reservation.propertyId },
@@ -563,7 +558,6 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
       });
     }
     
-    // Émettre un événement pour le frontend
     res.json({
       message: 'Statut mis à jour avec succès',
       reservation: updatedReservation
@@ -578,7 +572,7 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE /api/locations-saisonnieres/:id - Supprimer une réservation
+// DELETE /:id - Supprimer une réservation
 router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -602,12 +596,10 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       });
     }
 
-    // Supprimer les paiements associés
     await prisma.paiementLocation.deleteMany({
       where: { locationId: parseInt(id) },
     });
 
-    // Supprimer la réservation
     await prisma.locationSaisonniere.delete({
       where: { id: parseInt(id) },
     });
@@ -621,7 +613,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/locations-saisonnieres/:id - Obtenir les détails d'une réservation
+// GET /:id - Obtenir les détails d'une réservation
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -676,7 +668,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/locations-saisonnieres/:id/paiement - Ajouter un paiement
+// POST /:id/paiement - Ajouter un paiement
 router.post("/:id/paiement", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -718,7 +710,7 @@ router.post("/:id/paiement", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/locations-saisonnieres/proprietaire/:userId/stats - Statistiques pour propriétaire - CORRIGÉ
+// GET /proprietaire/:userId/stats - Statistiques pour propriétaire
 router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -750,14 +742,13 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       }
     }
 
-    // CORRECTION: Utiliser rentType au lieu de locationType
     const properties = await prisma.property.findMany({
       where: {
         ownerId: ownerId,
-        rentType: "saisonniere",  // ✅ CORRIGÉ
+        rentType: "saisonniere",
         listingType: { in: ["rent", "both"] },
       },
-      select: { id: true, price: true, title: true },  // Ajouter price pour debug
+      select: { id: true, price: true, title: true },
     });
 
     const propertyIds = properties.map((p) => p.id);
@@ -824,13 +815,6 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
       : 0;
 
     console.log(`✅ [BACKEND] Statistiques calculées pour ${propertyIds.length} propriétés`);
-    console.log(`📈 Détails:`, {
-      propertiesCount: propertyIds.length,
-      reservationsCount: reservations.length,
-      revenueTotal: stats.revenueTotal,
-      occupationRate,
-      sampleProperties: properties.slice(0, 3)
-    });
 
     res.json({
       ...stats,
@@ -843,51 +827,59 @@ router.get("/proprietaire/:userId/stats", authenticateToken, async (req, res) =>
     res.status(500).json({ error: "Erreur serveur", details: error.message });
   }
 });
-// GET /api/locations-saisonnieres/client/:userId/dashboard - Dashboard complet client
+
+// GET /client/:userId/dashboard - Dashboard complet client (VERSION ULTIME CORRIGÉE)
 router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     const { month, year } = req.query;
 
-    console.log(`📊 [BACKEND] Dashboard client pour: ${userId}`);
+    console.log(`📊 [BACKEND] Dashboard client pour: ${userId}, mois: ${month}, année: ${year}`);
 
-    let clientId;
-    let clientInfo;
-    
-    // Identifier le client (UUID ou ID numérique)
-    if (userId.includes('-')) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, firstName: true, lastName: true, email: true }
-      });
-      if (!user) {
-        return res.status(404).json({ 
-          success: false,
-          error: "Client non trouvé" 
-        });
+    // 1. Identifier le client
+    const client = await prisma.user.findUnique({
+      where: { 
+        id: userId
+      },
+      select: { 
+        id: true, 
+        firstName: true, 
+        lastName: true, 
+        email: true 
       }
-      clientId = user.id;
-      clientInfo = user;
-    } else {
-      clientId = parseInt(userId);
-      const user = await prisma.user.findUnique({
-        where: { id: clientId },
-        select: { id: true, firstName: true, lastName: true, email: true }
+    });
+
+    if (!client) {
+      return res.status(404).json({ 
+        success: false,
+        error: "Client non trouvé" 
       });
-      if (!user) {
-        return res.status(404).json({ 
-          success: false,
-          error: "Client non trouvé" 
-        });
-      }
-      clientInfo = user;
     }
 
-    // 1. Récupérer toutes les réservations du client avec gestion des propriétés manquantes
-    const reservations = await prisma.locationSaisonniere.findMany({
-      where: { clientId: clientId },
-      include: {
-        property: {
+    console.log(`✅ [BACKEND] Client trouvé: ${client.firstName} ${client.lastName}`);
+
+    // 2. RÉCUPÉRATION SÉCURISÉE EN 2 ÉTAPES POUR ÉVITER LES ERREURS PRISMA
+    // Étape 1: Récupérer les réservations SANS les relations
+    const reservationsRaw = await prisma.locationSaisonniere.findMany({
+      where: { 
+        clientId: client.id 
+      },
+      // NE PAS inclure les relations ici
+      orderBy: { dateDebut: "desc" }
+    });
+
+    console.log(`✅ [BACKEND] ${reservationsRaw.length} réservations trouvées (sans relations)`);
+
+    // Étape 2: Récupérer les propriétés séparément
+    const propertyIds = reservationsRaw.map(r => r.propertyId).filter(id => id && id !== '');
+    let propertiesMap = {};
+    
+    if (propertyIds.length > 0) {
+      try {
+        const properties = await prisma.property.findMany({
+          where: {
+            id: { in: propertyIds }
+          },
           select: {
             id: true,
             title: true,
@@ -895,77 +887,122 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
             price: true,
             images: true
           }
-        },
-        paiements: {
-          orderBy: { createdAt: "desc" }
-        }
-      },
-      orderBy: { dateDebut: "desc" }
-    });
-
-    console.log(`✅ [BACKEND] ${reservations.length} réservations trouvées`);
-    
-    // Vérifier s'il y a des réservations sans propriété
-    const reservationsSansProperty = reservations.filter(r => !r.property);
-    if (reservationsSansProperty.length > 0) {
-      console.warn(`⚠️ [BACKEND] ${reservationsSansProperty.length} réservations sans propriété trouvées`);
+        });
+        
+        // Créer une map pour un accès rapide
+        properties.forEach(p => {
+          propertiesMap[p.id] = p;
+        });
+      } catch (propertyError) {
+        console.warn(`⚠️ [BACKEND] Erreur récupération propriétés:`, propertyError.message);
+        // Continuer avec un map vide
+      }
     }
 
-    // 2. Statistiques générales avec valeurs par défaut sécurisées
-    const totalReservations = reservations.length;
-    const reservationsActives = reservations.filter(r => 
+    // Étape 3: Récupérer les paiements séparément
+    const reservationIds = reservationsRaw.map(r => r.id);
+    let paiementsMap = {};
+    
+    if (reservationIds.length > 0) {
+      try {
+        const paiements = await prisma.paiementLocation.findMany({
+          where: {
+            locationId: { in: reservationIds }
+          },
+          select: {
+            id: true,
+            locationId: true,
+            montant: true,
+            methode: true,
+            statut: true,
+            reference: true,
+            datePaiement: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: "desc" }
+        });
+        
+        // Grouper les paiements par réservation
+        paiements.forEach(p => {
+          if (!paiementsMap[p.locationId]) {
+            paiementsMap[p.locationId] = [];
+          }
+          paiementsMap[p.locationId].push(p);
+        });
+      } catch (paiementError) {
+        console.warn(`⚠️ [BACKEND] Erreur récupération paiements:`, paiementError.message);
+        // Continuer avec un map vide
+      }
+    }
+
+    // Étape 4: Combiner tout dans des réservations sécurisées
+    const safeReservations = reservationsRaw.map(reservation => {
+      // Propriété sécurisée
+      const property = propertiesMap[reservation.propertyId] || {
+        id: null,
+        title: "Propriété non disponible",
+        city: "Ville inconnue",
+        price: 0,
+        images: []
+      };
+      
+      // Paiements sécurisés
+      const paiements = paiementsMap[reservation.id] || [];
+      
+      return {
+        ...reservation,
+        property,
+        paiements
+      };
+    });
+
+    // 3. Statistiques générales
+    const totalReservations = safeReservations.length;
+    const reservationsActives = safeReservations.filter(r => 
       r.statut && ['en_attente', 'confirmee', 'en_cours'].includes(r.statut)
     ).length;
     
-    const montantTotalDepense = reservations.reduce((sum, r) => sum + (Number(r.prixTotal) || 0), 0);
-    const montantTotalPaye = reservations.reduce((sum, r) => {
+    const montantTotalDepense = safeReservations.reduce((sum, r) => {
+      return sum + (Number(r.prixTotal) || 0);
+    }, 0);
+    
+    const montantTotalPaye = safeReservations.reduce((sum, r) => {
       const paiementsPayes = r.paiements?.filter(p => p.statut === 'paye') || [];
       return sum + paiementsPayes.reduce((pSum, p) => pSum + (Number(p.montant) || 0), 0);
     }, 0);
     
     const montantRestantAPayer = Math.max(0, montantTotalDepense - montantTotalPaye);
 
-    // 3. Statistiques mensuelles
-    const currentDate = new Date();
-    const currentMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
-    const currentYear = year ? parseInt(year) : currentDate.getFullYear();
+    // 4. Statistiques mensuelles
+    const currentMonth = month ? parseInt(month) : new Date().getMonth() + 1;
+    const currentYear = year ? parseInt(year) : new Date().getFullYear();
 
-    const reservationsMois = reservations.filter(r => {
-      try {
-        if (!r.dateDebut) return false;
-        const dateDebut = new Date(r.dateDebut);
-        return dateDebut.getMonth() + 1 === currentMonth && 
-               dateDebut.getFullYear() === currentYear;
-      } catch (e) {
-        return false;
-      }
+    const reservationsMois = safeReservations.filter(r => {
+      if (!r.dateDebut) return false;
+      const dateDebut = new Date(r.dateDebut);
+      return dateDebut.getMonth() + 1 === currentMonth && 
+             dateDebut.getFullYear() === currentYear;
     });
 
-    const depenseMois = reservationsMois.reduce((sum, r) => sum + (Number(r.prixTotal) || 0), 0);
+    const depenseMois = reservationsMois.reduce((sum, r) => {
+      return sum + (Number(r.prixTotal) || 0);
+    }, 0);
 
-    // 4. Prochaines réservations (7 jours) avec données sécurisées
+    // 5. Prochaines réservations (7 jours)
+    const aujourdhui = new Date();
     const septJours = new Date();
     septJours.setDate(septJours.getDate() + 7);
-    const aujourdhui = new Date();
     
-    const prochainesReservations = reservations
+    const prochainesReservations = safeReservations
       .filter(r => {
-        try {
-          if (!r.dateDebut || !r.statut) return false;
-          const dateDebut = new Date(r.dateDebut);
-          return dateDebut >= aujourdhui && 
-                 dateDebut <= septJours && 
-                 ['confirmee', 'en_attente'].includes(r.statut);
-        } catch (e) {
-          return false;
-        }
+        if (!r.dateDebut || !r.statut) return false;
+        const dateDebut = new Date(r.dateDebut);
+        return dateDebut >= aujourdhui && 
+               dateDebut <= septJours && 
+               ['confirmee', 'en_attente'].includes(r.statut);
       })
       .sort((a, b) => {
-        try {
-          return new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime();
-        } catch (e) {
-          return 0;
-        }
+        return new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime();
       })
       .slice(0, 5)
       .map(r => {
@@ -982,16 +1019,16 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
         };
       });
 
-    // 5. Répartition par statut
+    // 6. Répartition par statut
     const repartitionStatut = {
-      en_attente: reservations.filter(r => r.statut === 'en_attente').length,
-      confirmee: reservations.filter(r => r.statut === 'confirmee').length,
-      en_cours: reservations.filter(r => r.statut === 'en_cours').length,
-      terminee: reservations.filter(r => r.statut === 'terminee').length,
-      annulee: reservations.filter(r => r.statut === 'annulee').length
+      en_attente: safeReservations.filter(r => r.statut === 'en_attente').length,
+      confirmee: safeReservations.filter(r => r.statut === 'confirmee').length,
+      en_cours: safeReservations.filter(r => r.statut === 'en_cours').length,
+      terminee: safeReservations.filter(r => r.statut === 'terminee').length,
+      annulee: safeReservations.filter(r => r.statut === 'annulee').length
     };
 
-    // 6. Évolution des dépenses (6 derniers mois)
+    // 7. Évolution des dépenses (6 derniers mois)
     const sixMois = [];
     for (let i = 5; i >= 0; i--) {
       const date = new Date();
@@ -999,18 +1036,16 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
       const mois = date.getMonth() + 1;
       const annee = date.getFullYear();
       
-      const reservationsDuMois = reservations.filter(r => {
-        try {
-          if (!r.dateDebut) return false;
-          const dateResa = new Date(r.dateDebut);
-          return dateResa.getMonth() + 1 === mois && 
-                 dateResa.getFullYear() === annee;
-        } catch (e) {
-          return false;
-        }
+      const reservationsDuMois = safeReservations.filter(r => {
+        if (!r.dateDebut) return false;
+        const dateResa = new Date(r.dateDebut);
+        return dateResa.getMonth() + 1 === mois && 
+               dateResa.getFullYear() === annee;
       });
       
-      const depense = reservationsDuMois.reduce((sum, r) => sum + (Number(r.prixTotal) || 0), 0);
+      const depense = reservationsDuMois.reduce((sum, r) => {
+        return sum + (Number(r.prixTotal) || 0);
+      }, 0);
       
       sixMois.push({
         mois: date.toLocaleDateString('fr-FR', { month: 'short' }),
@@ -1020,9 +1055,9 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
       });
     }
 
-    // 7. Top destinations avec données sécurisées
+    // 8. Top destinations
     const destinations = {};
-    reservations.forEach(r => {
+    safeReservations.forEach(r => {
       const ville = r.property?.city || 'Inconnu';
       if (!destinations[ville]) {
         destinations[ville] = { count: 0, montant: 0 };
@@ -1036,12 +1071,11 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // 8. Paiements en attente
-    const paiementsEnAttente = reservations
+    // 9. Paiements en attente
+    const paiementsEnAttente = safeReservations
       .filter(r => r.statut && ['en_attente', 'confirmee'].includes(r.statut))
       .flatMap(r => {
-        const paiements = r.paiements || [];
-        return paiements.filter(p => p.statut === 'en_attente');
+        return (r.paiements || []).filter(p => p.statut === 'en_attente');
       })
       .sort((a, b) => {
         const dateA = a.datePaiement || a.createdAt;
@@ -1049,65 +1083,43 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
         return new Date(dateA).getTime() - new Date(dateB).getTime();
       });
 
-    // 9. Préparer les données de réservations pour le frontend avec valeurs sécurisées
-    const reservationsFormatted = reservations.map(r => {
-      try {
-        const dateDebut = r.dateDebut ? new Date(r.dateDebut) : new Date();
-        const dateFin = r.dateFin ? new Date(r.dateFin) : new Date();
-        const nuits = Math.max(1, Math.ceil((dateFin - dateDebut) / (1000 * 60 * 60 * 24)));
-        
-        const paiements = r.paiements || [];
-        const paiementsPayes = paiements.filter(p => p.statut === 'paye');
-        const montantPaye = paiementsPayes.reduce((sum, p) => sum + (Number(p.montant) || 0), 0);
-        const prixTotal = Number(r.prixTotal) || 0;
-        const montantRestant = Math.max(0, prixTotal - montantPaye);
-        
-        return {
-          id: r.id,
-          propertyId: r.propertyId,
-          titre: r.property?.title || 'Propriété non disponible',
-          ville: r.property?.city || 'Ville inconnue',
-          dateDebut: r.dateDebut,
-          dateFin: r.dateFin,
-          nuits: nuits,
-          prixTotal: prixTotal,
-          statut: r.statut || 'inconnu',
-          paiements: paiements.map(p => ({
-            id: p.id,
-            montant: Number(p.montant) || 0,
-            methode: p.methode || 'inconnue',
-            statut: p.statut || 'inconnu',
-            datePaiement: p.datePaiement,
-            reference: p.reference || `PAY-${p.id}`
-          })),
-          montantPaye: montantPaye,
-          montantRestant: montantRestant,
-          image: r.property?.images?.[0] || null
-        };
-      } catch (error) {
-        console.error(`❌ Erreur format réservation ${r.id}:`, error);
-        // Retourner une réservation minimale en cas d'erreur
-        return {
-          id: r.id,
-          propertyId: r.propertyId,
-          titre: 'Erreur de chargement',
-          ville: 'Inconnu',
-          dateDebut: r.dateDebut || new Date(),
-          dateFin: r.dateFin || new Date(),
-          nuits: 1,
-          prixTotal: 0,
-          statut: 'erreur',
-          paiements: [],
-          montantPaye: 0,
-          montantRestant: 0,
-          image: null
-        };
-      }
+    // 10. Préparer les données de réservations
+    const reservationsFormatted = safeReservations.map(r => {
+      const dateDebut = r.dateDebut ? new Date(r.dateDebut) : new Date();
+      const dateFin = r.dateFin ? new Date(r.dateFin) : new Date();
+      const nuits = Math.max(1, Math.ceil((dateFin - dateDebut) / (1000 * 60 * 60 * 24)));
+      
+      const paiementsPayes = (r.paiements || []).filter(p => p.statut === 'paye');
+      const montantPaye = paiementsPayes.reduce((sum, p) => sum + (Number(p.montant) || 0), 0);
+      const prixTotal = Number(r.prixTotal) || 0;
+      const montantRestant = Math.max(0, prixTotal - montantPaye);
+      
+      return {
+        id: r.id,
+        propertyId: r.propertyId,
+        titre: r.property?.title || 'Propriété non disponible',
+        ville: r.property?.city || 'Ville inconnue',
+        dateDebut: r.dateDebut,
+        dateFin: r.dateFin,
+        nuits: nuits,
+        prixTotal: prixTotal,
+        statut: r.statut || 'inconnu',
+        paiements: (r.paiements || []).map(p => ({
+          id: p.id,
+          montant: Number(p.montant) || 0,
+          methode: p.methode || 'inconnue',
+          statut: p.statut || 'inconnu',
+          datePaiement: p.datePaiement,
+          reference: p.reference || `PAY-${p.id}`
+        })),
+        montantPaye: montantPaye,
+        montantRestant: montantRestant,
+        image: r.property?.images?.[0] || null
+      };
     });
 
-    // 10. Créer la réponse finale
+    // 11. Créer la réponse finale
     const dashboardData = {
-      // Résumé
       resume: {
         totalReservations,
         reservationsActives,
@@ -1117,18 +1129,12 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
         depenseMois,
         reservationsMois: reservationsMois.length
       },
-      
-      // Prochaines réservations
       prochainesReservations,
-      
-      // Statistiques
       statistiques: {
         repartitionStatut,
         evolutionDepenses: sixMois,
         topDestinations
       },
-      
-      // Paiements
       paiements: {
         enAttente: paiementsEnAttente.map(p => ({
           id: p.id,
@@ -1140,55 +1146,55 @@ router.get("/client/:userId/dashboard", authenticateToken, async (req, res) => {
         })),
         totalEnAttente: paiementsEnAttente.reduce((sum, p) => sum + (Number(p.montant) || 0), 0)
       },
-      
-      // Détails complets
       reservations: reservationsFormatted
     };
 
-    console.log(`✅ [BACKEND] Dashboard généré avec succès pour ${clientId}`);
+    console.log(`✅ [BACKEND] Dashboard généré avec succès`);
 
     res.json({
       success: true,
       message: "Dashboard chargé avec succès",
-      client: clientInfo,
+      client: client,
       dashboard: dashboardData
     });
 
   } catch (error) {
     console.error("❌ [BACKEND] Erreur dashboard client:", error);
     
-    // En cas d'erreur, retourner un dashboard vide mais structuré
+    // Retourner une structure de dashboard minimale en cas d'erreur
+    const emptyDashboard = {
+      resume: {
+        totalReservations: 0,
+        reservationsActives: 0,
+        montantTotalDepense: 0,
+        montantTotalPaye: 0,
+        montantRestantAPayer: 0,
+        depenseMois: 0,
+        reservationsMois: 0
+      },
+      prochainesReservations: [],
+      statistiques: {
+        repartitionStatut: {},
+        evolutionDepenses: [],
+        topDestinations: []
+      },
+      paiements: {
+        enAttente: [],
+        totalEnAttente: 0
+      },
+      reservations: []
+    };
+    
     res.status(500).json({ 
       success: false,
       error: "Erreur serveur lors du chargement du dashboard",
       details: error.message,
-      dashboard: {
-        resume: {
-          totalReservations: 0,
-          reservationsActives: 0,
-          montantTotalDepense: 0,
-          montantTotalPaye: 0,
-          montantRestantAPayer: 0,
-          depenseMois: 0,
-          reservationsMois: 0
-        },
-        prochainesReservations: [],
-        statistiques: {
-          repartitionStatut: {},
-          evolutionDepenses: [],
-          topDestinations: []
-        },
-        paiements: {
-          enAttente: [],
-          totalEnAttente: 0
-        },
-        reservations: []
-      }
+      dashboard: emptyDashboard
     });
   }
 });
 
-// POST /api/locations-saisonnieres/:id/simuler-paiement - Simuler un paiement
+// POST /:id/simuler-paiement - Simuler un paiement
 router.post("/:id/simuler-paiement", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1258,7 +1264,6 @@ router.post("/:id/simuler-paiement", authenticateToken, async (req, res) => {
         }
       });
 
-      // Vérifier si la réservation est entièrement payée
       const nouveauMontantPaye = montantTotalPaye + montantPropose;
       const estEntierementPaye = nouveauMontantPaye >= reservation.prixTotal;
 
@@ -1288,184 +1293,7 @@ router.post("/:id/simuler-paiement", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/locations-saisonnieres/client/:userId/rapport-financier - Rapport financier client
-router.get("/client/:userId/rapport-financier", authenticateToken, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { startDate, endDate, format = 'json' } = req.query;
-
-    console.log(`📈 [BACKEND] Rapport financier client: ${userId}`);
-
-    let clientId;
-    if (userId.includes('-')) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, firstName: true, lastName: true, email: true }
-      });
-      if (!user) return res.status(404).json({ error: "Client non trouvé" });
-      clientId = user.id;
-    } else {
-      clientId = parseInt(userId);
-      const user = await prisma.user.findUnique({
-        where: { id: clientId },
-        select: { id: true, firstName: true, lastName: true, email: true }
-      });
-      if (!user) return res.status(404).json({ error: "Client non trouvé" });
-    }
-
-    const dateDebut = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
-    const dateFin = endDate ? new Date(endDate) : new Date();
-
-    const reservations = await prisma.locationSaisonniere.findMany({
-      where: {
-        clientId: clientId,
-        dateDebut: {
-          gte: dateDebut,
-          lte: dateFin
-        }
-      },
-      include: {
-        property: {
-          select: {
-            title: true,
-            city: true,
-            type: true
-          }
-        },
-        paiements: {
-          where: {
-            statut: 'paye'
-          }
-        }
-      },
-      orderBy: { dateDebut: 'asc' }
-    });
-
-    // Calcul des statistiques financières
-    const totalDepenses = reservations.reduce((sum, r) => sum + (r.prixTotal || 0), 0);
-    const totalPaye = reservations.reduce((sum, r) => 
-      sum + r.paiements.reduce((pSum, p) => pSum + p.montant, 0), 0
-    );
-    const totalRestant = totalDepenses - totalPaye;
-
-    // Par mois
-    const depensesParMois = {};
-    const paiementsParMois = {};
-
-    reservations.forEach(r => {
-      const mois = new Date(r.dateDebut).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-      
-      if (!depensesParMois[mois]) depensesParMois[mois] = 0;
-      depensesParMois[mois] += r.prixTotal || 0;
-      
-      r.paiements.forEach(p => {
-        if (!paiementsParMois[mois]) paiementsParMois[mois] = 0;
-        paiementsParMois[mois] += p.montant || 0;
-      });
-    });
-
-    // Par type de bien
-    const depensesParType = {};
-    reservations.forEach(r => {
-      const type = r.property?.type || 'Autre';
-      if (!depensesParType[type]) depensesParType[type] = 0;
-      depensesParType[type] += r.prixTotal || 0;
-    });
-
-    // Par destination
-    const depensesParDestination = {};
-    reservations.forEach(r => {
-      const destination = r.property?.city || 'Inconnu';
-      if (!depensesParDestination[destination]) depensesParDestination[destination] = 0;
-      depensesParDestination[destination] += r.prixTotal || 0;
-    });
-
-    const rapport = {
-      periode: {
-        debut: dateDebut.toISOString().split('T')[0],
-        fin: dateFin.toISOString().split('T')[0]
-      },
-      resume: {
-        totalReservations: reservations.length,
-        totalDepenses,
-        totalPaye,
-        totalRestant,
-        tauxPaiement: totalDepenses > 0 ? Math.round((totalPaye / totalDepenses) * 100) : 0
-      },
-      details: {
-        parMois: Object.entries(depensesParMois).map(([mois, depense]) => ({
-          mois,
-          depense,
-          paiement: paiementsParMois[mois] || 0,
-          solde: depense - (paiementsParMois[mois] || 0)
-        })),
-        parType: Object.entries(depensesParType).map(([type, depense]) => ({
-          type,
-          depense,
-          pourcentage: Math.round((depense / totalDepenses) * 100)
-        })),
-        parDestination: Object.entries(depensesParDestination)
-          .map(([destination, depense]) => ({
-            destination,
-            depense,
-            pourcentage: Math.round((depense / totalDepenses) * 100)
-          }))
-          .sort((a, b) => b.depense - a.depense)
-      },
-      reservations: reservations.map(r => ({
-        id: r.id,
-        titre: r.property?.title,
-        destination: r.property?.city,
-        dateDebut: r.dateDebut,
-        dateFin: r.dateFin,
-        prixTotal: r.prixTotal,
-        montantPaye: r.paiements.reduce((sum, p) => sum + p.montant, 0),
-        montantRestant: r.prixTotal - r.paiements.reduce((sum, p) => sum + p.montant, 0),
-        statut: r.statut
-      }))
-    };
-
-    if (format === 'csv') {
-      // Générer CSV
-      const csvRows = [
-        ['ID', 'Titre', 'Destination', 'Date Début', 'Date Fin', 'Prix Total', 'Payé', 'Restant', 'Statut'],
-        ...rapport.reservations.map(r => [
-          r.id,
-          r.titre,
-          r.destination,
-          r.dateDebut.split('T')[0],
-          r.dateFin.split('T')[0],
-          r.prixTotal,
-          r.montantPaye,
-          r.montantRestant,
-          r.statut
-        ])
-      ];
-
-      const csvContent = csvRows.map(row => row.join(',')).join('\n');
-      
-      res.header('Content-Type', 'text/csv');
-      res.header('Content-Disposition', `attachment; filename=rapport-financier-${userId}-${dateDebut.toISOString().split('T')[0]}-${dateFin.toISOString().split('T')[0]}.csv`);
-      res.send(csvContent);
-    } else {
-      res.json({
-        success: true,
-        client: {
-          id: clientId,
-          nom: `${res.user?.firstName || ''} ${res.user?.lastName || ''}`.trim(),
-          email: res.user?.email
-        },
-        rapport
-      });
-    }
-
-  } catch (error) {
-    console.error("❌ [BACKEND] Erreur rapport financier:", error);
-    res.status(500).json({ error: "Erreur serveur", details: error.message });
-  }
-});
-
-// POST /api/locations-saisonnieres/from-demande - Créer réservation automatique depuis demande - CORRIGÉ
+// POST /from-demande/:demandeId - Créer réservation automatique depuis demande
 router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
   try {
     const { demandeId } = req.params;
@@ -1480,7 +1308,7 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
             owner: true
           }
         },
-        createdBy: true  // CORRIGÉ: utilisez createdBy au lieu de user
+        createdBy: true
       }
     });
 
@@ -1492,7 +1320,6 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Cette demande n'est pas liée à une propriété" });
     }
 
-    // CORRECTION: Utiliser rentType au lieu de locationType
     if (demande.property.rentType !== "saisonniere") {
       return res.status(400).json({ 
         error: "Cette propriété n'est pas en location saisonnière",
@@ -1500,7 +1327,6 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
       });
     }
 
-    // Vérifier si une réservation existe déjà
     const existingReservation = await prisma.locationSaisonniere.findFirst({
       where: {
         propertyId: demande.propertyId,
@@ -1517,28 +1343,25 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
       });
     }
 
-    // Calculer les dates (début dans 7 jours, durée 7 nuits par défaut)
     const dateDebut = new Date();
     dateDebut.setDate(dateDebut.getDate() + 7);
     
     const dateFin = new Date(dateDebut);
     dateFin.setDate(dateFin.getDate() + 7);
 
-    // Calculer le prix
-    const nuits = 7; // par défaut
+    const nuits = 7;
     const prixTotal = (demande.property?.price || 0) * nuits;
 
-    // Créer la réservation
     const reservation = await prisma.locationSaisonniere.create({
       data: {
         propertyId: demande.propertyId,
-        clientId: demande.createdById,  // CORRIGÉ: utiliser createdById
+        clientId: demande.createdById,
         dateDebut,
         dateFin,
         prixTotal,
         nombreAdultes: 2,
         nombreEnfants: 0,
-        statut: 'confirmee', // Directement confirmée car la visite a eu lieu
+        statut: 'confirmee',
         remarques: `Réservation créée automatiquement suite à la visite (Demande #${demande.id})`
       },
       include: {
@@ -1557,11 +1380,10 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
 
     console.log(`✅ [BACKEND] Réservation créée: ${reservation.id}`);
 
-    // Créer un paiement associé
     await prisma.paiementLocation.create({
       data: {
         locationId: reservation.id,
-        montant: prixTotal * 0.3, // 30% d'acompte
+        montant: prixTotal * 0.3,
         methode: 'virement',
         reference: `AUTO-RES-${reservation.id}-${Date.now()}`,
         statut: 'en_attente',
@@ -1569,7 +1391,6 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
       }
     });
 
-    // Créer une notification pour le client
     await prisma.notification.create({
       data: {
         type: 'reservation_created',
@@ -1595,7 +1416,7 @@ router.post("/from-demande/:demandeId", authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/locations-saisonnieres/auto-from-property/:propertyId - Création automatique
+// POST /auto-from-property/:propertyId - Création automatique
 router.post('/auto-from-property/:propertyId', authenticateToken, async (req, res) => {
   try {
     const { propertyId } = req.params;
@@ -1603,7 +1424,6 @@ router.post('/auto-from-property/:propertyId', authenticateToken, async (req, re
     
     console.log(`🏠 [BACKEND] Création réservation automatique depuis propriété: ${propertyId}`);
     
-    // propertyId est déjà un UUID string, ne pas utiliser parseInt()
     const property = await prisma.property.findUnique({
       where: {
         id: propertyId
@@ -1617,28 +1437,24 @@ router.post('/auto-from-property/:propertyId', authenticateToken, async (req, re
       return res.status(404).json({ error: 'Propriété non trouvée' });
     }
     
-    // Vérifier que c'est une location saisonnière
     if (property.rentType !== 'saisonniere') {
       return res.status(400).json({ 
         error: 'Cette propriété n\'est pas en location saisonnière' 
       });
     }
     
-    // Vérifier que le bien est à louer
     if (!['rent', 'both'].includes(property.listingType)) {
       return res.status(400).json({ 
         error: 'Cette propriété n\'est pas disponible à la location' 
       });
     }
     
-    // Vérifier que le bien n'est pas déjà loué
     if (property.status === 'rented') {
       return res.status(400).json({ 
         error: 'Cette propriété est déjà marquée comme louée' 
       });
     }
     
-    // Vérifier que le client existe
     const client = await prisma.user.findUnique({
       where: { id: clientId }
     });
@@ -1647,18 +1463,15 @@ router.post('/auto-from-property/:propertyId', authenticateToken, async (req, re
       return res.status(404).json({ error: 'Client non trouvé' });
     }
     
-    // Calculer les dates (par défaut 7 jours après aujourd'hui, durée 7 nuits)
     const dateDebut = new Date();
     dateDebut.setDate(dateDebut.getDate() + 7);
     
     const dateFin = new Date(dateDebut);
     dateFin.setDate(dateFin.getDate() + 7);
     
-    // Calculer le prix
     const prixNuit = property.price || 0;
     const prixTotal = prixNuit * 7;
     
-    // Créer la réservation
     const reservation = await prisma.locationSaisonniere.create({
       data: {
         propertyId: propertyId,
@@ -1685,7 +1498,6 @@ router.post('/auto-from-property/:propertyId', authenticateToken, async (req, re
       }
     });
     
-    // Mettre à jour le statut de la propriété
     await prisma.property.update({
       where: { id: propertyId },
       data: { 
@@ -1710,7 +1522,7 @@ router.post('/auto-from-property/:propertyId', authenticateToken, async (req, re
   }
 });
 
-// GET /api/locations-saisonnieres/client/:clientId - Réservations d'un client
+// GET /client/:clientId - Réservations d'un client (route alternative)
 router.get('/client/:clientId', authenticateToken, async (req, res) => {
   try {
     const { clientId } = req.params;
@@ -1768,14 +1580,13 @@ router.get('/client/:clientId', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/locations-saisonnieres/owner/:ownerId - Réservations des biens d'un propriétaire
+// GET /owner/:ownerId - Réservations des biens d'un propriétaire
 router.get('/owner/:ownerId', authenticateToken, async (req, res) => {
   try {
     const { ownerId } = req.params;
     
     console.log(`🏠 [BACKEND] Récupération réservations propriétaire: ${ownerId}`);
     
-    // 1. Récupérer toutes les propriétés du propriétaire
     const properties = await prisma.property.findMany({
       where: {
         ownerId: ownerId,
@@ -1793,7 +1604,6 @@ router.get('/owner/:ownerId', authenticateToken, async (req, res) => {
       return res.json([]);
     }
     
-    // 2. Récupérer les réservations pour ces propriétés
     const reservations = await prisma.locationSaisonniere.findMany({
       where: {
         propertyId: { in: propertyIds }
@@ -1844,7 +1654,8 @@ router.get('/owner/:ownerId', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// GET /api/locations-saisonnieres/property/:propertyId/client/:clientId - Vérifier si réservation existe
+
+// GET /property/:propertyId/client/:clientId - Vérifier si réservation existe
 router.get("/property/:propertyId/client/:clientId", authenticateToken, async (req, res) => {
   try {
     const { propertyId, clientId } = req.params;
@@ -1876,6 +1687,5 @@ router.get("/property/:propertyId/client/:clientId", authenticateToken, async (r
     res.status(500).json({ error: error.message });
   }
 });
-
 
 module.exports = router;
