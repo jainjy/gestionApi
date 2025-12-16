@@ -4,6 +4,320 @@ const { prisma } = require("../lib/db");
 const { authenticateToken, requireRole } = require("../middleware/auth");
 const bcrypt = require("bcryptjs");
 
+// Ajouter ces routes dans votre fichier users.js existant
+
+// Route pour exporter les données personnelles
+router.get("/export-data", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Récupérer toutes les données de l'utilisateur
+    const userData = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        // Inclure toutes les relations importantes
+        metiers: {
+          include: {
+            metier: true,
+          },
+        },
+        services: {
+          include: {
+            service: true,
+          },
+        },
+        blogArticleLikes: true,
+        blogComments: true,
+        blogCommentLikes: true,
+        Product: true,
+        properties: true,
+        blogArticles: true,
+        favorites: true,
+        ordersClient: true,
+        ordersPrestataire: true,
+        Transaction: true,
+        subscriptions: {
+          include: {
+            plan: true,
+          },
+        },
+        messagesEnvoyes: {
+          select: {
+            contenu: true,
+            createdAt: true,
+            conversation: {
+              select: {
+                titre: true,
+              },
+            },
+          },
+        },
+        messagesRecus: {
+          select: {
+            contenu: true,
+            createdAt: true,
+            expediteur: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+        demandesCrees: true,
+        demandesRecues: true,
+        Review: true,
+        Appointment: true,
+        demandesArtisan: true,
+        locationsClient: true,
+        conversationsCrees: true,
+        conversationsParticipees: true,
+        devisRecus: true,
+        devisEnvoyes: true,
+        advertisements: true,
+        preferences: true,
+        events: true,
+        audits: true,
+        notifications: true,
+        notificationsProprietaire: true,
+        mediaFavorites: true,
+        wellBeingStats: true,
+        ProfessionalSettings: true,
+        ContratType: true,
+        DocumentArchive: true,
+        reservationsCours: true,
+        courses: true,
+        investmentRequests: true,
+        tourismes: true,
+        volsCrees: true,
+        volsReserves: true,
+        touristicPlaceBookings: true,
+        flightReservations: true,
+        flightReservationsReceived: true,
+        financementPartenaires: true,
+        rendezvousEntreprise: true,
+        activityBookings: true,
+        activityReviews: true,
+        activityFavorites: true,
+        activityShares: true,
+        activityGuide: true,
+        guideContacts: true,
+        messagesRecusContact: true,
+        messagesEnvoyesContact: true,
+        servicesCrees: true,
+        demandesDroitFamille: true,
+        demandesConseil: true,
+        expertDemandesConseil: true,
+        suivisConseil: true,
+        Document: true,
+        demandesFinancement: true,
+        tourismeBookings: true,
+        activities: true,
+        podcasts: true,
+        videos: true,
+        // ✅ SUPPRIMÉ: documents: true (utiliser Document à la place)
+      },
+    });
+
+    // Structure des données pour l'export
+    const exportData = {
+      metadata: {
+        exportDate: new Date().toISOString(),
+        userId: userId,
+        format: "RGPD-Export",
+        version: "1.0",
+      },
+      profile: {
+        personalInfo: {
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          email: userData.email,
+          phone: userData.phone,
+          role: userData.role,
+          status: userData.status,
+          createdAt: userData.createdAt,
+        },
+        professionalInfo: {
+          companyName: userData.companyName,
+          siret: userData.siret,
+          commercialName: userData.commercialName,
+          address: userData.address,
+          city: userData.city,
+          zipCode: userData.zipCode,
+        },
+      },
+      services: {
+        metiers: userData.metiers.map((m) => ({
+          id: m.metier.id,
+          libelle: m.metier.libelle,
+        })),
+        services: userData.services.map((s) => ({
+          id: s.service.id,
+          libelle: s.service.libelle,
+          customPrice: s.customPrice,
+          customDuration: s.customDuration,
+        })),
+      },
+      content: {
+        products: userData.Product.map((p) => ({
+          id: p.id,
+          name: p.name,
+          category: p.category,
+          createdAt: p.createdAt,
+        })),
+        properties: userData.properties.map((p) => ({
+          id: p.id,
+          title: p.title,
+          type: p.type,
+          createdAt: p.createdAt,
+        })),
+        articles: userData.blogArticles.map((a) => ({
+          id: a.id,
+          title: a.title,
+          createdAt: a.createdAt,
+        })),
+      },
+      interactions: {
+        orders: {
+          asClient: userData.ordersClient.map((o) => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            totalAmount: o.totalAmount,
+            status: o.status,
+            createdAt: o.createdAt,
+          })),
+          asProvider: userData.ordersPrestataire.map((o) => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            totalAmount: o.totalAmount,
+            status: o.status,
+            createdAt: o.createdAt,
+          })),
+        },
+        transactions: userData.Transaction.map((t) => ({ // ✅ CHANGÉ: userData.transactions → userData.Transaction
+          id: t.id,
+          amount: t.amount,
+          status: t.status,
+          description: t.description,
+          createdAt: t.createdAt,
+        })),
+        messages: {
+          sent: userData.messagesEnvoyes.map((m) => ({
+            content: m.contenu,
+            conversation: m.conversation?.titre,
+            date: m.createdAt,
+          })),
+          received: userData.messagesRecus.map((m) => ({
+            content: m.contenu,
+            sender: m.expediteur
+              ? `${m.expediteur.firstName} ${m.expediteur.lastName}`
+              : "Anonyme",
+            date: m.createdAt,
+          })),
+        },
+        bookings: userData.tourismeBookings.map((b) => ({
+          id: b.id,
+          checkIn: b.checkIn,
+          checkOut: b.checkOut,
+          totalAmount: b.totalAmount,
+          status: b.status,
+        })),
+      },
+      subscriptions: userData.subscriptions.map((s) => ({
+        plan: s.plan?.name,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        status: s.status,
+      })),
+      documents: userData.Document.map((d) => ({ // ✅ CHANGÉ: userData.documents → userData.Document
+        id: d.id,
+        nom: d.nom,
+        type: d.type,
+        dateUpload: d.dateUpload,
+      })),
+    };
+
+    res.json(exportData);
+  } catch (error) {
+    console.error("Erreur lors de l'export des données:", error);
+    res.status(500).json({ error: "Erreur lors de l'export des données" });
+  }
+});
+
+// Route pour supprimer le compte
+router.delete("/delete-account", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { password, confirmAllSteps } = req.body;
+
+    // Vérifier que toutes les étapes sont confirmées
+    if (!confirmAllSteps) {
+      return res.status(403).json({
+        error:
+          "Vous devez confirmer toutes les étapes avant de supprimer votre compte",
+      });
+    }
+
+    // Vérifier le mot de passe
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur non trouvé" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: "Mot de passe incorrect" });
+    }
+
+    // Journaliser la demande de suppression
+    await prisma.userEvent.create({
+      data: {
+        userId: userId,
+        eventType: "ACCOUNT_DELETION_REQUEST",
+        eventData: {
+          timestamp: new Date().toISOString(),
+          ip: req.ip,
+          userAgent: req.get("User-Agent"),
+        },
+      },
+    });
+
+    // Marquer l'utilisateur comme "pending_deletion" pour traitement différé
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: "pending_deletion",
+        deletionRequestedAt: new Date(),
+      },
+    });
+
+    // Notifier l'administrateur
+    await prisma.notification.create({
+      data: {
+        type: "ACCOUNT_DELETION",
+        title: "Demande de suppression de compte",
+        message: `L'utilisateur ${user.email} a demandé la suppression de son compte conformément au RGPD`,
+        userId: userId,
+        userProprietaireId: userId,
+        relatedEntity: "user",
+        relatedEntityId: userId,
+      },
+    });
+
+    res.json({
+      success: true,
+      message:
+        "Votre demande de suppression a été enregistrée. Votre compte sera définitivement supprimé dans les 30 jours conformément au RGPD.",
+    });
+  } catch (error) {
+    console.error("Erreur lors de la suppression du compte:", error);
+    res.status(500).json({ error: "Erreur lors de la suppression du compte" });
+  }
+});
+
 // GET /api/users - Récupérer tous les utilisateurs
 router.get("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
   try {
@@ -686,4 +1000,5 @@ async function createSubscriptionForUser(userId, userType, role) {
     return null;
   }
 }
+
 module.exports = router;

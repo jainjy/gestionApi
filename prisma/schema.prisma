@@ -131,7 +131,8 @@ model User {
   DevisProviderToUser String?              @map("_DevisProviderToUser")
   demandesFinancement FinancementDemande[]
   websiteUrl          String?
-
+  deletionRequestedAt DateTime?  // Date de la demande de suppression
+  deletionReason     String?     // Raison de la suppression (optionnel)
   // Relations existantes
   blogArticles     BlogArticle[]        @relation("BlogArticleAuthor")
   blogArticleLikes BlogArticleLike[]    @relation("BlogArticleLikeUser")
