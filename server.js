@@ -343,6 +343,8 @@ app.use("/api/services-ibr", require("./routes/services-ibr"));
 app.use("/api/locations-saisonnieres", require("./routes/locations-saisonniere"));
 
 app.use("/api/pro", require("./routes/pro"));
+//route pour le demande conseil
+app.use('/api/conseil', require('./routes/conseil.js'));
 
 // ======================
 // 🆕 NOUVELLES ROUTES ACTIVITÉS ET LOISIRS
