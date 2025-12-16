@@ -196,6 +196,8 @@ model User {
   // Nouvelle relation avec FinancementPartenaire
   financementPartenaires FinancementPartenaire[]
 
+  rendezvousEntreprise RendezvousEntreprise[] // Liste des rendez-vous demandés pour l'entreprise
+
   // ======================
   // NOUVELLES RELATIONS POUR ACTIVITÉS - VERSION CORRIGÉE
   // ======================
@@ -205,19 +207,19 @@ model User {
   activityReviews        ActivityReview[]
   activityGuide          ActivityGuide?
   guideContacts          GuideContact[] // AJOUT: Relation manquante
-  messagesRecusContact   ContactMessage[]        @relation("ContactMessageRecipient")
-  messagesEnvoyesContact ContactMessage[]        @relation("ContactMessageSender")
+  messagesRecusContact   ContactMessage[]   @relation("ContactMessageRecipient")
+  messagesEnvoyesContact ContactMessage[]   @relation("ContactMessageSender")
   servicesCrees          Service[] // ✅ AJOUT: Relation avec les services créés par le professionnel
-  demandesDroitFamille DroitFamille[]
+  demandesDroitFamille   DroitFamille[]
+  //relation pour le demande de conseil
+  demandesConseil        DemandeConseil[]   @relation("UserDemandesConseil")
+  expertDemandesConseil  DemandeConseil[]   @relation("ExpertDemandesConseil")
+  suivisConseil          SuiviConseil[]
 
   @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
   @@index([role])
   @@index([status])
-  //relation pour le demande de conseil
-  demandesConseil      DemandeConseil[] @relation("UserDemandesConseil")
-  expertDemandesConseil DemandeConseil[] @relation("ExpertDemandesConseil")
-  suivisConseil        SuiviConseil[]
 }
 
 // ======================
@@ -559,15 +561,15 @@ model Service {
   isActive    Boolean                @default(true) // Si le service est actif
   tags        String[] // Tags personnalisés
 
-  category  Category?            @relation(fields: [categoryId], references: [id])
-  createdBy User?                @relation(fields: [createdById], references: [id], onDelete: Cascade) // Relation avec le créateur
-  metiers   MetierService[]
-  users     UtilisateurService[]
-  demandes  Demande[]
+  category             Category?            @relation(fields: [categoryId], references: [id])
+  createdBy            User?                @relation(fields: [createdById], references: [id], onDelete: Cascade) // Relation avec le créateur
+  metiers              MetierService[]
+  users                UtilisateurService[]
+  demandes             Demande[]
   demandesDroitFamille DroitFamille[]
-  Review         Review[]
-  Appointment    Appointment[]
-  ContactMessage ContactMessage[]
+  Review               Review[]
+  Appointment          Appointment[]
+  ContactMessage       ContactMessage[]
 
   @@index([createdById])
   @@index([isCustom])
@@ -2008,20 +2010,20 @@ model ContactMessage {
 }
 
 model DroitFamille {
-  id            Int       @id @default(autoincrement())
-  userId        String
-  serviceId     Int
+  id        Int    @id @default(autoincrement())
+  userId    String
+  serviceId Int
 
-  serviceType   String?    // ex: "avocat-divorce", "conseil-notaire", etc.
-  sousType      String?    // ex: type de divorce, type d'intervention
-  description   String?
+  serviceType String? // ex: "avocat-divorce", "conseil-notaire", etc.
+  sousType    String? // ex: type de divorce, type d'intervention
+  description String?
 
-  status        String     @default("pending")   // ✔ Ajouté : statut de la demande
+  status String @default("pending") // ✔ Ajouté : statut de la demande
 
-  createdAt     DateTime   @default(now())
+  createdAt DateTime @default(now())
 
-  user          User       @relation(fields: [userId], references: [id])
-  service       Service    @relation(fields: [serviceId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
 }
 
 // ======================
@@ -2049,11 +2051,11 @@ model ConseilType {
 }
 
 model DemandeConseil {
-  id          Int        @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   userId      String
   conseilType String
   besoin      String
-  budget      String     @default("surdevis")
+  budget      String   @default("surdevis")
   message     String?
   nom         String
   email       String
@@ -2062,15 +2064,15 @@ model DemandeConseil {
   serviceId   Int?
   metierId    Int?
   expertId    String?
-  statut      String     @default("en_attente")
-  origine     String     @default("page_conseil")
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  statut      String   @default("en_attente")
+  origine     String   @default("page_conseil")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations avec noms explicites
-  user    User           @relation(name: "UserDemandesConseil", fields: [userId], references: [id], onDelete: Cascade)
-  expert  User?          @relation(name: "ExpertDemandesConseil", fields: [expertId], references: [id], onDelete: SetNull)
-  suivis  SuiviConseil[]
+  user   User           @relation(name: "UserDemandesConseil", fields: [userId], references: [id], onDelete: Cascade)
+  expert User?          @relation(name: "ExpertDemandesConseil", fields: [expertId], references: [id], onDelete: SetNull)
+  suivis SuiviConseil[]
 
   @@index([userId])
   @@index([expertId])
@@ -2082,13 +2084,13 @@ model DemandeConseil {
 // SUIVIS DES DEMANDES DE CONSEIL
 // ======================
 model SuiviConseil {
-  id               Int      @id @default(autoincrement())
+  id               Int       @id @default(autoincrement())
   demandeConseilId Int
   userId           String
   message          String
-  type             String   @default("message") // message, rendez_vous, devis, facture
+  type             String    @default("message") // message, rendez_vous, devis, facture
   rendezVous       DateTime?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
 
   demandeConseil DemandeConseil @relation(fields: [demandeConseilId], references: [id], onDelete: Cascade)
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2096,4 +2098,25 @@ model SuiviConseil {
   @@index([demandeConseilId])
   @@index([userId])
   @@index([createdAt])
+}
+
+// ======================
+// RENDEZ-VOUS ENTREPRISE - TABLE SIMPLE
+// ======================
+model RendezvousEntreprise {
+  id            String   @id @default(uuid())
+  nomComplet    String
+  email         String
+  telephone     String
+  projetDetails String?
+  dateChoisie   String
+  heureChoisie  String
+  userId        String?
+  etat          String   @default("nouveau") // "nouveau", "traite", "annule"
+  creeLe        DateTime @default(now())
+  User          User?    @relation(fields: [userId], references: [id])
+
+  @@index([email])
+  @@index([creeLe])
+  @@index([etat])
 }
