@@ -2,6 +2,27 @@ const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db');
 const stripe = require('../utils/stripe');
+
+router.post("/create-payment-intent", async (req, res) => {
+  const { amount } = req.body;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount, // ex: 1000 = 10€
+      currency: "eur",
+      automatic_payment_methods: {
+        enabled: true, // Apple Pay + Google Pay auto
+      },
+    });
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/connect-account', async (req, res) => {
   try {
     const { userId, email } = req.body;
