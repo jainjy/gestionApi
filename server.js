@@ -282,6 +282,8 @@ app.use("/api/services-ibr", require("./routes/services-ibr"));
 app.use("/api/locations-saisonnieres", require("./routes/locations-saisonniere"));
 
 app.use("/api/pro", require("./routes/pro"));
+
+app.use("/api", require("./routes/rendez_vous"));
 //route pour le demande conseil
 app.use('/api/conseil', require('./routes/conseil.js'));
 //route pour les demandes d'accompagnement
@@ -374,7 +376,8 @@ app.get("/health", (req, res) => {
       "activity-bookings",
       "activity-actions",
       "guide-contact",
-      "activity-availability"
+      "activity-availability",
+      "rendez-vous-entreprise",
     ],
     websocket: {
       connectedClients: io.engine.clientsCount,
