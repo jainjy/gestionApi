@@ -6,7 +6,7 @@ async function main() {
     console.log("🌱 Seeding database with provided data...");
     
     // Suppression des données existantes
-    await prisma.category.deleteMany();
+    //await prisma.category.deleteMany();
     await prisma.metierService.deleteMany();
     await prisma.service.deleteMany();
     await prisma.metier.deleteMany();
