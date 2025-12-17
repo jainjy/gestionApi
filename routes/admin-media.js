@@ -128,19 +128,50 @@ router.get("/videos", async (req, res) => {
     const { page = 1, limit = 50, category, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    console.log('🎬 [VIDEOS] Récupération vidéos - Page:', page, 'Limit:', limit, 'Catégorie:', category, 'Recherche:', search);
+    console.log(
+      "🎬 [VIDEOS] Récupération vidéos - Page:",
+      page,
+      "Limit:",
+      limit,
+      "Catégorie:",
+      category,
+      "Recherche:",
+      search
+    );
 
     const where = { isActive: true };
-    
-    if (category && category !== 'all') {
-      where.category = category;
+
+    // Filtrer par catégorie avec Prisma
+    if (category && category !== "all") {
+      if (category == "Réunion") {
+        // Pour "Réunion", on prend les vidéos de plusieurs catégories
+        where.OR = [
+          { category: "Réunion" },
+          { category: "Tourisme" },
+          { category: "Alimentation" },
+          { category: "Bien-être" },
+          { category: "Culture" },
+          { category: "Nature" },
+          { category: "Gastronomie" },
+        ];
+      } else if (category == "Partenaires") {
+        // Pour "Partenaires", on cherche dans plusieurs critères
+        where.OR = [
+          { category: "Partenaires" },
+          { category: "Entreprise" },
+          { description: { contains: "partenaire", mode: "insensitive" } },
+          { title: { contains: "partenaire", mode: "insensitive" } },
+        ];
+      } else {
+        where.category = category;
+      }
     }
-    
+
     if (search) {
       where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { category: { contains: search, mode: 'insensitive' } }
+        { title: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+        { category: { contains: search, mode: "insensitive" } },
       ];
     }
 
@@ -161,7 +192,7 @@ router.get("/videos", async (req, res) => {
         storagePath: true,
         category: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
       },
       orderBy: { createdAt: "desc" },
       skip,
@@ -170,7 +201,7 @@ router.get("/videos", async (req, res) => {
 
     const total = await prisma.video.count({ where });
 
-    console.log('✅ [VIDEOS]', videos.length, 'vidéos récupérées sur', total);
+    console.log("✅ [VIDEOS]", videos.length, "vidéos récupérées sur", total);
 
     res.json({
       success: true,
@@ -178,8 +209,8 @@ router.get("/videos", async (req, res) => {
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total
-      }
+        total,
+      },
     });
   } catch (error) {
     console.error("❌ [VIDEOS] Erreur lors de la récupération des vidéos:", error);

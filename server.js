@@ -39,7 +39,6 @@ io.on("connection", (socket) => {
   console.log("🔌 Nouvelle connexion Socket.io:", socket.id);
 
   const userId = socket.handshake.query.userId;
-  console.log("📨 User ID from query:", userId);
 
   if (userId) {
     socket.join(`user:${userId}`);
@@ -54,7 +53,6 @@ io.on("connection", (socket) => {
 
   // 🔥 AJOUT: Gestion des notifications en temps réel
   socket.on('new-notification', (data) => {
-    console.log('📨 Nouvelle notification reçue:', data);
     if (data.userId) {
       socket.to(`user:${data.userId}`).emit('notification-received', data);
     }
@@ -178,65 +176,6 @@ app.use("/api", limiter);
 app.use(cookieParser());
 app.use(express.json({ limit: "50mb" })); // Augmenter à 50MB pour être large
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-// 🔥 CORRECTION CRITIQUE: Middleware CORS très permissif pour les fichiers média
-app.use("/media", (req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS, POST, PUT");
-  res.header("Access-Control-Allow-Headers", "*");
-  res.header("Access-Control-Expose-Headers", "*");
-  res.header("Access-Control-Max-Age", "86400");
-
-  res.removeHeader("X-Content-Type-Options");
-  res.removeHeader("X-Frame-Options");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  next();
-});
-
-// Désactiver Helmet pour les médias
-app.use("/media", (req, res, next) => {
-  res.removeHeader("Content-Security-Policy");
-  res.removeHeader("Cross-Origin-Embedder-Policy");
-  res.removeHeader("Cross-Origin-Opener-Policy");
-  res.removeHeader("Cross-Origin-Resource-Policy");
-  next();
-});
-
-// Servir les fichiers médias
-app.use(
-  "/media/audio",
-  express.static(path.join(__dirname, "uploads/audio"), {
-    setHeaders: (res, filePath) => {
-      res.setHeader("Content-Type", "audio/mpeg");
-      res.setHeader("Cache-Control", "public, max-age=3600");
-    },
-  })
-);
-
-app.use(
-  "/media/videos",
-  express.static(path.join(__dirname, "uploads/videos"), {
-    setHeaders: (res, filePath) => {
-      res.setHeader("Content-Type", "video/mp4");
-      res.setHeader("Accept-Ranges", "bytes");
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-      res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
-    },
-  })
-);
-
-app.use(
-  "/media/thumbnails",
-  express.static(path.join(__dirname, "uploads/thumbnails"), {
-    setHeaders: (res, filePath) => {
-      res.setHeader("Cache-Control", "public, max-age=3600");
-    },
-  })
-);
 
 // 🔥 AJOUT: Middleware pour injecter io dans les requêtes
 app.use((req, res, next) => {
@@ -391,31 +330,6 @@ app.use("/api/documents", require("./routes/documents"));
 app.use("/api/client/documents", require("./routes/documents-client"));
 app.use("/api/contrats-types", require("./routes/contratsTypes"));
 
-// Route de test pour les fichiers médias
-app.get("/media/test/:filename", (req, res) => {
-  const { filename } = req.params;
-  const filePath = path.join(__dirname, "uploads/videos", filename);
-
-  if (fs.existsSync(filePath)) {
-    const stats = fs.statSync(filePath);
-    console.log("✅ Fichier trouvé:", {
-      filename,
-      size: stats.size,
-      path: filePath,
-    });
-
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.sendFile(filePath);
-  } else {
-    console.log("❌ Fichier non trouvé:", filePath);
-    res.status(404).json({
-      success: false,
-      message: "Fichier non trouvé",
-      path: filePath,
-    });
-  }
-});
 
 // 🔥 AJOUT: Route de test WebSocket
 app.get("/websocket-test", (req, res) => {
@@ -454,7 +368,6 @@ app.get("/health", (req, res) => {
       "websocket",
       "map",
       "investissement",
-      // 🆕 AJOUT DES SERVICES ACTIVITÉS
       "activities",
       "activity-bookings",
       "activity-actions",
@@ -505,11 +418,4 @@ server.listen(PORT, async () => {
   console.log(`🚀 Serveur démarré sur le port: ${PORT}`);
   console.log(`🔌 WebSocket disponible sur: ws://localhost:${PORT}`);
   console.log(`🏥 Route santé: http://localhost:${PORT}/health`);
-  console.log(`🧪 Test WebSocket: http://localhost:${PORT}/websocket-test`);
-  console.log(`📨 Notifications: http://localhost:${PORT}/api/notifications/user/:userId`);
-  console.log(`🌍 Investissement: http://localhost:${PORT}/api/investissement/demande`);
-  // 🆕 AJOUT DES ACTIVITÉS
-  console.log(`🎯 Activités: http://localhost:${PORT}/api/activities`);
-  console.log(`📅 Réservations: http://localhost:${PORT}/api/activity-bookings`);
-  console.log(`❤️ Actions: http://localhost:${PORT}/api/activity-actions`);
 });
