@@ -1488,5 +1488,362 @@ router.get("/demandes/statistics/user", authenticateToken, async (req, res) => {
     });
   }
 });
+// routes/conseil.js - AJOUT DES ROUTES MANQUANTES
+// Ajoutez ces routes AVANT le module.exports
+
+/**
+ * @route GET /api/conseil/temoignages
+ * @description Récupérer les témoignages pour le conseil
+ * @access Public
+ */
+router.get("/temoignages", async (req, res) => {
+  try {
+    // Données par défaut pour le conseil
+    const defaultTemoignages = [
+      {
+        id: 1,
+        name: "Julie Moreau",
+        entreprise: "TechStart Solutions",
+        texte: "L'audit stratégique réalisé par l'équipe a été déterminant pour notre repositionnement sur le marché. Les recommandations étaient précises et actionnables.",
+        rating: 5,
+        date: "15 Jan 2024",
+        avatarColor: "#6B8E23",
+        resultat: "+150% croissance en 12 mois"
+      },
+      {
+        id: 2,
+        name: "Marc Lefebvre",
+        entreprise: "Manufacturing Corp",
+        texte: "La médiation a permis de résoudre un conflit interne qui durait depuis des mois. Professionnalisme et discrétion remarquables.",
+        rating: 5,
+        date: "22 Nov 2023",
+        avatarColor: "#8B4513",
+        resultat: "Conflit résolu en 3 semaines"
+      },
+      {
+        id: 3,
+        name: "Sarah Chen",
+        entreprise: "Green Innovations",
+        texte: "Le conseil en transformation digitale nous a permis d'optimiser nos processus et d'améliorer notre efficacité opérationnelle de 40%.",
+        rating: 5,
+        date: "5 Oct 2023",
+        avatarColor: "#556B2F",
+        resultat: "40% gain d'efficacité"
+      }
+    ];
+
+    res.json({
+      success: true,
+      data: defaultTemoignages
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération témoignages:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des témoignages"
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/etapes
+ * @description Récupérer les étapes du processus de conseil
+ * @access Public
+ */
+router.get("/etapes", async (req, res) => {
+  try {
+    const etapes = [
+      {
+        step: 1,
+        title: "Diagnostic initial",
+        description: "Analyse approfondie de votre situation",
+        icon: "Search",
+        color: "#6B8E23",
+        details: "Entretien découverte, analyse documentaire, identification des enjeux"
+      },
+      {
+        step: 2,
+        title: "Proposition sur mesure",
+        description: "Élaboration d'une approche personnalisée",
+        icon: "Lightbulb",
+        color: "#27AE60",
+        details: "Recommandations spécifiques, planning détaillé, budget prévisionnel"
+      },
+      {
+        step: 3,
+        title: "Mise en œuvre",
+        description: "Accompagnement dans la réalisation",
+        icon: "Rocket",
+        color: "#8B4513",
+        details: "Suivi régulier, ajustements en temps réel, coordination des équipes"
+      },
+      {
+        step: 4,
+        title: "Suivi & Évaluation",
+        description: "Mesure des résultats et capitalisation",
+        icon: "BarChart",
+        color: "#D4AF37",
+        details: "Tableaux de bord, reporting détaillé, recommandations finales"
+      }
+    ];
+
+    res.json({
+      success: true,
+      data: etapes
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération étapes:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des étapes"
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/avantages
+ * @description Récupérer les avantages du conseil
+ * @access Public
+ */
+router.get("/avantages", async (req, res) => {
+  try {
+    const avantages = [
+      {
+        title: "Expertise certifiée",
+        description: "Nos conseillers sont certifiés et possèdent une expertise avérée",
+        icon: "Shield",
+        color: "#6B8E23"
+      },
+      {
+        title: "Approche sur mesure",
+        description: "Chaque mission est adaptée à vos besoins spécifiques",
+        icon: "Target",
+        color: "#27AE60"
+      },
+      {
+        title: "Confidentialité absolue",
+        description: "Discrétion garantie dans toutes nos interventions",
+        icon: "Shield",
+        color: "#8B4513"
+      },
+      {
+        title: "Résultats mesurables",
+        description: "Des objectifs clairs avec des indicateurs de performance",
+        icon: "TrendingUp",
+        color: "#D4AF37"
+      }
+    ];
+
+    res.json({
+      success: true,
+      data: avantages
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération avantages:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des avantages"
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/demande/:id/suivis
+ * @description Récupérer tous les suivis d'une demande de conseil
+ * @access Private
+ */
+router.get("/demande/:id/suivis", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const demande = await prisma.demandeConseil.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!demande) {
+      return res.status(404).json({
+        success: false,
+        error: "Demande non trouvée"
+      });
+    }
+
+    if (demande.userId !== req.user.id && demande.expertId !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé à voir cette demande"
+      });
+    }
+
+    const suivis = await prisma.suiviConseil.findMany({
+      where: { demandeConseilId: parseInt(id) },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    res.json({
+      success: true,
+      data: suivis
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération suivis:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des suivis"
+    });
+  }
+});
+
+// routes/conseil.js - AJOUTER UNE ROUTE POUR LES STATISTIQUES DE L'UTILISATEUR
+/**
+ * @route GET /api/conseil/demandes/statistics/user
+ * @description Récupérer les statistiques des demandes pour l'utilisateur
+ * @access Private
+ */
+router.get("/demandes/statistics/user", authenticateToken, async (req, res) => {
+  try {
+    const stats = {
+      total: await prisma.demandeConseil.count({
+        where: { userId: req.user.id }
+      }),
+      en_attente: await prisma.demandeConseil.count({
+        where: { userId: req.user.id, statut: "en_attente" }
+      }),
+      en_cours: await prisma.demandeConseil.count({
+        where: { userId: req.user.id, statut: "en_cours" }
+      }),
+      terminee: await prisma.demandeConseil.count({
+        where: { userId: req.user.id, statut: "terminee" }
+      }),
+      annulee: await prisma.demandeConseil.count({
+        where: { userId: req.user.id, statut: "annulee" }
+      })
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération stats utilisateur:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des statistiques"
+    });
+  }
+});
+
+// routes/conseil.js - AJOUTER UNE ROUTE POUR RÉCUPÉRER UNE DEMANDE SPÉCIFIQUE
+/**
+ * @route GET /api/conseil/demande/:id
+ * @description Récupérer une demande de conseil spécifique
+ * @access Private
+ */
+router.get("/demande/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const demande = await prisma.demandeConseil.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            companyName: true
+          }
+        },
+        expert: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            companyName: true,
+            avatar: true
+          }
+        },
+        suivis: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!demande) {
+      return res.status(404).json({
+        success: false,
+        error: "Demande non trouvée"
+      });
+    }
+
+    if (demande.userId !== req.user.id && demande.expertId !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé à voir cette demande"
+      });
+    }
+
+    // Récupérer les infos service et metier
+    let serviceInfo = null;
+    let metierInfo = null;
+
+    if (demande.serviceId) {
+      serviceInfo = await prisma.service.findUnique({
+        where: { id: demande.serviceId }
+      });
+    }
+
+    if (demande.metierId) {
+      metierInfo = await prisma.metier.findUnique({
+        where: { id: demande.metierId }
+      });
+    }
+
+    const demandeComplete = {
+      ...demande,
+      service: serviceInfo,
+      metier: metierInfo
+    };
+
+    res.json({
+      success: true,
+      data: demandeComplete
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération demande:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération de la demande"
+    });
+  }
+});
 
 module.exports = router;
