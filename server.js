@@ -345,6 +345,8 @@ app.use("/api/locations-saisonnieres", require("./routes/locations-saisonniere")
 app.use("/api/pro", require("./routes/pro"));
 //route pour le demande conseil
 app.use('/api/conseil', require('./routes/conseil.js'));
+//route pour les demandes d'accompagnement
+app.use('/api/accompagnement', require('./routes/accompagnement.js'));
 
 // ======================
 // 🆕 NOUVELLES ROUTES ACTIVITÉS ET LOISIRS
