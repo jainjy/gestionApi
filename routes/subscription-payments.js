@@ -54,7 +54,7 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
       });
     }
 
-    // Créer le PaymentIntent
+    // Créer le PaymentIntent avec support pour Google Pay/Apple Pay
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount * 100, // Convertir en centimes
       currency: "eur",
@@ -67,8 +67,10 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
         type: "subscription",
       },
       automatic_payment_methods: {
-        enabled: true,
+        enabled: true, // Active automatiquement Google Pay/Apple Pay
       },
+      // Spécifiquement activer les méthodes de paiement rapides
+      payment_method_types: ["card", "apple_pay", "google_pay"],
     });
 
     // Créer une transaction dans la base de données
@@ -87,6 +89,7 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
           planName: plan.name,
           planPrice: plan.price,
           planInterval: plan.interval,
+          paymentMethodTypes: ["card", "apple_pay", "google_pay"],
         },
       },
     });
@@ -202,6 +205,7 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
             ...paymentIntent.metadata,
             subscriptionId: subscription.id,
             upgraded: true,
+            paymentMethod: paymentIntent.payment_method_types[0] || "card",
           },
         },
       });
@@ -211,6 +215,7 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
       success: true,
       message: "Abonnement mis à jour avec succès",
       subscription: subscription,
+      paymentMethod: paymentIntent.payment_method_types[0] || "card",
     });
   } catch (error) {
     console.error("Erreur confirmation upgrade:", error);
