@@ -5,9 +5,9 @@ async function main() {
   console.log('Début du seed des données financement...');
 
   // Nettoyer les tables existantes
-  await prisma.financementDemande.deleteMany();
-  await prisma.financementPartenaire.deleteMany();
-  await prisma.assuranceService.deleteMany();
+  // await prisma.financementDemande.deleteMany();
+  // await prisma.financementPartenaire.deleteMany();
+  // await prisma.assuranceService.deleteMany();
 
   // Partenaires de financement
   const partenaires = await prisma.financementPartenaire.createMany({
