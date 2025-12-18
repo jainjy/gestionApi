@@ -288,6 +288,8 @@ app.use("/api", require("./routes/rendez_vous"));
 app.use('/api/conseil', require('./routes/conseil.js'));
 //route pour les demandes d'accompagnement
 app.use('/api/accompagnement', require('./routes/accompagnement.js'));
+//route pour les demande expert
+app.use('/api/expert', require('./routes/expert.js'));
 
 // ======================
 // 🆕 NOUVELLES ROUTES ACTIVITÉS ET LOISIRS
