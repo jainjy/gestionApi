@@ -1450,46 +1450,6 @@ router.get("/demande/:id", authenticateToken, async (req, res) => {
     });
   }
 });
-/**
- * @route GET /api/conseil/demandes/statistics/user
- * @description Récupérer les statistiques des demandes pour l'utilisateur
- * @access Private
- */
-router.get("/demandes/statistics/user", authenticateToken, async (req, res) => {
-  try {
-    const stats = {
-      total: await prisma.demandeConseil.count({
-        where: { userId: req.user.id }
-      }),
-      en_attente: await prisma.demandeConseil.count({
-        where: { userId: req.user.id, statut: "en_attente" }
-      }),
-      en_cours: await prisma.demandeConseil.count({
-        where: { userId: req.user.id, statut: "en_cours" }
-      }),
-      terminee: await prisma.demandeConseil.count({
-        where: { userId: req.user.id, statut: "terminee" }
-      }),
-      annulee: await prisma.demandeConseil.count({
-        where: { userId: req.user.id, statut: "annulee" }
-      })
-    };
-
-    res.json({
-      success: true,
-      data: stats
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération stats utilisateur:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des statistiques"
-    });
-  }
-});
-// routes/conseil.js - AJOUT DES ROUTES MANQUANTES
-// Ajoutez ces routes AVANT le module.exports
 
 /**
  * @route GET /api/conseil/temoignages
