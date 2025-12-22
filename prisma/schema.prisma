@@ -223,6 +223,19 @@ model User {
   @@index([status])
 }
 
+//===================
+//REQUETES DE MOT DE PASSE OUBLIER
+//===================
+model PasswordResetRequest {
+  id        String   @id @default(uuid())
+  emailHash String
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([emailHash])
+  @@index([createdAt])
+}
+
 // ======================
 // PARAMÈTRES PROFESSIONNELS
 // ======================

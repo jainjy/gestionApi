@@ -6,7 +6,39 @@ const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../lib/email");
 const stripe = require("../utils/stripe");
 const { authenticateToken } = require("../middleware/auth");
-const { stat } = require("fs");
+const rateLimit = require("express-rate-limit"); // AJOUT
+
+// 🔥 AJOUT: Rate limiting spécifique pour la réinitialisation de mot de passe
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 heure
+  max: 3, // limite à 3 requêtes par heure
+  message: {
+    success: false,
+    error: "Trop de tentatives. Veuillez réessayer dans 1 heure.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: (req) => {
+    // Utiliser l'adresse IP comme clé
+    return req.ip;
+  },
+  handler: (req, res, next, options) => {
+    res.status(429).json(options.message);
+  },
+});
+
+// 🔥 AJOUT: Rate limiting pour la vérification du token
+const verifyTokenLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 heure
+  max: 10, // limite à 10 vérifications par heure
+  message: {
+    success: false,
+    error: "Trop de tentatives de vérification.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // POST /api/auth/login - Connexion
 router.post("/login", async (req, res) => {
@@ -46,7 +78,11 @@ router.post("/login", async (req, res) => {
         where: { userId: user.id },
       });
 
-      if (subscription && subscription.endDate < new Date() && subscription.status === "active") {
+      if (
+        subscription &&
+        subscription.endDate < new Date() &&
+        subscription.status === "active"
+      ) {
         // Mettre à jour le statut de l'abonnement et de l'utilisateur
         await prisma.subscription.update({
           where: { id: subscription.id },
@@ -60,10 +96,12 @@ router.post("/login", async (req, res) => {
     }
 
     // Recharger les données de l'utilisateur si nécessaire
-    const updatedUser = user.role === "professional" ? 
-      await prisma.user.findUnique({
-        where: { id: user.id },
-      }) : user;
+    const updatedUser =
+      user.role === "professional"
+        ? await prisma.user.findUnique({
+            where: { id: user.id },
+          })
+        : user;
 
     const token = `real-jwt-token-${updatedUser.id}`;
 
@@ -88,7 +126,9 @@ router.post("/login", async (req, res) => {
     res.json({
       user: userResponse,
       token,
-      ...(subscriptionStatus === "expired" && { message: "Votre abonnement a expiré" }),
+      ...(subscriptionStatus === "expired" && {
+        message: "Votre abonnement a expiré",
+      }),
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -120,7 +160,7 @@ router.post("/signup", async (req, res) => {
       longitude,
       siret,
       commercialName,
-      avatar
+      avatar,
     } = req.body;
 
     // Validation des données
@@ -144,13 +184,12 @@ router.post("/signup", async (req, res) => {
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 12);
 
-
     // Créer l'utilisateur avec TOUS les champs
     const user = await prisma.user.create({
       data: {
-        email : email,
+        email: email,
         passwordHash: hashedPassword,
-        firstName : firstName,
+        firstName: firstName,
         lastName: lastName,
         phone: phone,
         role: role,
@@ -163,7 +202,7 @@ router.post("/signup", async (req, res) => {
         latitude: latitude ? parseFloat(latitude) : null,
         longitude: longitude ? parseFloat(longitude) : null,
         avatar: avatar || null,
-      }
+      },
     });
 
     // Générer le token
@@ -199,7 +238,7 @@ router.post("/signup", async (req, res) => {
 // POST /api/auth/signup-pro - Inscription Pro sans paiement (essai gratuit 2 mois)
 router.post("/signup-pro", async (req, res) => {
   try {
-    const { utilisateur,planId } = req.body;
+    const { utilisateur, planId } = req.body;
     // Validation des données utilisateur
     if (
       !utilisateur ||
@@ -240,17 +279,22 @@ router.post("/signup-pro", async (req, res) => {
         addressComplement: utilisateur.addressComplement || null,
         zipCode: utilisateur.zipCode || null,
         city: utilisateur.city || null,
-        latitude: utilisateur.latitude ? parseFloat(utilisateur.latitude) : null,
-        longitude: utilisateur.longitude ? parseFloat(utilisateur.longitude) : null,
+        latitude: utilisateur.latitude
+          ? parseFloat(utilisateur.latitude)
+          : null,
+        longitude: utilisateur.longitude
+          ? parseFloat(utilisateur.longitude)
+          : null,
         siret: utilisateur.siret || null,
         commercialName: utilisateur.commercialName || null,
-        metiers: utilisateur.metiers && utilisateur.metiers.length > 0 && {
-          create: utilisateur.metiers.map((metierId) => ({
-            metier: {
-              connect: { id: metierId },
-            },
-          })),
-        },
+        metiers: utilisateur.metiers &&
+          utilisateur.metiers.length > 0 && {
+            create: utilisateur.metiers.map((metierId) => ({
+              metier: {
+                connect: { id: metierId },
+              },
+            })),
+          },
       },
       include: {
         metiers: {
@@ -305,15 +349,15 @@ router.post("/signup-pro", async (req, res) => {
 });
 
 // GET /api/auth/subscription/status - Récupérer l'état de l'abonnement (nouveau endpoint)
-router.get("/subscription/status",authenticateToken, async (req, res) => {
+router.get("/subscription/status", authenticateToken, async (req, res) => {
   try {
-
     const userId = req.user.id;
     const subscription = await prisma.subscription.findFirst({
       where: { userId },
       include: { plan: true },
     });
-    if (!subscription) return res.status(404).json({ error: "Aucun abonnement trouvé" });
+    if (!subscription)
+      return res.status(404).json({ error: "Aucun abonnement trouvé" });
     res.json(subscription);
   } catch (error) {
     res.status(500).json({ error: "Erreur serveur" });
@@ -398,8 +442,98 @@ router.post("/confirm-payment", async (req, res) => {
   }
 });
 
-// GET /api/auth/verify-reset-token/:token - Vérifier le token de réinitialisation (CORRIGÉ)
-router.get("/verify-reset-token/:token", async (req, res) => {
+// 🔥 MODIFICATION: Appliquer le rate limiting à la route forgot-password
+router.post("/forgot-password", passwordResetLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    const clientIp = req.ip;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email requis",
+      });
+    }
+
+    // 🔥 AJOUT: Vérifier s'il y a déjà eu trop de tentatives pour cet email
+    const recentRequests = await prisma.passwordResetRequest.findMany({
+      where: {
+        emailHash: crypto.createHash('sha256').update(email).digest('hex'),
+        createdAt: {
+          gte: new Date(Date.now() - 60 * 60 * 1000) // dernière heure
+        }
+      }
+    });
+
+    if (recentRequests.length >= 3) {
+      return res.status(429).json({
+        success: false,
+        message: "Trop de tentatives pour cet email. Veuillez réessayer dans 1 heure."
+      });
+    }
+
+    // Vérifier si l'utilisateur existe
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // 🔥 AJOUT: Enregistrer la tentative même si l'email n'existe pas
+      await prisma.passwordResetRequest.create({
+        data: {
+          emailHash: crypto.createHash('sha256').update(email).digest('hex'),
+          ip: clientIp
+        }
+      });
+
+      // Pour des raisons de sécurité, on ne révèle pas si l'email existe
+      return res.json({
+        success: true,
+        message: "Si votre email est enregistré, vous recevrez un lien de réinitialisation",
+        attemptsLeft: 3 - (recentRequests.length + 1)
+      });
+    }
+
+    // 🔥 AJOUT: Enregistrer la tentative
+    await prisma.passwordResetRequest.create({
+      data: {
+        emailHash: crypto.createHash('sha256').update(email).digest('hex'),
+        ip: clientIp
+      }
+    });
+
+    // Générer un token de réinitialisation
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 heures
+
+    // Stocker le token dans la base de données
+    await prisma.user.update({
+      where: { email },
+      data: {
+        resetToken,
+        resetTokenExpiry,
+      },
+    });
+
+    // Envoyer l'email de réinitialisation
+    await sendPasswordResetEmail(email, resetToken);
+
+    res.json({
+      success: true,
+      message: "Si votre email est enregistré, vous recevrez un lien de réinitialisation",
+      attemptsLeft: 3 - (recentRequests.length + 1)
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur",
+    });
+  }
+});
+
+// 🔥 MODIFICATION: Appliquer le rate limiting à la vérification du token
+router.get("/verify-reset-token/:token", verifyTokenLimiter, async (req, res) => {
   try {
     const { token } = req.params;
 
@@ -453,12 +587,14 @@ router.post("/reset-password", async (req, res) => {
 
     if (!token || !newPassword) {
       return res.status(400).json({
+        success: false,
         message: "Token et nouveau mot de passe requis",
       });
     }
 
     if (newPassword.length < 6) {
       return res.status(400).json({
+        success: false,
         message: "Le mot de passe doit contenir au moins 6 caractères",
       });
     }
@@ -475,6 +611,7 @@ router.post("/reset-password", async (req, res) => {
 
     if (!user) {
       return res.status(400).json({
+        success: false,
         message: "Token invalide ou expiré",
       });
     }
@@ -492,6 +629,14 @@ router.post("/reset-password", async (req, res) => {
       },
     });
 
+    // 🔥 AJOUT: Supprimer les tentatives enregistrées pour cet email
+    const emailHash = crypto.createHash('sha256').update(user.email).digest('hex');
+    await prisma.passwordResetRequest.deleteMany({
+      where: {
+        emailHash: emailHash
+      }
+    });
+
     res.json({
       success: true,
       message: "Mot de passe réinitialisé avec succès",
@@ -499,60 +644,7 @@ router.post("/reset-password", async (req, res) => {
   } catch (error) {
     console.error("Reset password error:", error);
     res.status(500).json({
-      message: "Erreur interne du serveur",
-    });
-  }
-});
-
-// POST /api/auth/forgot-password - Mot de passe oublié
-router.post("/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        message: "Email requis",
-      });
-    }
-
-    // Vérifier si l'utilisateur existe
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      // Pour des raisons de sécurité, on ne révèle pas si l'email existe
-      return res.json({
-        success: true,
-        message:
-          "Si votre email est enregistré, vous recevrez un lien de réinitialisation",
-      });
-    }
-
-    // Générer un token de réinitialisation
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 heures
-
-    // Stocker le token dans la base de données
-    await prisma.user.update({
-      where: { email },
-      data: {
-        resetToken,
-        resetTokenExpiry,
-      },
-    });
-
-    // Envoyer l'email de réinitialisation
-    await sendPasswordResetEmail(email, resetToken);
-
-    res.json({
-      success: true,
-      message:
-        "Si votre email est enregistré, vous recevrez un lien de réinitialisation",
-    });
-  } catch (error) {
-    console.error("Forgot password error:", error);
-    res.status(500).json({
+      success: false,
       message: "Erreur interne du serveur",
     });
   }
