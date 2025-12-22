@@ -290,6 +290,14 @@ app.use('/api/conseil', require('./routes/conseil.js'));
 app.use('/api/accompagnement', require('./routes/accompagnement.js'));
 //route pour les demande expert
 app.use('/api/expert', require('./routes/expert.js'));
+//route pour les service maison
+app.use('/api/service-maison', require('./routes/service-maison.js'));
+//route pour les design decoration
+app.use('/api/design', require('./routes/design.routes.js'));
+//route pour les equipement 
+app.use('/api/equipements', require('./routes/equipement.routes'));
+//route pour les demandes de marketplace
+app.use('/api/marketplace', require('./routes/marketplace.routes'));
 
 // ======================
 // 🆕 NOUVELLES ROUTES ACTIVITÉS ET LOISIRS
