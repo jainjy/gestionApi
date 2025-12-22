@@ -76,6 +76,9 @@ router.get('/', async (req, res) => {
         break;
     }
 
+
+
+    
     // Récupérer les services avec leurs relations
     const services = await prisma.service.findMany({
       where: whereClause,
