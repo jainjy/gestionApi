@@ -298,6 +298,8 @@ app.use('/api/design', require('./routes/design.routes.js'));
 app.use('/api/equipements', require('./routes/equipement.routes'));
 //route pour les demandes de marketplace
 app.use('/api/marketplace', require('./routes/marketplace.routes'));
+//route pour les nutrition bien etre
+app.use('/api/nutrition-bienetre', require('./routes/nutrition.routes'));
 
 //routes pour les vehicukles sa reservation et autres 
 app.use("/api/vehicules", require("./routes/vehicules"));
