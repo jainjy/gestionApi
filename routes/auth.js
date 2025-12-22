@@ -7,37 +7,46 @@ const { sendPasswordResetEmail } = require("../lib/email");
 const stripe = require("../utils/stripe");
 const { authenticateToken } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit"); // AJOUT
-
-// 🔥 AJOUT: Rate limiting spécifique pour la réinitialisation de mot de passe
 const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 heure
-  max: 3, // limite à 3 requêtes par heure
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+
+  keyGenerator: (req) => {
+    const email = req.body?.email || "unknown";
+    return `${req.ip}:${email}`;
+  },
+
   message: {
     success: false,
     error: "Trop de tentatives. Veuillez réessayer dans 1 heure.",
   },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false,
-  keyGenerator: (req) => {
-    // Utiliser l'adresse IP comme clé
-    return req.ip;
-  },
+
   handler: (req, res, next, options) => {
-    res.status(429).json(options.message);
+    res.status(options.statusCode).json(options.message);
   },
 });
-
-// 🔥 AJOUT: Rate limiting pour la vérification du token
 const verifyTokenLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 heure
-  max: 10, // limite à 10 vérifications par heure
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+
+  keyGenerator: (req) => {
+    const token = req.query?.token || req.body?.token || "unknown";
+    return `${req.ip}:${token}`;
+  },
+
   message: {
     success: false,
     error: "Trop de tentatives de vérification.",
   },
-  standardHeaders: true,
-  legacyHeaders: false,
+
+  handler: (req, res, next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 // POST /api/auth/login - Connexion

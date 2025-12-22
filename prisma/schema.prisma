@@ -131,23 +131,23 @@ model User {
   DevisProviderToUser String?              @map("_DevisProviderToUser")
   demandesFinancement FinancementDemande[]
   websiteUrl          String?
-  deletionRequestedAt DateTime?  // Date de la demande de suppression
-  deletionReason     String?     // Raison de la suppression (optionnel)
+  deletionRequestedAt DateTime? // Date de la demande de suppression
+  deletionReason      String? // Raison de la suppression (optionnel)
   // Relations existantes
-  blogArticles     BlogArticle[]        @relation("BlogArticleAuthor")
-  blogArticleLikes BlogArticleLike[]    @relation("BlogArticleLikeUser")
-  blogComments     BlogComment[]        @relation("BlogCommentUser")
-  blogCommentLikes BlogCommentLike[]    @relation("BlogCommentLikeUser")
-  properties       Property[]
-  favorites        Favorite[]
-  metiers          UtilisateurMetier[]
-  services         UtilisateurService[]
-  demandesCrees    Demande[]            @relation("DemandeCreePar")
-  demandesArtisan  DemandeArtisan[]     @relation("DemandeArtisanUser")
-  Product          Product[]
-  Transaction      Transaction[]
-  Review           Review[]
-  Appointment      Appointment[]
+  blogArticles        BlogArticle[]        @relation("BlogArticleAuthor")
+  blogArticleLikes    BlogArticleLike[]    @relation("BlogArticleLikeUser")
+  blogComments        BlogComment[]        @relation("BlogCommentUser")
+  blogCommentLikes    BlogCommentLike[]    @relation("BlogCommentLikeUser")
+  properties          Property[]
+  favorites           Favorite[]
+  metiers             UtilisateurMetier[]
+  services            UtilisateurService[]
+  demandesCrees       Demande[]            @relation("DemandeCreePar")
+  demandesArtisan     DemandeArtisan[]     @relation("DemandeArtisanUser")
+  Product             Product[]
+  Transaction         Transaction[]
+  Review              Review[]
+  Appointment         Appointment[]
 
   // RELATIONS ORDER CORRIGÉES
   ordersClient      Order[]               @relation("OrderClient") // Commandes passées en tant que client
@@ -216,6 +216,11 @@ model User {
   demandesConseil        DemandeConseil[]   @relation("UserDemandesConseil")
   expertDemandesConseil  DemandeConseil[]   @relation("ExpertDemandesConseil")
   suivisConseil          SuiviConseil[]
+
+  vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
+  reservationsVehiculesClient      ReservationVehicule[] @relation("ReservationVehiculeClient")
+  reservationsVehiculesPrestataire ReservationVehicule[] @relation("ReservationVehiculePrestataire")
+  avisVehicules                    AvisVehicule[] // Avis laissés sur les véhicules
 
   @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
@@ -2133,4 +2138,245 @@ model RendezvousEntreprise {
   @@index([email])
   @@index([creeLe])
   @@index([etat])
+}
+
+model Vehicule {
+  id            String @id @default(uuid())
+  // Propriétaire/professionnel
+  prestataireId String
+  prestataire   User   @relation(fields: [prestataireId], references: [id], onDelete: Cascade)
+
+  // Informations générales
+  marque          String
+  modele          String
+  annee           Int
+  immatriculation String @unique
+  couleur         String
+  puissance       String // ex: "75ch"
+
+  // Caractéristiques techniques
+  typeVehicule String // "economique", "compacte", "berline", "suv", "luxe", "utilitaire", "camion", "minibus"
+  carburant    String // "essence", "diesel", "electrique", "hybride"
+  transmission String // "manuelle", "automatique"
+  places       Int     @default(5)
+  portes       Int     @default(5)
+  volumeCoffre String? // ex: "350L"
+
+  // Localisation
+  ville     String
+  adresse   String?
+  latitude  Float?
+  longitude Float?
+
+  // Prix et conditions
+  prixJour          Float
+  prixSemaine       Float?
+  prixMois          Float?
+  kilometrageInclus String @default("300 km/jour") // ou "illimité"
+  caution           Float  @default(500)
+
+  // État et disponibilité
+  disponible Boolean  @default(true)
+  statut     String   @default("active") // "active", "maintenance", "vendu"
+  images     String[] // URLs des images
+
+  // Équipements (stockés en JSON pour flexibilité)
+  equipements      Json? // Liste des équipements: climatisation, GPS, etc.
+  caracteristiques String[] // Caractéristiques principales
+
+  // Informations commerciales
+  description        String?
+  agence             String? // Nom de l'agence/professionnel
+  conditionsLocation String? // Conditions spécifiques
+
+  // Statistiques
+  rating             Float @default(0)
+  nombreAvis         Int   @default(0)
+  nombreReservations Int   @default(0)
+  vues               Int   @default(0)
+
+  // Métadonnées
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  // Relations
+  reservations   ReservationVehicule[]
+  avis           AvisVehicule[]
+  disponibilites DisponibiliteVehicule[]
+
+  @@index([prestataireId])
+  @@index([typeVehicule])
+  @@index([carburant])
+  @@index([transmission])
+  @@index([ville])
+  @@index([prixJour])
+  @@index([disponible])
+  @@index([rating])
+  @@index([publishedAt])
+}
+
+model DisponibiliteVehicule {
+  id          String   @id @default(uuid())
+  vehiculeId  String
+  dateDebut   DateTime
+  dateFin     DateTime
+  disponible  Boolean  @default(true)
+  prixSpecial Float? // Prix spécial pour cette période
+  createdAt   DateTime @default(now())
+
+  vehicule Vehicule @relation(fields: [vehiculeId], references: [id], onDelete: Cascade)
+
+  @@unique([vehiculeId, dateDebut, dateFin])
+  @@index([vehiculeId])
+  @@index([dateDebut])
+  @@index([dateFin])
+  @@index([disponible])
+}
+
+model ReservationVehicule {
+  id String @id @default(uuid())
+
+  // Références
+  vehiculeId    String
+  clientId      String
+  prestataireId String
+
+  // Dates
+  datePrise       DateTime
+  dateRetour      DateTime
+  dateReservation DateTime @default(now())
+
+  // Informations client
+  nomClient       String
+  emailClient     String
+  telephoneClient String
+  numeroPermis    String?
+  adresseClient   String?
+
+  // Détails de location
+  lieuPrise         String
+  lieuRetour        String
+  nombreJours       Int
+  nombreConducteurs Int    @default(1)
+  kilometrageOption String @default("standard") // "standard", "illimité"
+
+  // Options supplémentaires (stockées en JSON)
+  extras Json? // GPS, siège bébé, etc.
+
+  // Prix
+  prixVehicule   Float
+  prixExtras     Float @default(0)
+  fraisService   Float @default(0)
+  totalHT        Float
+  totalTTC       Float
+  cautionBloquee Float // Montant de la caution bloquée
+
+  // Paiement
+  statutPaiement    String    @default("en_attente") // "en_attente", "paye", "annule", "rembourse"
+  methodePaiement   String?
+  referencePaiement String?
+  datePaiement      DateTime?
+
+  // Statut de la location
+  statut           String    @default("confirmee") // "en_attente", "confirmee", "en_cours", "terminee", "annulee"
+  dateAnnulation   DateTime?
+  raisonAnnulation String?
+
+  // Contrôles
+  kilometrageDepart Int?
+  kilometrageRetour Int?
+  carburantDepart   String? // "plein", "3/4", etc.
+  carburantRetour   String?
+  etatDepart        Json? // État des lieux à la prise
+  etatRetour        Json? // État des lieux au retour
+
+  // Métadonnées
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations avec noms explicites
+  vehicule     Vehicule      @relation(fields: [vehiculeId], references: [id], onDelete: Cascade)
+  client       User          @relation(name: "ReservationVehiculeClient", fields: [clientId], references: [id], onDelete: Cascade)
+  prestataire  User          @relation(name: "ReservationVehiculePrestataire", fields: [prestataireId], references: [id], onDelete: Cascade)
+  avisVehicule AvisVehicule?
+
+  @@index([vehiculeId])
+  @@index([clientId])
+  @@index([prestataireId])
+  @@index([datePrise])
+  @@index([dateRetour])
+  @@index([statut])
+  @@index([statutPaiement])
+  @@index([createdAt])
+}
+
+model AvisVehicule {
+  id             String   @id @default(uuid())
+  vehiculeId     String
+  reservationId  String?  @unique
+  clientId       String
+  rating         Int // 1-5
+  titre          String?
+  commentaire    String?
+  avantages      String[] // Points positifs
+  inconvenients  String[] // Points négatifs
+  recommandation Boolean? // Recommanderait-il ?
+  dateExperience DateTime // Date de la location
+  verifie        Boolean  @default(false) // Vérifié comme vrai client
+  statut         String   @default("actif") // "actif", "modere", "supprime"
+  createdAt      DateTime @default(now())
+
+  vehicule    Vehicule             @relation(fields: [vehiculeId], references: [id], onDelete: Cascade)
+  reservation ReservationVehicule? @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  client      User                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([vehiculeId, clientId]) // Un client ne peut noter qu'une fois par véhicule
+  @@index([vehiculeId])
+  @@index([clientId])
+  @@index([rating])
+  @@index([verifie])
+  @@index([createdAt])
+}
+
+enum TypeVehicule {
+  economique
+  compacte
+  berline
+  suv
+  luxe
+  utilitaire
+  camion
+  minibus
+  autre
+}
+
+enum CarburantType {
+  essence
+  diesel
+  electrique
+  hybride
+  gpl
+}
+
+enum TransmissionType {
+  manuelle
+  automatique
+  semi_automatique
+}
+
+enum StatutReservationVehicule {
+  en_attente
+  confirmee
+  en_cours
+  terminee
+  annulee
+}
+
+enum StatutPaiementLocation {
+  en_attente
+  paye
+  annule
+  rembourse
+  echec
 }

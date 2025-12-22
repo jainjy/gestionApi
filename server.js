@@ -299,6 +299,13 @@ app.use('/api/equipements', require('./routes/equipement.routes'));
 //route pour les demandes de marketplace
 app.use('/api/marketplace', require('./routes/marketplace.routes'));
 
+//routes pour les vehicukles sa reservation et autres 
+app.use("/api/vehicules", require("./routes/vehicules"));
+app.use(
+  "/api/reservations-vehicules",
+  require("./routes/reservations-vehicules")
+);
+app.use("/api/avis-vehicules", require("./routes/avis-vehicules"));
 // ======================
 // 🆕 NOUVELLES ROUTES ACTIVITÉS ET LOISIRS
 // ======================
