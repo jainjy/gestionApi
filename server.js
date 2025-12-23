@@ -14,6 +14,9 @@ const { upload } = require("./middleware/upload");
 const { authenticateToken } = require("./middleware/auth");
 require("./cron/subscriptionCron.js");
 
+const artCreationRoutes = require('./routes/art-creation');
+
+
 // Initialisation des variables nécessaires
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -282,6 +285,9 @@ app.use("/api/services-ibr", require("./routes/services-ibr"));
 app.use("/api/locations-saisonnieres", require("./routes/locations-saisonniere"));
 
 app.use("/api/pro", require("./routes/pro"));
+
+app.use("/api/art-creation", require("./routes/art-creation"));
+
 
 app.use("/api", require("./routes/rendez_vous"));
 //route pour le demande conseil
