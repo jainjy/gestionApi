@@ -242,12 +242,12 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST: Créer un véhicule (Prestataire)
+// POST: Créer un véhicule (Prestataire) - VERSION CORRIGÉE
 router.post(
   "/",
   authenticateToken,
   requireRole(["professional", "admin"]),
-  upload.array("images"),
+  upload.array("images", 10),
   async (req, res) => {
     try {
       const userId = req.user.id;
@@ -280,11 +280,14 @@ router.post(
         conditionsLocation,
       } = req.body;
 
-      // Parsing des champs JSON si reçus sous forme de string (FormData)
-      let parsedEquipements = equipements;
-      let parsedCaracteristiques = caracteristiques;
+      console.log("📸 Fichiers reçus:", req.files?.length || 0);
+      console.log("📝 Données reçues:", { marque, modele, immatriculation });
 
-      if (typeof equipements === "string") {
+      // Parsing des champs JSON si reçus sous forme de string (FormData)
+      let parsedEquipements = {};
+      let parsedCaracteristiques = [];
+
+      if (equipements) {
         try {
           parsedEquipements = JSON.parse(equipements);
         } catch (e) {
@@ -292,7 +295,7 @@ router.post(
         }
       }
 
-      if (typeof caracteristiques === "string") {
+      if (caracteristiques) {
         try {
           parsedCaracteristiques = JSON.parse(caracteristiques);
         } catch (e) {
@@ -303,7 +306,7 @@ router.post(
       // Vérifier si l'utilisateur est un professionnel
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { userType: true },
+        select: { userType: true, companyName: true, commercialName: true },
       });
 
       // Vérifier si l'immatriculation existe déjà
@@ -321,12 +324,29 @@ router.post(
       // Upload des images vers Supabase
       const imageUrls = [];
       if (req.files && req.files.length > 0) {
+        console.log("📤 Upload des images vers Supabase...");
         for (const file of req.files) {
-          const { url } = await uploadToSupabase(file, "vehicules");
-          imageUrls.push(url);
+          try {
+            const { url } = await uploadToSupabase(file, "vehicules");
+            imageUrls.push(url);
+            console.log("✅ Image uploadée:", url);
+          } catch (uploadError) {
+            console.error("❌ Erreur upload image:", uploadError);
+            throw new Error(
+              `Erreur lors de l'upload de l'image: ${uploadError.message}`
+            );
+          }
         }
       }
 
+      if (imageUrls.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Au moins une image est requise pour créer un véhicule",
+        });
+      }
+
+      // Créer le véhicule
       const vehicule = await prisma.vehicule.create({
         data: {
           prestataireId: userId,
@@ -352,7 +372,7 @@ router.post(
           kilometrageInclus: kilometrageInclus || "300 km/jour",
           caution: parseFloat(caution) || 500,
           images: imageUrls,
-          equipements: parsedEquipements || {},
+          equipements: parsedEquipements,
           caracteristiques: Array.isArray(parsedCaracteristiques)
             ? parsedCaracteristiques
             : [],
@@ -364,6 +384,8 @@ router.post(
           publishedAt: new Date(),
         },
       });
+
+      console.log("✅ Véhicule créé avec succès:", vehicule.id);
 
       // Créer la notification Socket.io
       if (req.io) {
@@ -384,137 +406,200 @@ router.post(
         message: "Véhicule ajouté avec succès",
       });
     } catch (error) {
-      console.error("Erreur création véhicule:", error);
+      console.error("❌ Erreur création véhicule:", error);
       res.status(500).json({
         success: false,
-        error: "Erreur lors de la création du véhicule",
+        error: error.message || "Erreur lors de la création du véhicule",
       });
     }
   }
 );
 
-// PUT: Mettre à jour un véhicule
-router.put("/:id", authenticateToken, upload.array("images"), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-    const {
-      marque, modele, annee, immatriculation, couleur, puissance,
-      typeVehicule, carburant, transmission, places, portes, volumeCoffre,
-      ville, adresse, latitude, longitude,
-      prixJour, prixSemaine, prixMois, kilometrageInclus, caution,
-      equipements, caracteristiques, description, agence, conditionsLocation,
-      images, disponible, statut
-    } = req.body;
+// PUT: Mettre à jour un véhicule - VERSION CORRIGÉE
+router.put(
+  "/:id",
+  authenticateToken,
+  upload.array("images", 10),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
 
-    // Vérifier si le véhicule appartient à l'utilisateur ou si c'est un admin
-    const vehicule = await prisma.vehicule.findUnique({
-      where: { id },
-      select: { prestataireId: true },
-    });
+      console.log("📝 Mise à jour véhicule ID:", id);
+      console.log("📸 Nouvelles images:", req.files?.length || 0);
+      console.log("📦 Corps de la requête:", req.body);
 
-    if (!vehicule) {
-      return res.status(404).json({
+      // Vérifier si le véhicule appartient à l'utilisateur ou si c'est un admin
+      const vehicule = await prisma.vehicule.findUnique({
+        where: { id },
+        select: { prestataireId: true, images: true },
+      });
+
+      if (!vehicule) {
+        return res.status(404).json({
+          success: false,
+          error: "Véhicule non trouvé",
+        });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+
+      if (vehicule.prestataireId !== userId && user.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          error: "Vous n'êtes pas autorisé à modifier ce véhicule",
+        });
+      }
+
+      // Récupérer les données
+      const {
+        marque,
+        modele,
+        annee,
+        immatriculation,
+        couleur,
+        puissance,
+        typeVehicule,
+        carburant,
+        transmission,
+        places,
+        portes,
+        volumeCoffre,
+        ville,
+        adresse,
+        latitude,
+        longitude,
+        prixJour,
+        prixSemaine,
+        prixMois,
+        kilometrageInclus,
+        caution,
+        equipements,
+        caracteristiques,
+        description,
+        agence,
+        conditionsLocation,
+        disponible,
+        statut,
+      } = req.body;
+
+      // Parsing des champs JSON
+      let parsedEquipements = {};
+      let parsedCaracteristiques = [];
+
+      if (equipements) {
+        try {
+          parsedEquipements = JSON.parse(equipements);
+        } catch (e) {
+          parsedEquipements = {};
+        }
+      }
+
+      if (caracteristiques) {
+        try {
+          parsedCaracteristiques = JSON.parse(caracteristiques);
+        } catch (e) {
+          parsedCaracteristiques = [];
+        }
+      }
+
+      // Traiter les images
+      let finalImages = vehicule.images || [];
+
+      // Uploader les nouvelles images vers Supabase
+      if (req.files && req.files.length > 0) {
+        console.log("📤 Upload des nouvelles images...");
+        for (const file of req.files) {
+          try {
+            const { url } = await uploadToSupabase(file, "vehicules");
+            finalImages.push(url);
+            console.log("✅ Nouvelle image ajoutée:", url);
+          } catch (uploadError) {
+            console.error("❌ Erreur upload nouvelle image:", uploadError);
+          }
+        }
+      }
+
+      // Limiter à 10 images maximum
+      if (finalImages.length > 10) {
+        finalImages = finalImages.slice(0, 10);
+      }
+
+      // Préparer les données de mise à jour
+      const updateData = {
+        marque: marque || undefined,
+        modele: modele || undefined,
+        annee: annee ? parseInt(annee) : undefined,
+        immatriculation: immatriculation || undefined,
+        couleur: couleur || undefined,
+        puissance: puissance || undefined,
+        typeVehicule: typeVehicule || undefined,
+        carburant: carburant || undefined,
+        transmission: transmission || undefined,
+        places: places ? parseInt(places) : undefined,
+        portes: portes ? parseInt(portes) : undefined,
+        volumeCoffre: volumeCoffre || undefined,
+        ville: ville || undefined,
+        adresse: adresse || undefined,
+        latitude: latitude ? parseFloat(latitude) : undefined,
+        longitude: longitude ? parseFloat(longitude) : undefined,
+        prixJour: prixJour ? parseFloat(prixJour) : undefined,
+        prixSemaine: prixSemaine ? parseFloat(prixSemaine) : undefined,
+        prixMois: prixMois ? parseFloat(prixMois) : undefined,
+        kilometrageInclus: kilometrageInclus || undefined,
+        caution: caution ? parseFloat(caution) : undefined,
+        images: finalImages,
+        equipements: parsedEquipements,
+        caracteristiques: Array.isArray(parsedCaracteristiques)
+          ? parsedCaracteristiques
+          : [],
+        description: description || undefined,
+        agence: agence || undefined,
+        conditionsLocation: conditionsLocation || undefined,
+        updatedAt: new Date(),
+      };
+
+      // Gérer les booléens
+      if (disponible !== undefined) {
+        updateData.disponible = disponible === "true" || disponible === true;
+      }
+
+      if (statut) {
+        updateData.statut = statut;
+      }
+
+      // Nettoyer les champs undefined
+      Object.keys(updateData).forEach(
+        (key) => updateData[key] === undefined && delete updateData[key]
+      );
+
+      console.log("📝 Données de mise à jour:", updateData);
+
+      // Mettre à jour le véhicule
+      const updatedVehicule = await prisma.vehicule.update({
+        where: { id },
+        data: updateData,
+      });
+
+      console.log("✅ Véhicule mis à jour avec succès:", updatedVehicule.id);
+
+      res.json({
+        success: true,
+        data: updatedVehicule,
+        message: "Véhicule mis à jour avec succès",
+      });
+    } catch (error) {
+      console.error("❌ Erreur mise à jour véhicule:", error);
+      res.status(500).json({
         success: false,
-        error: "Véhicule non trouvé",
+        error: error.message || "Erreur lors de la mise à jour du véhicule",
       });
     }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
-
-    if (vehicule.prestataireId !== userId && user.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        error: "Vous n'êtes pas autorisé à modifier ce véhicule",
-      });
-    }
-
-    // Parsing des champs JSON
-    let parsedEquipements = equipements;
-    let parsedCaracteristiques = caracteristiques;
-
-    if (typeof equipements === "string") {
-      try {
-        parsedEquipements = JSON.parse(equipements);
-      } catch (e) {
-        parsedEquipements = {};
-      }
-    }
-
-    if (typeof caracteristiques === "string") {
-      try {
-        parsedCaracteristiques = JSON.parse(caracteristiques);
-      } catch (e) {
-        parsedCaracteristiques = [];
-      }
-    }
-
-    // Gestion des images
-    // 1. Récupérer les images existantes (envoyées comme strings)
-    let finalImages = [];
-    if (images) {
-      if (Array.isArray(images)) {
-        // Filtrer les objets vides et garder seulement les strings
-        finalImages = images.filter(img => typeof img === 'string' && img.trim());
-      } else if (typeof images === 'string' && images.trim()) {
-        finalImages = [images];
-      }
-    }
-
-    // 2. Ajouter les nouvelles images uploadées
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        const { url } = await uploadToSupabase(file, "vehicules");
-        finalImages.push(url);
-      }
-    }
-
-    const updateData = {
-      marque, modele, immatriculation, couleur, puissance,
-      typeVehicule, carburant, transmission, volumeCoffre,
-      ville, adresse, kilometrageInclus, description, agence, conditionsLocation,
-      annee: annee ? parseInt(annee) : undefined,
-      places: places ? parseInt(places) : undefined,
-      portes: portes ? parseInt(portes) : undefined,
-      latitude: latitude ? parseFloat(latitude) : undefined,
-      longitude: longitude ? parseFloat(longitude) : undefined,
-      prixJour: prixJour ? parseFloat(prixJour) : undefined,
-      prixSemaine: prixSemaine ? parseFloat(prixSemaine) : undefined,
-      prixMois: prixMois ? parseFloat(prixMois) : undefined,
-      caution: caution ? parseFloat(caution) : undefined,
-      equipements: parsedEquipements,
-      caracteristiques: Array.isArray(parsedCaracteristiques) ? parsedCaracteristiques : [],
-      images: finalImages,
-      updatedAt: new Date(),
-    };
-
-    if (disponible !== undefined) updateData.disponible = String(disponible) === 'true';
-    if (statut) updateData.statut = statut;
-
-    // Nettoyer les champs undefined
-    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
-
-    const updatedVehicule = await prisma.vehicule.update({
-      where: { id },
-      data: updateData,
-    });
-
-    res.json({
-      success: true,
-      data: updatedVehicule,
-      message: "Véhicule mis à jour avec succès",
-    });
-  } catch (error) {
-    console.error("Erreur mise à jour véhicule:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la mise à jour du véhicule",
-    });
   }
-});
+);
 
 // DELETE: Supprimer un véhicule
 router.delete("/:id", authenticateToken, async (req, res) => {

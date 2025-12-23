@@ -2261,6 +2261,11 @@ model ReservationVehicule {
   nombreConducteurs Int    @default(1)
   kilometrageOption String @default("standard") // "standard", "illimité"
 
+  // Itinéraire (NOUVEAU)
+  itineraire        Json? // Stocke les waypoints et détails de l'itinéraire
+  coordonneesPrise  Json? // {latitude, longitude, address}
+  coordonneesRetour Json? // {latitude, longitude, address}
+
   // Options supplémentaires (stockées en JSON)
   extras Json? // GPS, siège bébé, etc.
 

@@ -282,7 +282,40 @@ app.use("/api/services-ibr", require("./routes/services-ibr"));
 app.use("/api/locations-saisonnieres", require("./routes/locations-saisonniere"));
 
 app.use("/api/pro", require("./routes/pro"));
+// Route pour upload multiple
+app.post(
+  "/api/upload/multiple",
+  authenticateToken,
+  upload.array("files", 10),
+  async (req, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Aucun fichier fourni",
+        });
+      }
 
+      const uploadedImages = [];
+      for (const file of req.files) {
+        const { uploadToSupabase } = require("./middleware/upload");
+        const fileInfo = await uploadToSupabase(file, "vehicules");
+        uploadedImages.push(fileInfo);
+      }
+
+      res.json({
+        success: true,
+        data: uploadedImages,
+      });
+    } catch (error) {
+      console.error("Erreur upload multiple:", error);
+      res.status(500).json({
+        success: false,
+        error: "Erreur lors de l'upload des fichiers",
+      });
+    }
+  }
+);
 app.use("/api", require("./routes/rendez_vous"));
 //route pour le demande conseil
 app.use('/api/conseil', require('./routes/conseil.js'));
