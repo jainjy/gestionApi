@@ -240,6 +240,9 @@ app.use("/api/recherche", require("./routes/rechercheIntelligentPremium"));
 // 🔥 CORRECTION: Route notifications
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/bienetre", require("./routes/reservationbien_etre"));
+app.use('/api/soins-bienetre', require('./routes/soins.routes'));
+app.use('/api/therapeutes-bienetre', require('./routes/therapeutes.routes'));
+app.use('/api/medecines-bienetre', require('./routes/medecines.routes'));
  
 app.use("/api/Vol", require("./routes/Vol"));
 app.use("/api/ActivityCategory", require("./routes/ActivityCategory"));
