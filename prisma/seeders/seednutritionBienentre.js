@@ -1,13 +1,13 @@
-// prisma/seeders/seedNutritionBienetre.js
+// prisma/seeders/seedNutritionBienetre.js - VERSION COMPATIBLE
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// ID utilisateur spécifique que vous avez mentionné
+// ID utilisateur spécifique
 const TARGET_USER_ID = 'b14f8e76-667b-4c13-9eb5-d24a0f012071';
 
 async function main() {
-  console.log('🌱 Début du seeding des services nutrition...');
+  console.log('🌱 Début du seeding des services nutrition compatibles...');
 
   // Vérifier l'existence de l'utilisateur spécifique
   console.log(`👤 Recherche de l'utilisateur avec ID: ${TARGET_USER_ID}...`);
@@ -29,13 +29,13 @@ async function main() {
 
   console.log(`✅ Utilisateur trouvé: ${testUser.email} (${testUser.firstName} ${testUser.lastName})`);
 
-  // Créer ou récupérer les métiers spécifiques à la nutrition
-  console.log('📝 Création/recupération des métiers de nutrition...');
+  // Créer ou récupérer les métiers EXACTEMENT comme dans votre formulaire
+  console.log('📝 Création/recupération des métiers cibles...');
   
-  const nutritionMetiers = ['Nutritionniste', 'Diététicien', 'Coach Nutrition', 'Naturopathe', 'Médecin Nutritionniste'];
+  const metiersCibles = ["Thérapeute", "Masseur", "Formateur", "Podcasteur"]; // ✅ Même que votre formulaire
   const createdMetiers = [];
   
-  for (const metierLibelle of nutritionMetiers) {
+  for (const metierLibelle of metiersCibles) {
     // Vérifier si le métier existe déjà
     let metier = await prisma.metier.findFirst({
       where: { libelle: metierLibelle }
@@ -54,23 +54,9 @@ async function main() {
     createdMetiers.push(metier);
   }
   
-  console.log(`✅ ${createdMetiers.length} métiers de nutrition prêts`);
+  console.log(`✅ ${createdMetiers.length} métiers cibles prêts`);
 
-  // Vérifier/Créer la catégorie "Bien-être"
-  let bienEtreCategory = await prisma.category.findFirst({
-    where: { name: 'Bien-être' }
-  });
-
-  if (!bienEtreCategory) {
-    bienEtreCategory = await prisma.category.create({
-      data: { name: 'Bien-être' }
-    });
-    console.log('✅ Catégorie "Bien-être" créée');
-  } else {
-    console.log(`✓ Catégorie existante: ${bienEtreCategory.name}`);
-  }
-
-  // Vérifier/Créer la catégorie "Nutrition"
+  // Vérifier/Créer la catégorie "Nutrition" (pas "Bien-être" car votre formulaire montre "Nutrition")
   let nutritionCategory = await prisma.category.findFirst({
     where: { name: 'Nutrition' }
   });
@@ -84,27 +70,38 @@ async function main() {
     console.log(`✓ Catégorie existante: ${nutritionCategory.name}`);
   }
 
-  // Filtrer les métiers pour n'associer que ceux pertinents
-  const metiersToAssociate = createdMetiers;
+  // Vérifier/Créer la catégorie "Bien-être" aussi, pour la compatibilité
+  let bienEtreCategory = await prisma.category.findFirst({
+    where: { name: 'Bien-être' }
+  });
 
-  // Données des services nutrition - Version enrichie
+  if (!bienEtreCategory) {
+    bienEtreCategory = await prisma.category.create({
+      data: { name: 'Bien-être' }
+    });
+    console.log('✅ Catégorie "Bien-être" créée');
+  } else {
+    console.log(`✓ Catégorie existante: ${bienEtreCategory.name}`);
+  }
+
+  // Données des services nutrition - VERSION COMPATIBLE AVEC LE FORMULAIRE
   const nutritionServices = [
     {
       libelle: "Consultation Nutrition Initiale Complète",
       description: "Bilan approfondi de vos habitudes alimentaires, analyse de composition corporelle, évaluation des besoins nutritionnels et définition d'un plan alimentaire personnalisé. Inclut une analyse détaillée de votre mode de vie et de vos objectifs santé.",
       price: 95,
       duration: 90,
-      categoryId: nutritionCategory.id,
+      categoryId: nutritionCategory.id, // ✅ Catégorie "Nutrition"
       images: [
         "https://images.unsplash.com/photo-1490818387583-1baba5e638af?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
         "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
       ],
-      type: "bien_etre",
+      type: "bien_etre", // ✅ Important pour l'API nutrition-bienetre
       tags: ["consultation", "bilan complet", "plan personnalisé", "nutrition", "santé"],
       isCustom: false,
       isActive: true,
       createdById: testUser.id,
-      metiers: ['Nutritionniste', 'Diététicien', 'Médecin Nutritionniste']
+      metiers: ['Thérapeute', 'Formateur'] // ✅ Utilise les métiers du formulaire
     },
     {
       libelle: "Suivi Nutritionnel Mensuel Personnalisé",
@@ -121,7 +118,7 @@ async function main() {
       isCustom: false,
       isActive: true,
       createdById: testUser.id,
-      metiers: ['Nutritionniste', 'Diététicien', 'Coach Nutrition']
+      metiers: ['Thérapeute', 'Formateur']
     },
     {
       libelle: "Programme Perte de Poids Intelligent (12 semaines)",
@@ -138,28 +135,28 @@ async function main() {
       isCustom: false,
       isActive: true,
       createdById: testUser.id,
-      metiers: ['Nutritionniste', 'Coach Nutrition', 'Diététicien']
+      metiers: ['Thérapeute', 'Formateur', 'Podcasteur']
     },
     {
-      libelle: "Coaching Nutrition Sportive",
-      description: "Programme nutritionnel spécialisé pour sportifs et athlètes. Optimisation des performances, planification des repas pré/post entraînement, gestion de l'hydratation et supplémentation adaptée. Pour amateurs et professionnels.",
-      price: 120,
+      libelle: "Massage Nutrition Détente",
+      description: "Combinaison unique de techniques de massage relaxant avec conseils nutritionnels pour une approche holistique du bien-être. Détente musculaire et équilibre alimentaire pour une santé optimale.",
+      price: 85,
       duration: 60,
       categoryId: nutritionCategory.id,
       images: [
-        "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+        "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
       ],
       type: "bien_etre",
-      tags: ["sport", "performance", "athlète", "supplémentation", "énergie"],
+      tags: ["massage", "détente", "nutrition", "holistique", "bien-être"],
       isCustom: false,
       isActive: true,
       createdById: testUser.id,
-      metiers: ['Nutritionniste', 'Coach Nutrition']
+      metiers: ['Masseur', 'Thérapeute'] // ✅ Utilise "Masseur"
     },
     {
-      libelle: "Atelier Nutrition Familiale",
-      description: "Atelier pratique pour apprendre à composer des repas équilibrés pour toute la famille. Conseils pour les enfants, astuces pour cuisiner sainement, lecture des étiquettes alimentaires et éducation nutritionnelle ludique.",
+      libelle: "Atelier Cuisine Santé & Nutrition",
+      description: "Atelier pratique de cuisine saine avec un formateur nutritionniste. Apprenez à préparer des repas équilibrés, découvrez les super-aliments et maîtrisez les techniques de cuisson préservant les nutriments.",
       price: 75,
       duration: 120,
       categoryId: nutritionCategory.id,
@@ -168,32 +165,32 @@ async function main() {
         "https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
       ],
       type: "bien_etre",
-      tags: ["atelier", "famille", "éducation", "pratique", "enfants"],
+      tags: ["atelier", "cuisine", "santé", "pratique", "éducation"],
       isCustom: false,
       isActive: true,
       createdById: testUser.id,
-      metiers: ['Diététicien', 'Nutritionniste']
+      metiers: ['Formateur', 'Podcasteur'] // ✅ Utilise "Formateur" et "Podcasteur"
     },
     {
-      libelle: "Consultation Nutrition Végétarienne/Végétalienne",
-      description: "Accompagnement spécialisé pour les régimes végétariens et végétaliens. Équilibrage des apports en protéines végétales, gestion des carences potentielles (B12, fer, calcium), planification de repas complets et variés.",
-      price: 85,
-      duration: 75,
+      libelle: "Podcast Nutrition & Bien-être",
+      description: "Série de podcasts éducatifs sur la nutrition, le bien-être et la santé. Abonnements mensuels avec accès à du contenu exclusif, interviews d'experts et conseils pratiques.",
+      price: 25,
+      duration: null,
       categoryId: nutritionCategory.id,
       images: [
-        "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+        "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
       ],
       type: "bien_etre",
-      tags: ["végétarien", "végétalien", "protéines végétales", "spécialisé", "équilibre"],
+      tags: ["podcast", "éducation", "audio", "abonnement", "conseils"],
       isCustom: false,
       isActive: true,
       createdById: testUser.id,
-      metiers: ['Nutritionniste', 'Diététicien', 'Naturopathe']
+      metiers: ['Podcasteur', 'Formateur'] // ✅ Utilise "Podcasteur"
     }
   ];
 
-  console.log('📦 Création des services nutrition...');
+  console.log('📦 Création des services nutrition compatibles...');
   let servicesCreated = 0;
   let servicesUpdated = 0;
 
@@ -227,28 +224,29 @@ async function main() {
       console.log(`✅ Service créé: ${service.libelle} (${service.price}€)`);
       servicesCreated++;
 
-      // Associer le service aux métiers spécifiés
-      const specifiedMetiers = createdMetiers.filter(m => 
-        serviceData.metiers.includes(m.libelle)
-      );
-
-      for (const metier of specifiedMetiers) {
-        try {
-          await prisma.metierService.create({
-            data: {
-              metierId: metier.id,
-              serviceId: service.id
+      // Associer le service aux métiers spécifiés (uniquement ceux qui existent)
+      for (const metierName of serviceData.metiers) {
+        const metier = createdMetiers.find(m => m.libelle === metierName);
+        if (metier) {
+          try {
+            await prisma.metierService.create({
+              data: {
+                metierId: metier.id,
+                serviceId: service.id
+              }
+            });
+            console.log(`  🔗 Associé à: ${metier.libelle}`);
+          } catch (error) {
+            if (!error.message.includes('Unique constraint')) {
+              console.error(`❌ Erreur association métier: ${error.message}`);
             }
-          });
-        } catch (error) {
-          // Ignorer les erreurs de contrainte d'unicité
-          if (!error.message.includes('Unique constraint')) {
-            console.error(`❌ Erreur association métier: ${error.message}`);
           }
+        } else {
+          console.log(`⚠️ Métier "${metierName}" non trouvé pour l'association`);
         }
       }
 
-      // Créer aussi la relation UtilisateurService
+      // Créer aussi la relation UtilisateurService (comme le fait votre formulaire)
       try {
         await prisma.utilisateurService.create({
           data: {
@@ -260,6 +258,7 @@ async function main() {
             description: serviceData.description
           }
         });
+        console.log(`  👤 Relation utilisateur-service créée`);
       } catch (error) {
         if (!error.message.includes('Unique constraint')) {
           console.error(`❌ Erreur relation utilisateur: ${error.message}`);
@@ -279,34 +278,35 @@ async function main() {
           duration: serviceData.duration,
           images: serviceData.images,
           tags: serviceData.tags,
-          isActive: true
+          isActive: true,
+          type: "bien_etre" // ✅ S'assurer que le type est bien_etre
         }
       });
 
       // Mettre à jour les associations de métiers
-      const specifiedMetiers = createdMetiers.filter(m => 
-        serviceData.metiers.includes(m.libelle)
-      );
-
-      for (const metier of specifiedMetiers) {
-        const existingAssociation = await prisma.metierService.findFirst({
-          where: {
-            metierId: metier.id,
-            serviceId: existingService.id
-          }
-        });
-        
-        if (!existingAssociation) {
-          try {
-            await prisma.metierService.create({
-              data: {
-                metierId: metier.id,
-                serviceId: existingService.id
+      for (const metierName of serviceData.metiers) {
+        const metier = createdMetiers.find(m => m.libelle === metierName);
+        if (metier) {
+          const existingAssociation = await prisma.metierService.findFirst({
+            where: {
+              metierId: metier.id,
+              serviceId: existingService.id
+            }
+          });
+          
+          if (!existingAssociation) {
+            try {
+              await prisma.metierService.create({
+                data: {
+                  metierId: metier.id,
+                  serviceId: existingService.id
+                }
+              });
+              console.log(`  🔗 Association ajoutée: ${metier.libelle}`);
+            } catch (error) {
+              if (!error.message.includes('Unique constraint')) {
+                console.error(`❌ Erreur création association: ${error.message}`);
               }
-            });
-          } catch (error) {
-            if (!error.message.includes('Unique constraint')) {
-              console.error(`❌ Erreur création association: ${error.message}`);
             }
           }
         }
@@ -315,10 +315,10 @@ async function main() {
   }
 
   // Afficher le résumé
-  console.log('\n📊 RÉSUMÉ DU SEEDING:');
+  console.log('\n📊 RÉSUMÉ DU SEEDING COMPATIBLE:');
   console.log(`✅ ${servicesCreated} services créés`);
   console.log(`🔄 ${servicesUpdated} services mis à jour`);
-  console.log(`🎯 ${createdMetiers.length} métiers de nutrition disponibles`);
+  console.log(`🎯 ${createdMetiers.length} métiers disponibles: ${metiersCibles.join(', ')}`);
   console.log(`👤 Services associés à: ${testUser.email}`);
   
   // Vérifier le total des services créés
@@ -332,8 +332,36 @@ async function main() {
   
   console.log(`📈 Total services nutrition/bien-être: ${totalServices}`);
 
-  console.log('\n🎉 Seeding terminé avec succès !');
-  console.log('🔍 Pour tester: http://localhost:3001/api/nutrition-bienetre?limit=20');
+  // Vérification des associations
+  console.log('\n🔍 VÉRIFICATION DES ASSOCIATIONS:');
+  const allServices = await prisma.service.findMany({
+    where: {
+      type: 'bien_etre',
+      createdById: testUser.id
+    },
+    include: {
+      metiers: {
+        include: {
+          metier: true
+        }
+      },
+      category: true
+    }
+  });
+
+  for (const service of allServices) {
+    console.log(`\n📋 ${service.libelle}:`);
+    console.log(`   Catégorie: ${service.category?.name || 'Aucune'}`);
+    console.log(`   Type: ${service.type}`);
+    console.log(`   Métiers: ${service.metiers.map(m => m.metier.libelle).join(', ') || 'Aucun'}`);
+  }
+
+  console.log('\n✅ Seeding terminé avec succès !');
+  console.log('🔍 Pour tester votre formulaire:');
+  console.log('   1. Allez dans HarmonieApp');
+  console.log('   2. Les services créés devraient apparaître dans ServicesCard');
+  console.log('   3. Vous pouvez les éditer avec le modal (mode "edit")');
+  console.log('🔗 API test: http://localhost:3001/api/nutrition-bienetre?limit=20');
 }
 
 main()
