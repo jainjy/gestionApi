@@ -1,285 +1,544 @@
-// routes/art-creation.js
+// routes/art-creation.js - VERSION NETTOYÉE
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// ✅ CORRIGÉ: Récupérer les pros associés aux photographes
-router.get('/products', async (req, res) => {
+// ✅ ROUTE DE TEST
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'API Art & Création fonctionne!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ✅ ROUTE POUR LES CATÉGORIES DE PHOTOGRAPHIE
+router.get('/photographie/categories', async (req, res) => {
   try {
-    const { metierId, type = 'service', category, location, limit = 20 } = req.query;
-    
-    console.log('📡 API appelée avec params:', { metierId, type, category, location });
-
-    // Vérifier d'abord si le métier "photographe" existe
-    let targetMetierId = metierId;
-    
-    if (!targetMetierId && (category?.includes('photo') || category?.includes('photographe'))) {
-      const photoMetier = await prisma.metier.findFirst({
-        where: {
-          OR: [
-            { name: { contains: 'photographe', mode: 'insensitive' } },
-            { category: { contains: 'photo', mode: 'insensitive' } }
-          ]
-        }
-      });
-      
-      if (photoMetier) {
-        targetMetierId = photoMetier.id;
-        console.log('📸 Métier photographe trouvé:', photoMetier.id, photoMetier.name);
+    const photoMetiers = await prisma.metier.findMany({
+      where: {
+        OR: [
+          { libelle: { contains: 'photo', mode: 'insensitive' } },
+          { libelle: { contains: 'photographe', mode: 'insensitive' } },
+          { libelle: { contains: 'image', mode: 'insensitive' } },
+          { libelle: { contains: 'camera', mode: 'insensitive' } }
+        ]
+      },
+      select: {
+        id: true,
+        libelle: true
       }
-    }
+    });
 
-    // Construire le filtre pour trouver les PROS ASSOCIÉS (pas les photographes eux-mêmes)
-    const whereClause = {
-      isActive: true,
-      productType: 'service', // Seulement les services professionnels
-      isProfessionalService: true,
-      OR: [
-        // Recherche par métier associé
-        targetMetierId ? {
-          tags: {
-            has: `associated_metier:${targetMetierId}`
-          }
-        } : {},
-        // Recherche par tags spécifiques aux pros photo
-        {
-          tags: {
-            hasSome: ['galeriste_photo', 'agent_photographe', 'editeur_photo', 'marchand_photo']
-          }
-        },
-        // Recherche par catégorie de service
-        category ? {
-          category: {
-            contains: category,
-            mode: 'insensitive'
-          }
-        } : {
-          category: {
-            contains: 'photo',
-            mode: 'insensitive'
-          }
-        }
-      ]
-    };
-
-    // Filtrer par localisation
-    if (location) {
-      whereClause.location = {
-        contains: location,
-        mode: 'insensitive'
-      };
-    }
-
-    console.log('🔍 Filtre Prisma:', JSON.stringify(whereClause, null, 2));
-
-    const products = await prisma.product.findMany({
-      where: whereClause,
-      take: parseInt(limit),
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            name: true,
-            avatar: true,
-            city: true,
-            verified: true,
-            phone: true,
-            email: true,
-            bio: true,
-            metiers: {
-              include: {
-                metier: {
-                  select: {
-                    id: true,
-                    name: true,
-                    category: true
-                  }
-                }
-              }
+    const categoriesWithCount = [];
+    
+    for (const metier of photoMetiers) {
+      try {
+        const userCount = await prisma.utilisateurMetier.count({
+          where: {
+            metierId: metier.id,
+            user: {
+              OR: [
+                { role: 'professional' },
+                { userType: 'PRESTATAIRE' },
+                { userType: 'PROFESSIONAL' }
+              ]
             }
           }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
+        });
+        
+        categoriesWithCount.push({
+          id: metier.id,
+          name: metier.libelle || 'Photographe',
+          count: userCount,
+          slug: (metier.libelle || 'photographe')
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        });
+      } catch (error) {
+        categoriesWithCount.push({
+          id: metier.id,
+          name: metier.libelle || 'Photographe',
+          count: 0,
+          slug: 'photographe'
+        });
       }
-    });
+    }
 
-    console.log(`✅ ${products.length} produits trouvés`);
-
-    // Formater la réponse pour les pros associés
-    const formattedProducts = products.map(product => {
-      // Trouver les métiers de l'utilisateur
-      const userMetiers = product.user?.metiers || [];
-      const primaryMetier = userMetiers[0]?.metier;
-      
-      return {
-        id: product.id,
-        userId: product.user.id,
-        name: product.user.name || product.user.username,
-        title: product.title || `Service ${product.category}`,
-        specialty: product.category || primaryMetier?.name || 'Professionnel associé',
-        description: product.description,
-        location: product.location || product.user.city,
-        rating: product.rating || 0,
-        priceRange: product.price ? `${product.price}€` : 'Sur devis',
-        price: product.price,
-        image: product.images?.[0] || product.user.avatar,
-        verified: product.user.verified || false,
-        experience: 'Professionnel confirmé',
-        tags: product.tags,
-        type: 'pro',
-        // Informations de contact
-        contact: {
-          phone: product.user.phone,
-          email: product.user.email,
-          canContact: true
-        },
-        // Métiers de l'utilisateur
-        metiers: userMetiers.map(um => ({
-          id: um.metier.id,
-          name: um.metier.name,
-          category: um.metier.category
-        })),
-        // Pour affichage
-        isAvailable: product.availability !== 'unavailable'
-      };
-    });
+    const categories = categoriesWithCount.filter(cat => cat.count > 0);
 
     res.json({
       success: true,
-      count: formattedProducts.length,
-      message: formattedProducts.length > 0 
-        ? `${formattedProducts.length} professionnels associés trouvés`
-        : 'Aucun professionnel associé trouvé pour le moment',
-      data: formattedProducts
+      data: categories
     });
 
   } catch (error) {
-    console.error("❌ Erreur récupération produits:", error);
-    res.status(500).json({ 
+    console.error("Erreur récupération catégories photo:", error);
+    
+    res.status(500).json({
       success: false,
-      error: "Erreur de récupération des professionnels associés",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: "Erreur lors de la récupération des catégories"
     });
   }
 });
 
-// ✅ NOUVELLE ROUTE: Récupérer les photographes ET leurs pros associés
-router.get('/photography-ecosystem', async (req, res) => {
+// ✅ ROUTE PRINCIPALE POUR LES PHOTOGRAPHES
+router.get('/products', async (req, res) => {
   try {
-    const { includePhotographers = false } = req.query;
-    
-    // 1. Trouver le métier "photographe"
-    const photoMetier = await prisma.metier.findFirst({
+    const { 
+      search = '', 
+      location = '', 
+      category = '',
+      limit = 20,
+      page = 1,
+      sort = 'newest'
+    } = req.query;
+
+    const photoMetiers = await prisma.metier.findMany({
       where: {
         OR: [
-          { name: { contains: 'photographe', mode: 'insensitive' } },
-          { category: { contains: 'photo', mode: 'insensitive' } }
+          { libelle: { contains: 'photo', mode: 'insensitive' } },
+          { libelle: { contains: 'photographe', mode: 'insensitive' } },
+          { libelle: { contains: 'image', mode: 'insensitive' } },
+          { libelle: { contains: 'camera', mode: 'insensitive' } }
         ]
+      },
+      select: {
+        id: true,
+        libelle: true
       }
     });
 
-    if (!photoMetier) {
+    if (photoMetiers.length === 0) {
       return res.json({
         success: true,
         count: 0,
-        message: 'Métier photographe non trouvé',
-        photographers: [],
-        associatedPros: []
+        message: 'Aucun métier photographie trouvé dans la base',
+        data: []
       });
     }
 
-    const results = {
-      photographers: [],
-      associatedPros: []
-    };
+    const metierIds = photoMetiers.map(m => m.id);
 
-    // 2. Récupérer les photographes (si demandé)
-    if (includePhotographers === 'true') {
-      const photographers = await prisma.userMetier.findMany({
-        where: {
-          metierId: photoMetier.id
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              avatar: true,
-              city: true,
-              verified: true,
-              bio: true
+    const where = {
+      ...(metierIds.length > 0 && {
+        metiers: {
+          some: {
+            metierId: {
+              in: metierIds
             }
-          },
-          metier: true
-        }
-      });
-
-      results.photographers = photographers.map(um => ({
-        id: um.user.id,
-        name: um.user.name,
-        type: 'photographe',
-        metier: um.metier.name,
-        location: um.user.city,
-        image: um.user.avatar,
-        verified: um.user.verified
-      }));
-    }
-
-    // 3. Récupérer les pros associés (services pour photographes)
-    const associatedPros = await prisma.product.findMany({
-      where: {
-        isActive: true,
-        productType: 'service',
-        isProfessionalService: true,
-        OR: [
-          { tags: { has: `associated_metier:${photoMetier.id}` } },
-          { tags: { hasSome: ['galeriste', 'agent', 'editeur', 'marchand'] } },
-          { category: { contains: 'photo', mode: 'insensitive' } }
-        ]
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-            city: true,
-            verified: true
           }
         }
-      },
-      take: 20
-    });
+      })
+    };
 
-    results.associatedPros = associatedPros.map(pro => ({
-      id: pro.id,
-      name: pro.user.name,
-      title: pro.title,
-      type: 'pro_associe',
-      specialty: pro.category,
-      location: pro.location || pro.user.city,
-      image: pro.images?.[0] || pro.user.avatar,
-      description: pro.description,
-      price: pro.price ? `${pro.price}€` : 'Sur devis'
-    }));
+    const roleCondition = {
+      OR: [
+        { role: 'professional' },
+        { userType: 'PRESTATAIRE' },
+        { userType: 'PROFESSIONAL' }
+      ]
+    };
+    
+    where.AND = [roleCondition];
+
+    if (search && search.trim() !== '') {
+      where.AND.push({
+        OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { companyName: { contains: search, mode: 'insensitive' } },
+          { commercialName: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { city: { contains: search, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    if (location && location.trim() !== '') {
+      where.AND.push({
+        city: {
+          contains: location.trim(),
+          mode: 'insensitive'
+        }
+      });
+    }
+
+    const orderBy = {};
+    switch (sort) {
+      case 'name':
+        orderBy.firstName = 'asc';
+        orderBy.lastName = 'asc';
+        break;
+      case 'rating':
+        orderBy.createdAt = 'desc';
+        break;
+      case 'newest':
+      default:
+        orderBy.createdAt = 'desc';
+        break;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    const [users, totalCount] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          avatar: true,
+          companyName: true,
+          commercialName: true,
+          userType: true,
+          role: true,
+          address: true,
+          city: true,
+          zipCode: true,
+          createdAt: true,
+          status: true,
+          
+          metiers: {
+            where: metierIds.length > 0 ? {
+              metierId: {
+                in: metierIds
+              }
+            } : {},
+            include: {
+              metier: {
+                select: {
+                  id: true,
+                  libelle: true
+                }
+              }
+            }
+          }
+        },
+        orderBy
+      }),
+      prisma.user.count({ where })
+    ]);
+
+    const formattedProfessionals = users.map(user => {
+      const name = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}`
+        : user.companyName || user.commercialName || 'Professionnel';
+      
+      const userMetiers = user.metiers || [];
+      const primaryMetier = userMetiers[0]?.metier;
+      
+      const rating = Math.random() * 2 + 3;
+      const reviewCount = Math.floor(Math.random() * 50);
+
+      return {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        name: name,
+        email: user.email,
+        phone: user.phone,
+        companyName: user.companyName,
+        commercialName: user.commercialName,
+        address: user.address,
+        city: user.city,
+        zipCode: user.zipCode,
+        avatar: user.avatar,
+        verified: false,
+        status: user.status,
+        createdAt: user.createdAt,
+        
+        specialty: primaryMetier?.libelle || 'Photographe',
+        
+        metiers: userMetiers.map(um => ({
+          id: um.metier.id,
+          name: um.metier.libelle
+        })),
+        
+        rating: parseFloat(rating.toFixed(1)),
+        reviewCount: reviewCount,
+        
+        services: [],
+        
+        isAvailable: user.status === 'active'
+      };
+    });
 
     res.json({
       success: true,
-      count: results.photographers.length + results.associatedPros.length,
-      message: `${results.photographers.length} photographes, ${results.associatedPros.length} pros associés`,
-      ...results
+      count: formattedProfessionals.length,
+      total: totalCount,
+      message: formattedProfessionals.length > 0 
+        ? `${formattedProfessionals.length} professionnels trouvés`
+        : 'Aucun professionnel ne correspond à vos critères',
+      data: formattedProfessionals,
+      pagination: {
+        total: totalCount,
+        page: parseInt(page),
+        limit: take,
+        totalPages: Math.ceil(totalCount / take) || 1
+      }
     });
 
   } catch (error) {
-    console.error("❌ Erreur écosystème photo:", error);
+    console.error("ERREUR récupération photographes:", error);
+    
     res.status(500).json({
       success: false,
-      error: "Erreur de récupération de l'écosystème photographique"
+      error: "Erreur interne du serveur",
+      message: error.message
+    });
+  }
+});
+
+// ✅ ROUTE POUR LES SCULPTEURS (CORRIGÉE)
+router.get('/sculpture/products', async (req, res) => {
+  try {
+    console.log("🔍 ROUTE /sculpture/products appelée avec query:", req.query);
+    
+    const { 
+      search = '', 
+      location = '', 
+      limit = 20,
+      page = 1,
+      sort = 'newest'
+    } = req.query;
+
+    // Récupérer les métiers de sculpture - VERSION SIMPLIFIÉE
+    const sculptureMetiers = await prisma.metier.findMany({
+      where: {
+        OR: [
+          { libelle: { contains: 'sculpteur', mode: 'insensitive' } },
+          { libelle: { contains: 'sculpture', mode: 'insensitive' } },
+          { libelle: { contains: 'sculpt', mode: 'insensitive' } }
+          // Supprimez { categorie: { equals: 'sculpture', mode: 'insensitive' } }
+          // si la colonne 'categorie' n'existe pas dans votre base
+        ]
+      },
+      select: {
+        id: true,
+        libelle: true
+      }
+    });
+
+    console.log("🎨 Métiers sculpture trouvés:", sculptureMetiers.length);
+    console.log("📋 Liste des métiers:", sculptureMetiers);
+
+    if (sculptureMetiers.length === 0) {
+      console.log("⚠️ Aucun métier sculpture trouvé");
+      return res.json({
+        success: true,
+        count: 0,
+        message: 'Aucun métier sculpture trouvé dans la base',
+        data: []
+      });
+    }
+
+    const metierIds = sculptureMetiers.map(m => m.id);
+    console.log("📌 IDs des métiers sculpture:", metierIds);
+
+    // Construction de la requête WHERE
+    const whereConditions = {
+      AND: [
+        {
+          OR: [
+            { role: 'professional' },
+            { userType: 'PRESTATAIRE' },
+            { userType: 'PROFESSIONAL' }
+          ]
+        }
+      ]
+    };
+
+    // Ajout de la condition des métiers
+    if (metierIds.length > 0) {
+      whereConditions.AND.push({
+        metiers: {
+          some: {
+            metierId: {
+              in: metierIds
+            }
+          }
+        }
+      });
+    }
+
+    // Condition de recherche
+    if (search && search.trim() !== '') {
+      whereConditions.AND.push({
+        OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { companyName: { contains: search, mode: 'insensitive' } },
+          { commercialName: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    // Condition de localisation
+    if (location && location.trim() !== '') {
+      whereConditions.AND.push({
+        city: {
+          contains: location.trim(),
+          mode: 'insensitive'
+        }
+      });
+    }
+
+    console.log("🔎 Conditions WHERE:", JSON.stringify(whereConditions, null, 2));
+
+    const orderBy = {};
+    switch (sort) {
+      case 'name':
+        orderBy.firstName = 'asc';
+        orderBy.lastName = 'asc';
+        break;
+      case 'rating':
+        orderBy.createdAt = 'desc';
+        break;
+      case 'newest':
+      default:
+        orderBy.createdAt = 'desc';
+        break;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    try {
+      const [users, totalCount] = await Promise.all([
+        prisma.user.findMany({
+          where: whereConditions,
+          skip,
+          take,
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            avatar: true,
+            companyName: true,
+            commercialName: true,
+            userType: true,
+            role: true,
+            address: true,
+            city: true,
+            zipCode: true,
+            createdAt: true,
+            status: true,
+            
+            metiers: {
+              where: {
+                metierId: {
+                  in: metierIds
+                }
+              },
+              include: {
+                metier: {
+                  select: {
+                    id: true,
+                    libelle: true
+                  }
+                }
+              }
+            }
+          },
+          orderBy
+        }),
+        prisma.user.count({ where: whereConditions })
+      ]);
+
+      console.log(`👥 Utilisateurs trouvés: ${users.length}/${totalCount}`);
+
+      const formattedSculptors = users.map(user => {
+        const name = user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}`
+          : user.companyName || user.commercialName || 'Sculpteur';
+        
+        const userMetiers = user.metiers || [];
+        const primaryMetier = userMetiers[0]?.metier;
+        
+        // Générer un rating et review count pour l'affichage
+        const rating = Math.random() * 2 + 3; // Entre 3 et 5
+        const reviewCount = Math.floor(Math.random() * 50);
+
+        return {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          name: name,
+          email: user.email,
+          phone: user.phone,
+          companyName: user.companyName,
+          commercialName: user.commercialName,
+          address: user.address,
+          city: user.city,
+          zipCode: user.zipCode,
+          avatar: user.avatar,
+          verified: user.status === 'active',
+          status: user.status,
+          createdAt: user.createdAt,
+          
+          specialty: primaryMetier?.libelle || 'Sculpteur',
+          
+          metiers: userMetiers.map(um => ({
+            id: um.metier.id,
+            name: um.metier.libelle
+          })),
+          
+          rating: parseFloat(rating.toFixed(1)),
+          reviewCount: reviewCount,
+          
+          services: [],
+          
+          isAvailable: user.status === 'active'
+        };
+      });
+
+      res.json({
+        success: true,
+        count: formattedSculptors.length,
+        total: totalCount,
+        message: formattedSculptors.length > 0 
+          ? `${formattedSculptors.length} sculpteurs trouvés`
+          : 'Aucun sculpteur ne correspond à vos critères',
+        data: formattedSculptors,
+        pagination: {
+          total: totalCount,
+          page: parseInt(page),
+          limit: take,
+          totalPages: Math.ceil(totalCount / take) || 1
+        }
+      });
+
+    } catch (prismaError) {
+      console.error("❌ Erreur Prisma:", prismaError);
+      res.status(500).json({
+        success: false,
+        error: "Erreur de base de données",
+        message: prismaError.message,
+        stack: process.env.NODE_ENV === 'development' ? prismaError.stack : undefined
+      });
+    }
+
+  } catch (error) {
+    console.error("🔥 ERREUR récupération sculpteurs:", error);
+    console.error("🔥 Stack:", error.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: "Erreur interne du serveur",
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });

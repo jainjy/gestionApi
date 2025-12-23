@@ -14,6 +14,9 @@ const { upload } = require("./middleware/upload");
 const { authenticateToken } = require("./middleware/auth");
 require("./cron/subscriptionCron.js");
 
+const artCreationRoutes = require('./routes/art-creation');
+
+
 // Initialisation des variables nécessaires
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -320,6 +323,9 @@ app.post(
     }
   }
 );
+
+app.use("/api/art-creation", require("./routes/art-creation"));
+
 app.use("/api", require("./routes/rendez_vous"));
 //route pour le demande conseil
 app.use('/api/conseil', require('./routes/conseil.js'));
