@@ -50,6 +50,7 @@ class MetiersController {
       });
     }
   }
+  
   async getMetiers(req, res) {
     try {
       const metiers = await prisma.metier.findMany({
