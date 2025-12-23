@@ -348,6 +348,99 @@ class MetiersController {
       });
     }
   }
+
+   // Récupérer tous les métiers pour l'interface utilisateur
+  async getAllUserMetiers(req, res) {
+    try {
+      const metiers = await prisma.metier.findMany({
+        select: {
+          id: true,
+          libelle: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          libelle: "asc",
+        },
+      });
+      res.json(metiers);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des métiers:", error);
+      res.status(500).json({
+        message: "Erreur serveur lors de la récupération des métiers",
+        error: error.message,
+      });
+    }
+  }
+
+  // Récupérer un métier par son ID pour l'interface utilisateur
+  async getUserMetierById(req, res) {
+    try {
+      const { id } = req.params;
+      const metier = await prisma.metier.findUnique({
+        where: { id: parseInt(id) },
+        select: {
+          id: true,
+          libelle: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      
+      if (!metier) {
+        return res.status(404).json({ message: "Métier non trouvé" });
+      }
+      
+      res.json(metier);
+    } catch (error) {
+      console.error("Erreur lors de la récupération du métier:", error);
+      res.status(500).json({
+        message: "Erreur serveur lors de la récupération du métier",
+        error: error.message,
+      });
+    }
+  }
+
+  // Rechercher des métiers par libellé pour l'interface utilisateur
+  async searchUserMetiers(req, res) {
+    try {
+      const { q } = req.query;
+      
+      if (!q || q.trim().length < 2) {
+        return res.status(400).json({ 
+          message: "Le terme de recherche doit contenir au moins 2 caractères" 
+        });
+      }
+      
+      const searchTerm = q.trim();
+      
+      const metiers = await prisma.metier.findMany({
+        where: {
+          libelle: {
+            contains: searchTerm,
+            mode: 'insensitive',
+          },
+        },
+        select: {
+          id: true,
+          libelle: true,
+          createdAt: true,
+        },
+        orderBy: {
+          libelle: "asc",
+        },
+        take: 50,
+      });
+      
+      res.json(metiers);
+    } catch (error) {
+      console.error("Erreur lors de la recherche des métiers:", error);
+      res.status(500).json({
+        message: "Erreur serveur lors de la recherche des métiers",
+        error: error.message,
+      });
+    }
+  }
 }
 
 module.exports = new MetiersController();
