@@ -730,20 +730,31 @@ router.get("/stats/global", async (req, res) => {
   try {
     const stats = await prisma.$queryRaw`
       SELECT 
-        COUNT(*) as totalVehicules,
-        COUNT(CASE WHEN disponible = true THEN 1 END) as disponibles,
-        COUNT(CASE WHEN carburant = 'electrique' THEN 1 END) as electriques,
-        COUNT(CASE WHEN carburant = 'hybride' THEN 1 END) as hybrides,
-        AVG(prixJour) as prixMoyen,
-        MIN(prixJour) as prixMin,
-        MAX(prixJour) as prixMax
+        COUNT(*) as "totalVehicules",
+        COUNT(CASE WHEN disponible = true THEN 1 END) as "disponibles",
+        COUNT(CASE WHEN carburant = 'electrique' THEN 1 END) as "electriques",
+        COUNT(CASE WHEN carburant = 'hybride' THEN 1 END) as "hybrides",
+        AVG("prixJour") as "prixMoyen",
+        MIN("prixJour") as "prixMin",
+        MAX("prixJour") as "prixMax"
       FROM "Vehicule"
       WHERE statut = 'active'
     `;
 
+    // Convertir les BigInt en nombres pour éviter l'erreur de sérialisation
+    const convertedStats = {
+      totalVehicules: Number(stats[0].totalVehicules),
+      disponibles: Number(stats[0].disponibles),
+      electriques: Number(stats[0].electriques),
+      hybrides: Number(stats[0].hybrides),
+      prixMoyen: stats[0].prixMoyen ? parseFloat(stats[0].prixMoyen) : 0,
+      prixMin: stats[0].prixMin ? parseFloat(stats[0].prixMin) : 0,
+      prixMax: stats[0].prixMax ? parseFloat(stats[0].prixMax) : 0,
+    };
+
     res.json({
       success: true,
-      data: stats[0],
+      data: convertedStats,
     });
   } catch (error) {
     console.error("Erreur récupération stats:", error);
