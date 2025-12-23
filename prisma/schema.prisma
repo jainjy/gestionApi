@@ -217,6 +217,14 @@ model User {
   expertDemandesConseil  DemandeConseil[]   @relation("ExpertDemandesConseil")
   suivisConseil          SuiviConseil[]
 
+
+  // AJOUTEZ CES RELATIONS À LA FIN DU MODÈLE USER :
+  formations        Formation[]
+  emplois           Emploi[]
+  alternanceStages  AlternanceStage[]
+  candidatures      Candidature[] // Si c'est l'utilisateur qui candidate
+
+
   vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
   reservationsVehiculesClient      ReservationVehicule[] @relation("ReservationVehiculeClient")
   reservationsVehiculesPrestataire ReservationVehicule[] @relation("ReservationVehiculePrestataire")
@@ -2385,3 +2393,165 @@ enum StatutPaiementLocation {
   rembourse
   echec
 }
+
+
+
+// ======================
+// GESTION EMPLOI ET FORMATIONS - VERSION CORRIGÉE ET SIMPLIFIÉE
+// ======================
+
+model Formation {
+  id                  Int       @id @default(autoincrement())
+  proId               String
+  title               String
+  description         String
+  category            String
+  format              String
+  duration            String
+  price               Float
+  maxParticipants     Int
+  currentParticipants Int       @default(0)
+  certification       String?
+  startDate           DateTime
+  endDate             DateTime?
+  location            String?
+  requirements        String?
+  program             String[]
+  status              String    @default("draft")
+  isCertified         Boolean   @default(false)
+  isFinanced          Boolean   @default(false)
+  isOnline            Boolean   @default(false)
+  views               Int       @default(0)
+  applications        Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  // Relation seulement avec User
+  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
+  
+  @@map("formations")
+  @@index([proId])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model Emploi {
+  id                Int       @id @default(autoincrement())
+  proId             String
+  title             String
+  description       String
+  typeContrat       String
+  secteur           String
+  experience        String
+  salaire           String
+  location          String
+  remotePossible    Boolean   @default(false)
+  urgent            Boolean   @default(false)
+  status            String    @default("draft")
+  missions          String[]
+  competences       String[]
+  avantages         String[]
+  datePublication   DateTime?
+  dateLimite        DateTime?
+  nombrePostes      Int       @default(1)
+  candidaturesCount Int       @default(0)
+  vues              Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relation seulement avec User
+  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
+  
+  @@map("emplois")
+  @@index([proId])
+  @@index([status])
+  @@index([typeContrat])
+  @@index([secteur])
+  @@index([urgent])
+  @@index([createdAt])
+}
+
+model AlternanceStage {
+  id                Int       @id @default(autoincrement())
+  proId             String
+  title             String
+  description       String
+  type              String
+  niveauEtude       String
+  duree             String
+  remuneration      String
+  location          String
+  dateDebut         DateTime
+  dateFin           DateTime?
+  status            String    @default("draft")
+  missions          String[]
+  competences       String[]
+  avantages         String[]
+  ecolePartenaire   String?
+  rythmeAlternance  String?
+  pourcentageTemps  String?
+  urgent            Boolean   @default(false)
+  candidaturesCount Int       @default(0)
+  vues              Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relation seulement avec User
+  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
+  
+  @@map("alternance_stages")
+  @@index([proId])
+  @@index([status])
+  @@index([type])
+  @@index([niveauEtude])
+  @@index([urgent])
+  @@index([createdAt])
+}
+
+model Candidature {
+  id                  Int       @id @default(autoincrement())
+  userId              String
+  offreId             Int
+  offreType           String
+  statut              String    @default("en_attente")
+  messageMotivation   String?
+  cvUrl               String?
+  lettreMotivationUrl String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  // Relation seulement avec User
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, offreId, offreType])
+  @@map("candidatures")
+  @@index([userId])
+  @@index([offreId, offreType])
+  @@index([statut])
+  @@index([createdAt])
+}ean   @default(false)
+  status            String    @default("draft")
+  missions          String[]
+  competences       String[]
+  avantages         String[]
+  datePublication   DateTime?
+  dateLimite        DateTime?
+  nombrePostes      Int       @default(1)
+  candidaturesCount Int       @default(0)
+  vues              Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relation seulement avec User
+  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
+  
+  @@map("emplois")
+  @@index([proId])
+  @@index([status])
+  @@index([typeContrat])
+  @@index([secteur])
+  @@index([urgent])
+  @@index([createdAt])
+}
+
