@@ -405,6 +405,12 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Routes publiques pour utilisateurs
+app.use("/api/user/metiers", require("./routes/userMetier"));
+
+// 🔥 AJOUTEZ ICI - ROUTES SERVICES ENTREPRISE & PRO
+app.use("/api/user/enterprise-services", require("./routes/userService"));
+
 // Route 404 - MISE À JOUR
 app.use("*", (req, res) => {
   res.status(404).json({
@@ -443,3 +449,4 @@ server.listen(PORT, async () => {
   console.log(`🔌 WebSocket disponible sur: ws://localhost:${PORT}`);
   console.log(`🏥 Route santé: http://localhost:${PORT}/health`);
 });
+
