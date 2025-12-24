@@ -785,8 +785,7 @@ router.get('/peinture/products', async (req, res) => {
 // ✅ ROUTE POUR LES ARTISANS
 router.get('/artisanat/products', async (req, res) => {
   try {
-    console.log("🔧 Route /artisanat/products appelée");
-    
+        
     const { 
       search = '', 
       location = '', 
@@ -820,7 +819,6 @@ router.get('/artisanat/products', async (req, res) => {
       }
     });
 
-    console.log(`🎯 ${artisanatMetiers.length} métiers d'artisanat trouvés`);
 
     if (artisanatMetiers.length === 0) {
       return res.json({
@@ -943,8 +941,6 @@ router.get('/artisanat/products', async (req, res) => {
         }),
         prisma.user.count({ where: whereConditions })
       ]);
-
-      console.log(`👥 ${users.length} artisans trouvés`);
 
       const formattedArtisans = users.map(user => {
         const name = user.firstName && user.lastName 
