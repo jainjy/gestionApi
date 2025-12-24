@@ -628,4 +628,119 @@ router.get("/vehicule/:vehiculeId/disponibilite", async (req, res) => {
   }
 });
 
+// DELETE: Supprimer une réservation
+router.delete("/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const reservation = await prisma.reservationVehicule.findUnique({
+      where: { id },
+      include: {
+        vehicule: true,
+        client: true,
+        prestataire: true,
+      },
+    });
+
+    if (!reservation) {
+      return res.status(404).json({
+        success: false,
+        error: "Réservation non trouvée",
+      });
+    }
+
+    // Vérifier les autorisations
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    // Seul le client, le prestataire ou un admin peuvent supprimer
+    if (
+      reservation.clientId !== userId &&
+      reservation.prestataireId !== userId &&
+      user.role !== "admin"
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Vous n'êtes pas autorisé à supprimer cette réservation",
+      });
+    }
+
+    // Les réservations terminées ou annulées peuvent être supprimées
+    // Les réservations en attente/confirmée peuvent être supprimées (avec annulation)
+    if (!["en_attente", "confirmee", "terminee", "annulee"].includes(reservation.statut)) {
+      return res.status(400).json({
+        success: false,
+        error: "Cette réservation ne peut pas être supprimée",
+      });
+    }
+
+    // Si la réservation est en attente ou confirmée, créer un historique d'annulation
+    if (["en_attente", "confirmee"].includes(reservation.statut)) {
+      // Vérifier si elle est trop proche de la date de prise
+      const joursAvantLocation = Math.ceil(
+        (reservation.datePrise - new Date()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (joursAvantLocation < 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Impossible de supprimer une réservation passée",
+        });
+      }
+    }
+
+    // Supprimer la réservation
+    await prisma.reservationVehicule.delete({
+      where: { id },
+    });
+
+    // Créer des notifications
+    const otherPartyId =
+      reservation.clientId === userId
+        ? reservation.prestataireId
+        : reservation.clientId;
+
+    const roleWhoDeleted = reservation.clientId === userId ? "client" : "prestataire";
+
+    const notificationMessage =
+      roleWhoDeleted === "client"
+        ? `Le client a supprimé la réservation pour ${reservation.vehicule.marque} ${reservation.vehicule.modele}`
+        : `La réservation pour ${reservation.vehicule.marque} ${reservation.vehicule.modele} a été supprimée`;
+
+    await prisma.notification.create({
+      data: {
+        userId: otherPartyId,
+        type: "reservation_deleted",
+        title: "Réservation supprimée",
+        message: notificationMessage,
+        relatedEntity: "ReservationVehicule",
+        relatedEntityId: id,
+      },
+    });
+
+    // Socket.io
+    if (req.io) {
+      req.io.to(`user:${otherPartyId}`).emit("reservation-deleted", {
+        reservationId: id,
+        message: notificationMessage,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Réservation supprimée avec succès",
+    });
+  } catch (error) {
+    console.error("Erreur suppression réservation:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la suppression de la réservation",
+    });
+  }
+});
+
 module.exports = router;
