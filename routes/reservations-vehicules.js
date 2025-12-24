@@ -553,6 +553,125 @@ router.put("/:id/statut", authenticateToken, async (req, res) => {
   }
 });
 
+// PUT: Confirmer manuellement un paiement
+router.put("/:id/confirmer-paiement", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const { montant, methode, dateReceived, reference, notes } = req.body;
+
+    // Vérifier la réservation
+    const reservation = await prisma.reservationVehicule.findUnique({
+      where: { id },
+      include: {
+        vehicule: true,
+        client: true,
+        prestataire: true,
+      },
+    });
+
+    if (!reservation) {
+      return res.status(404).json({
+        success: false,
+        error: "Réservation non trouvée",
+      });
+    }
+
+    // Vérifier les autorisations (seul le prestataire peut confirmer)
+    if (reservation.prestataireId !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: "Vous n'êtes pas autorisé à confirmer ce paiement",
+      });
+    }
+
+    // Validation des données
+    if (!montant || montant <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Montant invalide",
+      });
+    }
+
+    if (!reference || reference.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        error: "Référence de paiement requise",
+      });
+    }
+
+    // Mettre à jour la réservation
+    const updatedReservation = await prisma.reservationVehicule.update({
+      where: { id },
+      data: {
+        statutPaiement: "paye",
+        methodePaiement: methode,
+        referencePaiement: reference,
+        datePaiement: new Date(dateReceived),
+        updatedAt: new Date(),
+      },
+      include: {
+        vehicule: {
+          select: { marque: true, modele: true },
+        },
+        client: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Créer un historique ou une note de paiement (optionnel)
+    // Vous pouvez stocker cela dans une table PaymentHistory si nécessaire
+    console.log(`Paiement confirmé pour la réservation ${id}:`, {
+      montant,
+      methode,
+      reference,
+      dateReceived,
+      notes,
+    });
+
+    // Notification au client
+    await prisma.notification.create({
+      data: {
+        userId: reservation.clientId,
+        type: "paiement_confirme",
+        title: "Paiement de votre location reçu",
+        message: `Le paiement de ${montant}€ pour votre location de ${updatedReservation.vehicule.marque} ${updatedReservation.vehicule.modele} a été reçu et confirmé.`,
+        relatedEntity: "ReservationVehicule",
+        relatedEntityId: id,
+      },
+    });
+
+    // Socket.io notification
+    if (req.io) {
+      req.io.to(`user:${reservation.clientId}`).emit("payment-confirmed", {
+        type: "reservation_payment",
+        reservationId: id,
+        montant,
+        methode,
+        message: `Paiement de ${montant}€ confirmé`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: updatedReservation,
+      message: "Paiement confirmé avec succès",
+    });
+  } catch (error) {
+    console.error("Erreur confirmation paiement:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la confirmation du paiement",
+    });
+  }
+});
+
 // GET: Vérifier la disponibilité
 router.get("/vehicule/:vehiculeId/disponibilite", async (req, res) => {
   try {
