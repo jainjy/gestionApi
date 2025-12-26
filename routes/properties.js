@@ -1,15 +1,51 @@
-// routes/properties.js - VERSION CORRIGÉE COMPLÈTE
+// routes/properties.js - VERSION COMPLÈTE AVEC ROUTE SOCIAL
 const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db')
 const { authenticateToken } = require('../middleware/auth')
 const { createNotification } = require("../services/notificationService");
+
 // Fonction utilitaire pour mapper les propriétés
 const mapPropertyFields = (property) => ({
   ...property,
   socialLoan: property.isPSLA || false,
   isSHLMR: property.isSHLMR || false
 });
+
+// Fonction pour déterminer le type de logement social
+const determineSocialType = (property) => {
+  if (property.isSHLMR) return 'SHLMR';
+  if (property.isPSLA) return 'PSLA';
+  
+  // Vérifier dans les features
+  if (property.features && Array.isArray(property.features)) {
+    const features = property.features.map(f => f.toUpperCase());
+    if (features.includes('SODIAC')) return 'SODIAC';
+    if (features.includes('SIDR')) return 'SIDR';
+    if (features.includes('SEDRE')) return 'SEDRE';
+    if (features.includes('SEMAC')) return 'SEMAC';
+  }
+  
+  // Vérifier dans la description
+  if (property.description) {
+    const desc = property.description.toUpperCase();
+    if (desc.includes('SODIAC')) return 'SODIAC';
+    if (desc.includes('SIDR')) return 'SIDR';
+    if (desc.includes('SEDRE')) return 'SEDRE';
+    if (desc.includes('SEMAC')) return 'SEMAC';
+  }
+  
+  // Vérifier dans le titre
+  if (property.title) {
+    const title = property.title.toUpperCase();
+    if (title.includes('SODIAC')) return 'SODIAC';
+    if (title.includes('SIDR')) return 'SIDR';
+    if (title.includes('SEDRE')) return 'SEDRE';
+    if (title.includes('SEMAC')) return 'SEMAC';
+  }
+  
+  return null;
+};
 
 // GET /api/properties - Récupérer les propriétés avec filtres avancés
 router.get('/', async (req, res) => {
@@ -88,101 +124,227 @@ router.get('/', async (req, res) => {
   }
 })
 
-//filtre par rayon de positionnement de navigateur 
+// GET /api/properties/social - ROUTE NOUVELLE - Récupérer tous les logements sociaux
+router.get('/social', async (req, res) => {
+  try {
+    const {
+      status,
+      city,
+      minPrice,
+      maxPrice,
+      type,
+      listingType,
+      search,
+      socialType, // 'SHLMR', 'SODIAC', 'SIDR', 'SEDRE', 'SEMAC', 'all'
+      limit = 50
+    } = req.query;
 
-// router.get('/', async (req, res) => {
-//   try {
-//     const { 
-//       status, 
-//       city, 
-//       minPrice, 
-//       maxPrice,
-//       type,
-//       listingType,
-//       search,
-//       userId,
-//       isSHLMR,
-//       lat,
-//       lon,
-//       radiusKm
-//     } = req.query
+    // Construire la condition de base
+    let where = {
+      isActive: true,
+      status: { in: ['for_sale', 'for_rent'] } // Par défaut seulement publiés
+    };
 
-//     const where = { isActive: true }
+    // Si un type social spécifique est demandé
+    if (socialType && socialType !== 'all') {
+      const typeUpper = socialType.toUpperCase();
+      
+      if (typeUpper === 'SHLMR') {
+        where.isSHLMR = true;
+      } 
+      else if (typeUpper === 'PSLA') {
+        where.isPSLA = true;
+      }
+      // Pour les autres types (SODIAC, SIDR, SEDRE, SEMAC), chercher dans features ou description
+      else {
+        where.OR = [
+          { features: { has: typeUpper } },
+          { description: { contains: typeUpper, mode: 'insensitive' } },
+          { title: { contains: typeUpper, mode: 'insensitive' } }
+        ];
+      }
+    } 
+    // Si aucun type spécifique ou 'all', inclure tous les logements sociaux
+    else {
+      where.OR = [
+        { isSHLMR: true },
+        { isPSLA: true },
+        {
+          OR: [
+            { features: { hasSome: ['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'] } },
+            { description: { contains: 'SODIAC', mode: 'insensitive' } },
+            { description: { contains: 'SIDR', mode: 'insensitive' } },
+            { description: { contains: 'SEDRE', mode: 'insensitive' } },
+            { description: { contains: 'SEMAC', mode: 'insensitive' } }
+          ]
+        }
+      ];
+    }
 
-//     // FILTRE STATUT
-//     if (status === 'all') {
-//       where.status = { in: ['for_sale', 'for_rent', 'pending', 'sold', 'rented'] }
-//     } else if (status) {
-//       where.status = status
-//     } else {
-//       where.status = { in: ['for_sale', 'for_rent'] }
-//     }
+    // Filtres standard
+    if (status) {
+      if (status === 'all') {
+        where.status = { in: ['for_sale', 'for_rent', 'pending', 'sold', 'rented'] };
+      } else {
+        where.status = status;
+      }
+    }
+    
+    if (city) where.city = { contains: city, mode: 'insensitive' };
+    if (type) where.type = type;
+    if (listingType) where.listingType = listingType;
+    
+    if (minPrice || maxPrice) {
+      where.price = {};
+      if (minPrice) where.price.gte = parseFloat(minPrice);
+      if (maxPrice) where.price.lte = parseFloat(maxPrice);
+    }
 
-//     // FILTRES CLASSIQUES
-//     if (city) where.city = { contains: city, mode: 'insensitive' }
-//     if (type) where.type = type
-//     if (listingType) where.listingType = listingType
-//     if (userId) where.ownerId = userId
+    if (search) {
+      where.AND = [
+        where,
+        {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+            { address: { contains: search, mode: 'insensitive' } },
+            { city: { contains: search, mode: 'insensitive' } }
+          ]
+        }
+      ];
+      delete where.OR; // Supprimer le OR précédent s'il existe
+    }
 
-//     if (isSHLMR !== undefined) {
-//       where.isSHLMR = isSHLMR === 'true'
-//     }
+    const properties = await prisma.property.findMany({
+      where,
+      include: {
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true
+          }
+        },
+        favorites: true
+      },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit)
+    });
 
-//     if (minPrice || maxPrice) {
-//       where.price = {}
-//       if (minPrice) where.price.gte = parseFloat(minPrice)
-//       if (maxPrice) where.price.lte = parseFloat(maxPrice)
-//     }
+    // Ajouter le type social déterminé à chaque propriété
+    const enhancedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+      return {
+        ...mapped,
+        socialType: determineSocialType(property),
+        features: property.features || []
+      };
+    });
 
-//     if (search) {
-//       where.OR = [
-//         { title: { contains: search, mode: 'insensitive' } },
-//         { description: { contains: search, mode: 'insensitive' } },
-//         { address: { contains: search, mode: 'insensitive' } }
-//       ]
-//     }
+    // Si un type social est spécifié et n'est pas SHLMR/PSLA, filtrer à nouveau
+    let filteredProperties = enhancedProperties;
+    if (socialType && socialType !== 'all' && !['SHLMR', 'PSLA'].includes(socialType.toUpperCase())) {
+      filteredProperties = enhancedProperties.filter(property => 
+        property.socialType === socialType.toUpperCase()
+      );
+    }
 
-//     // FILTRE PAR RAYON (distance)
-//     const latitude = lat ? Number(lat) : null;
-//     const longitude = lon ? Number(lon) : null;
-//     const rayon = radiusKm ? Number(radiusKm) : null;
+    res.json({
+      success: true,
+      count: filteredProperties.length,
+      data: filteredProperties
+    });
+  } catch (error) {
+    console.error('Failed to fetch social properties:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch social properties',
+      message: error.message
+    });
+  }
+});
 
-//     let properties;
+// GET /api/properties/social/types - Récupérer les statistiques par type
+router.get('/social/types', async (req, res) => {
+  try {
+    const properties = await prisma.property.findMany({
+      where: {
+        isActive: true,
+        status: { in: ['for_sale', 'for_rent'] },
+        OR: [
+          { isSHLMR: true },
+          { isPSLA: true },
+          {
+            OR: [
+              { features: { hasSome: ['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'] } },
+              { description: { contains: 'SODIAC', mode: 'insensitive' } },
+              { description: { contains: 'SIDR', mode: 'insensitive' } },
+              { description: { contains: 'SEDRE', mode: 'insensitive' } },
+              { description: { contains: 'SEMAC', mode: 'insensitive' } }
+            ]
+          }
+        ]
+      },
+      select: {
+        id: true,
+        isSHLMR: true,
+        isPSLA: true,
+        features: true,
+        description: true,
+        title: true,
+        city: true,
+        price: true
+      }
+    });
 
-//     if (latitude && longitude && rayon) {
-//       properties = await prisma.$queryRaw`
-//         SELECT *, 
-//         (6371 * acos(
-//           cos(radians(${latitude})) *
-//           cos(radians("latitude")) *
-//           cos(radians("longitude") - radians(${longitude})) +
-//           sin(radians(${latitude})) *
-//           sin(radians("latitude"))
-//         )) AS distance
-//         FROM "Property"
-//         WHERE "isActive" = true
-//         HAVING distance <= ${rayon}
-//         ORDER BY distance ASC
-//       `;
-//     } else {
-//       properties = await prisma.property.findMany({
-//         where,
-//         include: {
-//           owner: {
-//             select: { id: true, firstName: true, lastName: true, email: true }
-//           },
-//           favorites: true
-//         },
-//         orderBy: { createdAt: 'desc' }
-//       })
-//     }
+    // Compter les types
+    const typeCounts = {
+      SHLMR: 0,
+      PSLA: 0,
+      SODIAC: 0,
+      SIDR: 0,
+      SEDRE: 0,
+      SEMAC: 0,
+      TOTAL: 0
+    };
 
-//     res.json(properties)
-//   } catch (error) {
-//     console.error('Failed to fetch properties:', error)
-//     res.status(500).json({ error: 'Failed to fetch properties' })
-//   }
-// })
+    // Compter les propriétés par ville
+    const cities = {};
+
+    properties.forEach(property => {
+      typeCounts.TOTAL++;
+      
+      const socialType = determineSocialType(property);
+      if (socialType && typeCounts.hasOwnProperty(socialType)) {
+        typeCounts[socialType]++;
+      }
+
+      // Compter par ville
+      if (property.city) {
+        cities[property.city] = (cities[property.city] || 0) + 1;
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        counts: typeCounts,
+        cities: Object.entries(cities)
+          .map(([city, count]) => ({ city, count }))
+          .sort((a, b) => b.count - a.count),
+        totalProperties: properties.length
+      }
+    });
+  } catch (error) {
+    console.error('Failed to fetch social types:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch social types'
+    });
+  }
+});
 
 // GET /api/properties/psla - Récupérer les propriétés éligibles au Prêt Social Location Accession
 router.get('/psla', async (req, res) => {
@@ -244,7 +406,13 @@ router.get('/psla', async (req, res) => {
       take: parseInt(limit)
     });
 
-    const mappedProperties = properties.map(mapPropertyFields);
+    const mappedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+      return {
+        ...mapped,
+        socialType: 'PSLA'
+      };
+    });
 
     res.json({
       success: true,
@@ -320,7 +488,13 @@ router.get('/shlmr', async (req, res) => {
       take: parseInt(limit)
     });
 
-    const mappedProperties = properties.map(mapPropertyFields);
+    const mappedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+      return {
+        ...mapped,
+        socialType: 'SHLMR'
+      };
+    });
 
     res.json({
       success: true,
@@ -373,6 +547,14 @@ router.post('/', authenticateToken, async (req, res) => {
       longitude: data.longitude || null
     };
 
+    // Si un type social spécifique est fourni, l'ajouter aux features
+    if (data.socialType) {
+      const socialType = data.socialType.toUpperCase();
+      if (!propertyData.features.includes(socialType)) {
+        propertyData.features.push(socialType);
+      }
+    }
+
     const newProperty = await prisma.property.create({
       data: propertyData,
       include: {
@@ -398,6 +580,7 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     const responseProperty = mapPropertyFields(newProperty);
+    responseProperty.socialType = determineSocialType(newProperty);
 
     res.status(201).json({
       success: true,
@@ -455,7 +638,13 @@ router.get('/user/:userId', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     })
 
-    const mappedProperties = properties.map(mapPropertyFields);
+    const mappedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+      return {
+        ...mapped,
+        socialType: determineSocialType(property)
+      };
+    });
 
     res.json(mappedProperties)
   } catch (error) {
@@ -527,7 +716,14 @@ router.get('/admin/all', authenticateToken, async (req, res) => {
       orderBy: { [sortBy]: sortOrder }
     })
 
-    const mappedProperties = properties.map(mapPropertyFields);
+    const mappedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+      return {
+        ...mapped,
+        socialType: determineSocialType(property),
+        favoriteCount: property.favorites.length
+      };
+    });
 
     res.json(mappedProperties)
   } catch (error) {
@@ -581,13 +777,47 @@ router.get('/stats', authenticateToken, async (req, res) => {
     const totalViews = publishedProperties.reduce((sum, prop) => sum + prop.views, 0)
     const avgViews = publishedProperties.length > 0 ? Math.round(totalViews / publishedProperties.length) : 0
 
+    // Statistiques sociales si admin
+    let socialStats = {};
+    if (user.role === 'admin') {
+      const socialProperties = await prisma.property.findMany({
+        where: {
+          ...where,
+          OR: [
+            { isSHLMR: true },
+            { isPSLA: true },
+            {
+              OR: [
+                { features: { hasSome: ['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'] } },
+                { description: { contains: 'SODIAC', mode: 'insensitive' } },
+                { description: { contains: 'SIDR', mode: 'insensitive' } },
+                { description: { contains: 'SEDRE', mode: 'insensitive' } },
+                { description: { contains: 'SEMAC', mode: 'insensitive' } }
+              ]
+            }
+          ]
+        }
+      });
+
+      socialStats = {
+        totalSocial: socialProperties.length,
+        shlmr: socialProperties.filter(p => p.isSHLMR).length,
+        psla: socialProperties.filter(p => p.isPSLA).length,
+        sodiac: socialProperties.filter(p => determineSocialType(p) === 'SODIAC').length,
+        sidr: socialProperties.filter(p => determineSocialType(p) === 'SIDR').length,
+        sedre: socialProperties.filter(p => determineSocialType(p) === 'SEDRE').length,
+        semac: socialProperties.filter(p => determineSocialType(p) === 'SEMAC').length
+      };
+    }
+
     res.json({
       total,
       published,
       pending,
       archived,
       totalViews,
-      avgViews
+      avgViews,
+      ...(user.role === 'admin' && { socialStats })
     })
   } catch (error) {
     console.error('Failed to fetch stats:', error)
@@ -626,6 +856,7 @@ router.get('/:id', async (req, res) => {
     })
 
     const mappedProperty = mapPropertyFields(property);
+    mappedProperty.socialType = determineSocialType(property);
 
     res.json(mappedProperty)
   } catch (error) {
@@ -657,6 +888,22 @@ router.put('/:id', authenticateToken, async (req, res) => {
       updateData.isSHLMR = data.isSHLMR;
     }
 
+    // Gestion du type social
+    if (data.socialType) {
+      const socialType = data.socialType.toUpperCase();
+      if (!updateData.features) {
+        updateData.features = [];
+      }
+      // Retirer les anciens types sociaux des features
+      updateData.features = updateData.features.filter(f => 
+        !['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'].includes(f.toUpperCase())
+      );
+      // Ajouter le nouveau type
+      if (!updateData.features.includes(socialType)) {
+        updateData.features.push(socialType);
+      }
+    }
+
     if (data.status === 'for_sale' || data.status === 'for_rent') {
       updateData.publishedAt = new Date()
     }
@@ -677,6 +924,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     })
 
     const responseProperty = mapPropertyFields(updatedProperty);
+    responseProperty.socialType = determineSocialType(updatedProperty);
 
     res.json(responseProperty)
   } catch (error) {
@@ -711,6 +959,27 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       updateData.isSHLMR = data.isSHLMR;
     }
 
+    // Gestion du type social
+    if (data.socialType) {
+      const socialType = data.socialType.toUpperCase();
+      // Récupérer les features actuelles
+      const currentProperty = await prisma.property.findUnique({
+        where: { id },
+        select: { features: true }
+      });
+      
+      let features = currentProperty?.features || [];
+      // Retirer les anciens types sociaux
+      features = features.filter(f => 
+        !['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'].includes(f.toUpperCase())
+      );
+      // Ajouter le nouveau type
+      if (!features.includes(socialType)) {
+        features.push(socialType);
+      }
+      updateData.features = features;
+    }
+
     if (data.status === 'for_sale' || data.status === 'for_rent') {
       updateData.publishedAt = new Date()
     }
@@ -731,6 +1000,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     })
 
     const responseProperty = mapPropertyFields(updatedProperty);
+    responseProperty.socialType = determineSocialType(updatedProperty);
 
     res.json(responseProperty)
   } catch (error) {
@@ -843,14 +1113,18 @@ router.get('/professional/all', authenticateToken, async (req, res) => {
       orderBy: { [sortBy]: sortOrder }
     })
 
-    const mappedProperties = properties.map(property => ({
-      ...mapPropertyFields(property),
-      favoriteCount: property.favorites.length,
-      stats: {
-        views: property.views || 0,
-        favorites: property.favorites.length
+    const mappedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+      return {
+        ...mapped,
+        socialType: determineSocialType(property),
+        favoriteCount: property.favorites.length,
+        stats: {
+          views: property.views || 0,
+          favorites: property.favorites.length
+        }
       }
-    }))
+    })
 
     res.json({
       success: true,
