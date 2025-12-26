@@ -4,7 +4,7 @@ const { PrismaClient } = require("@prisma/client");
 const { authenticateToken } = require("../middleware/auth");
 const prisma = new PrismaClient();
 
-// POST: Créer une réservation
+// POST: Créer une réservation (MIS À JOUR pour gérer les vélos)
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -44,11 +44,18 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    // Vérifier les disponibilités
+    // Pour les vélos, pas besoin de permis
+    if (vehicule.categorie !== "velo" && !numeroPermis) {
+      return res.status(400).json({
+        success: false,
+        error: "Le numéro de permis est requis pour ce type de véhicule",
+      });
+    }
+
     const datePriseObj = new Date(datePrise);
     const dateRetourObj = new Date(dateRetour);
 
-    // Vérifier s'il y a des conflits de disponibilité
+    // Vérifier les disponibilités
     const conflitsDisponibilite = await prisma.disponibiliteVehicule.findFirst({
       where: {
         vehiculeId,
@@ -69,7 +76,7 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    // Vérifier s'il y a des réservations en conflit
+    // Vérifier les réservations en conflit
     const conflitsReservations = await prisma.reservationVehicule.findFirst({
       where: {
         vehiculeId,
@@ -107,22 +114,19 @@ router.post("/", authenticateToken, async (req, res) => {
     let prixExtras = 0;
 
     if (extras && Array.isArray(extras)) {
-      // Simuler le calcul des extras (à adapter selon vos besoins)
+      // Pour les vélos, options spécifiques
+      const extraPrices = {
+        gps: 5,
+        "siège-bébé": 8,
+        wifi: 10,
+        "assurance-tous-risques": 15,
+        "conduite-additionnelle": 12,
+        casque: 5, // Pour vélos/motos
+        antivol: 3, // Pour vélos
+      };
+
       prixExtras = extras.reduce((total, extra) => {
-        switch (extra) {
-          case "gps":
-            return total + 5 * nombreJours;
-          case "siège-bébé":
-            return total + 8 * nombreJours;
-          case "wifi":
-            return total + 10 * nombreJours;
-          case "assurance-tous-risques":
-            return total + 15 * nombreJours;
-          case "conduite-additionnelle":
-            return total + 12 * nombreJours;
-          default:
-            return total;
-        }
+        return total + (extraPrices[extra] || 0) * nombreJours;
       }, 0);
     }
 
@@ -131,38 +135,44 @@ router.post("/", authenticateToken, async (req, res) => {
     const totalTTC = totalHT * 1.2; // TVA 20%
 
     // Créer la réservation
+    const reservationData = {
+      vehiculeId,
+      clientId: userId,
+      prestataireId: vehicule.prestataireId,
+      datePrise: datePriseObj,
+      dateRetour: dateRetourObj,
+      lieuPrise: lieuPrise || vehicule.ville,
+      lieuRetour: lieuRetour || vehicule.ville,
+      nombreJours,
+      nombreConducteurs: nombreConducteurs || 1,
+      kilometrageOption:
+        vehicule.categorie === "velo"
+          ? "illimité"
+          : kilometrageOption || "standard",
+      extras: extras || {},
+      nomClient: nomClient || req.user.firstName + " " + req.user.lastName,
+      emailClient: emailClient || req.user.email,
+      telephoneClient: telephoneClient || req.user.phone,
+      numeroPermis: vehicule.categorie === "velo" ? null : numeroPermis,
+      adresseClient,
+      prixVehicule,
+      prixExtras,
+      fraisService,
+      totalHT,
+      totalTTC,
+      cautionBloquee: vehicule.caution,
+      statut: "en_attente",
+      statutPaiement: "en_attente",
+    };
+
     const reservation = await prisma.reservationVehicule.create({
-      data: {
-        vehiculeId,
-        clientId: userId,
-        prestataireId: vehicule.prestataireId,
-        datePrise: datePriseObj,
-        dateRetour: dateRetourObj,
-        lieuPrise: lieuPrise || vehicule.ville,
-        lieuRetour: lieuRetour || vehicule.ville,
-        nombreJours,
-        nombreConducteurs: nombreConducteurs || 1,
-        kilometrageOption: kilometrageOption || "standard",
-        extras: extras || {},
-        nomClient: nomClient || req.user.firstName + " " + req.user.lastName,
-        emailClient: emailClient || req.user.email,
-        telephoneClient: telephoneClient || req.user.phone,
-        numeroPermis,
-        adresseClient,
-        prixVehicule,
-        prixExtras,
-        fraisService,
-        totalHT,
-        totalTTC,
-        cautionBloquee: vehicule.caution,
-        statut: "en_attente",
-        statutPaiement: "en_attente",
-      },
+      data: reservationData,
       include: {
         vehicule: {
           select: {
             marque: true,
             modele: true,
+            categorie: true,
             images: true,
             prestataire: {
               select: {
@@ -185,24 +195,25 @@ router.post("/", authenticateToken, async (req, res) => {
       },
     });
 
-    // Créer une notification pour le prestataire
+    // Notification au prestataire
     await prisma.notification.create({
       data: {
         userId: vehicule.prestataireId,
         type: "nouvelle_reservation",
-        title: "Nouvelle réservation de véhicule",
-        message: `${reservation.nomClient} a réservé votre ${vehicule.marque} ${vehicule.modele} du ${new Date(datePrise).toLocaleDateString()} au ${new Date(dateRetour).toLocaleDateString()}`,
+        title: `Nouvelle réservation - ${vehicule.categorie}`,
+        message: `${reservation.nomClient} a réservé votre ${vehicule.marque} ${vehicule.modele} (${vehicule.categorie})`,
         relatedEntity: "ReservationVehicule",
         relatedEntityId: reservation.id,
       },
     });
 
-    // Notification Socket.io
+    // Socket.io
     if (req.io) {
       req.io.to(`user:${vehicule.prestataireId}`).emit("new-reservation", {
         type: "vehicule_reservation",
         reservationId: reservation.id,
         vehicule: `${vehicule.marque} ${vehicule.modele}`,
+        categorie: vehicule.categorie,
         client: reservation.nomClient,
         dates: `${datePrise} au ${dateRetour}`,
         montant: totalTTC,
@@ -789,7 +800,11 @@ router.delete("/:id", authenticateToken, async (req, res) => {
 
     // Les réservations terminées ou annulées peuvent être supprimées
     // Les réservations en attente/confirmée peuvent être supprimées (avec annulation)
-    if (!["en_attente", "confirmee", "terminee", "annulee"].includes(reservation.statut)) {
+    if (
+      !["en_attente", "confirmee", "terminee", "annulee"].includes(
+        reservation.statut
+      )
+    ) {
       return res.status(400).json({
         success: false,
         error: "Cette réservation ne peut pas être supprimée",
@@ -822,7 +837,8 @@ router.delete("/:id", authenticateToken, async (req, res) => {
         ? reservation.prestataireId
         : reservation.clientId;
 
-    const roleWhoDeleted = reservation.clientId === userId ? "client" : "prestataire";
+    const roleWhoDeleted =
+      reservation.clientId === userId ? "client" : "prestataire";
 
     const notificationMessage =
       roleWhoDeleted === "client"

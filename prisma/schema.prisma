@@ -225,7 +225,7 @@ model User {
   candidatures      Candidature[] // Si c'est l'utilisateur qui candidate
 
   projets Projet[]
-  
+
   vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
   reservationsVehiculesClient      ReservationVehicule[] @relation("ReservationVehiculeClient")
   reservationsVehiculesPrestataire ReservationVehicule[] @relation("ReservationVehiculePrestataire")
@@ -2214,8 +2214,10 @@ model Vehicule {
   disponibilites DisponibiliteVehicule[]
 
   @@index([categorie])
+  @@index([typeVehicule])
   @@index([ville])
   @@index([prixJour])
+  @@index([disponible])
 }
 
 model DisponibiliteVehicule {

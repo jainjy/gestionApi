@@ -4,11 +4,12 @@ const { authenticateToken, requireRole } = require("../middleware/auth");
 const { prisma } = require("../lib/db");
 const { upload, uploadToSupabase } = require("../middleware/upload");
 
-// GET: Tous les véhicules avec filtres
+// GET: Tous les véhicules avec filtres (MIS À JOUR)
 router.get("/", async (req, res) => {
   try {
     const {
-      type,
+      categorie,
+      typeVehicule,
       marque,
       transmission,
       carburant,
@@ -26,8 +27,13 @@ router.get("/", async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const where = {};
 
-    if (type && type !== "tous") {
-      where.typeVehicule = type;
+    // Nouveau filtre par catégorie
+    if (categorie && categorie !== "tous") {
+      where.categorie = categorie;
+    }
+
+    if (typeVehicule && typeVehicule !== "tous") {
+      where.typeVehicule = typeVehicule;
     }
 
     if (marque) {
@@ -62,6 +68,7 @@ router.get("/", async (req, res) => {
         { modele: { contains: search, mode: "insensitive" } },
         { description: { contains: search, mode: "insensitive" } },
         { ville: { contains: search, mode: "insensitive" } },
+        { typeVehicule: { contains: search, mode: "insensitive" } },
       ];
     }
 
@@ -145,6 +152,235 @@ router.get("/", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Erreur lors de la récupération des véhicules",
+    });
+  }
+});
+
+// POST: Créer un véhicule (MIS À JOUR)
+router.post(
+  "/",
+  authenticateToken,
+  requireRole(["professional", "admin"]),
+  upload.array("images", 10),
+  async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const {
+        categorie,
+        marque,
+        modele,
+        annee,
+        immatriculation,
+        couleur,
+        typeVehicule,
+        carburant,
+        transmission,
+        places,
+        portes,
+        cylindree,
+        typeVelo,
+        assistanceElec,
+        poids,
+        ville,
+        adresse,
+        latitude,
+        longitude,
+        prixJour,
+        prixSemaine,
+        prixMois,
+        caution,
+        description,
+      } = req.body;
+
+      console.log("📝 Données reçues:", {
+        categorie,
+        marque,
+        modele,
+        immatriculation,
+      });
+
+      // Vérifier si l'utilisateur est un professionnel
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { userType: true, companyName: true, commercialName: true },
+      });
+
+      // Pour les vélos, pas d'immatriculation obligatoire
+      if (categorie !== "velo" && immatriculation) {
+        // Vérifier si l'immatriculation existe déjà
+        const existingVehicule = await prisma.vehicule.findUnique({
+          where: { immatriculation },
+        });
+
+        if (existingVehicule) {
+          return res.status(400).json({
+            success: false,
+            error: "Cette immatriculation est déjà enregistrée",
+          });
+        }
+      }
+
+      // Upload des images vers Supabase
+      const imageUrls = [];
+      if (req.files && req.files.length > 0) {
+        console.log("📤 Upload des images vers Supabase...");
+        for (const file of req.files) {
+          try {
+            const { url } = await uploadToSupabase(file, "vehicules");
+            imageUrls.push(url);
+            console.log("✅ Image uploadée:", url);
+          } catch (uploadError) {
+            console.error("❌ Erreur upload image:", uploadError);
+            throw new Error(
+              `Erreur lors de l'upload de l'image: ${uploadError.message}`
+            );
+          }
+        }
+      }
+
+      if (imageUrls.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Au moins une image est requise pour créer un véhicule",
+        });
+      }
+
+      // Préparer les données avec les nouveaux champs
+      const vehiculeData = {
+        prestataireId: userId,
+        categorie,
+        marque,
+        modele,
+        annee: annee ? parseInt(annee) : null,
+        immatriculation: categorie === "velo" ? null : immatriculation,
+        couleur,
+        typeVehicule,
+        carburant: categorie === "velo" ? null : carburant,
+        transmission: categorie === "velo" ? null : transmission,
+        places: places ? parseInt(places) : null,
+        portes: portes ? parseInt(portes) : null,
+        cylindree: cylindree ? parseInt(cylindree) : null,
+        typeVelo,
+        assistanceElec: assistanceElec === "true" || assistanceElec === true,
+        poids: poids ? parseFloat(poids) : null,
+        ville,
+        adresse,
+        latitude: latitude ? parseFloat(latitude) : null,
+        longitude: longitude ? parseFloat(longitude) : null,
+        prixJour: parseFloat(prixJour),
+        prixSemaine: prixSemaine ? parseFloat(prixSemaine) : null,
+        prixMois: prixMois ? parseFloat(prixMois) : null,
+        caution: parseFloat(caution) || 500,
+        images: imageUrls,
+        description,
+        disponible: true,
+        statut: "active",
+      };
+
+      // Nettoyer les champs null
+      Object.keys(vehiculeData).forEach(
+        (key) => vehiculeData[key] === null && delete vehiculeData[key]
+      );
+
+      // Créer le véhicule
+      const vehicule = await prisma.vehicule.create({
+        data: vehiculeData,
+      });
+
+      console.log("✅ Véhicule créé avec succès:", vehicule.id);
+
+      // Créer la notification Socket.io
+      if (req.io) {
+        req.io.emit("new-vehicule", {
+          type: "vehicule_created",
+          vehiculeId: vehicule.id,
+          categorie: vehicule.categorie,
+          marque: vehicule.marque,
+          modele: vehicule.modele,
+          ville: vehicule.ville,
+          prixJour: vehicule.prixJour,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      res.status(201).json({
+        success: true,
+        data: vehicule,
+        message: "Véhicule ajouté avec succès",
+      });
+    } catch (error) {
+      console.error("❌ Erreur création véhicule:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Erreur lors de la création du véhicule",
+      });
+    }
+  }
+);
+
+// GET: Statistiques des véhicules (MIS À JOUR)
+router.get("/stats/global", async (req, res) => {
+  try {
+    // Récupérer les statistiques par catégorie
+    const statsByCategory = await prisma.vehicule.groupBy({
+      by: ["categorie"],
+      where: { statut: "active" },
+      _count: { id: true },
+      _avg: { prixJour: true },
+    });
+
+    // Statistiques globales
+    const globalStats = await prisma.$queryRaw`
+      SELECT 
+        COUNT(*) as "totalVehicules",
+        COUNT(CASE WHEN disponible = true THEN 1 END) as "disponibles",
+        COUNT(CASE WHEN carburant = 'electrique' THEN 1 END) as "electriques",
+        COUNT(CASE WHEN carburant = 'hybride' THEN 1 END) as "hybrides",
+        AVG("prixJour") as "prixMoyen",
+        MIN("prixJour") as "prixMin",
+        MAX("prixJour") as "prixMax"
+      FROM "Vehicule"
+      WHERE statut = 'active'
+    `;
+
+    // Compter par catégorie
+    const categories = await prisma.vehicule.groupBy({
+      by: ["categorie"],
+      where: { statut: "active" },
+      _count: { id: true },
+    });
+
+    // Convertir les statistiques
+    const convertedStats = {
+      totalVehicules: Number(globalStats[0].totalVehicules),
+      disponibles: Number(globalStats[0].disponibles),
+      electriques: Number(globalStats[0].electriques),
+      hybrides: Number(globalStats[0].hybrides),
+      prixMoyen: globalStats[0].prixMoyen
+        ? parseFloat(globalStats[0].prixMoyen)
+        : 0,
+      prixMin: globalStats[0].prixMin ? parseFloat(globalStats[0].prixMin) : 0,
+      prixMax: globalStats[0].prixMax ? parseFloat(globalStats[0].prixMax) : 0,
+      parCategorie: categories.reduce((acc, category) => {
+        acc[category.categorie] = Number(category._count.id);
+        return acc;
+      }, {}),
+      statsByCategory: statsByCategory.map((stat) => ({
+        categorie: stat.categorie,
+        count: Number(stat._count.id),
+        avgPrice: stat._avg.prixJour ? parseFloat(stat._avg.prixJour) : 0,
+      })),
+    };
+
+    res.json({
+      success: true,
+      data: convertedStats,
+    });
+  } catch (error) {
+    console.error("Erreur récupération stats:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des statistiques",
     });
   }
 });
@@ -241,179 +477,6 @@ router.get("/:id", async (req, res) => {
     });
   }
 });
-
-// POST: Créer un véhicule (Prestataire) - VERSION CORRIGÉE
-router.post(
-  "/",
-  authenticateToken,
-  requireRole(["professional", "admin"]),
-  upload.array("images", 10),
-  async (req, res) => {
-    try {
-      const userId = req.user.id;
-      const {
-        marque,
-        modele,
-        annee,
-        immatriculation,
-        couleur,
-        puissance,
-        typeVehicule,
-        carburant,
-        transmission,
-        places,
-        portes,
-        volumeCoffre,
-        ville,
-        adresse,
-        latitude,
-        longitude,
-        prixJour,
-        prixSemaine,
-        prixMois,
-        kilometrageInclus,
-        caution,
-        equipements,
-        caracteristiques,
-        description,
-        agence,
-        conditionsLocation,
-      } = req.body;
-
-      console.log("📸 Fichiers reçus:", req.files?.length || 0);
-      console.log("📝 Données reçues:", { marque, modele, immatriculation });
-
-      // Parsing des champs JSON si reçus sous forme de string (FormData)
-      let parsedEquipements = {};
-      let parsedCaracteristiques = [];
-
-      if (equipements) {
-        try {
-          parsedEquipements = JSON.parse(equipements);
-        } catch (e) {
-          parsedEquipements = {};
-        }
-      }
-
-      if (caracteristiques) {
-        try {
-          parsedCaracteristiques = JSON.parse(caracteristiques);
-        } catch (e) {
-          parsedCaracteristiques = [];
-        }
-      }
-
-      // Vérifier si l'utilisateur est un professionnel
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { userType: true, companyName: true, commercialName: true },
-      });
-
-      // Vérifier si l'immatriculation existe déjà
-      const existingVehicule = await prisma.vehicule.findUnique({
-        where: { immatriculation },
-      });
-
-      if (existingVehicule) {
-        return res.status(400).json({
-          success: false,
-          error: "Cette immatriculation est déjà enregistrée",
-        });
-      }
-
-      // Upload des images vers Supabase
-      const imageUrls = [];
-      if (req.files && req.files.length > 0) {
-        console.log("📤 Upload des images vers Supabase...");
-        for (const file of req.files) {
-          try {
-            const { url } = await uploadToSupabase(file, "vehicules");
-            imageUrls.push(url);
-            console.log("✅ Image uploadée:", url);
-          } catch (uploadError) {
-            console.error("❌ Erreur upload image:", uploadError);
-            throw new Error(
-              `Erreur lors de l'upload de l'image: ${uploadError.message}`
-            );
-          }
-        }
-      }
-
-      if (imageUrls.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: "Au moins une image est requise pour créer un véhicule",
-        });
-      }
-
-      // Créer le véhicule
-      const vehicule = await prisma.vehicule.create({
-        data: {
-          prestataireId: userId,
-          marque,
-          modele,
-          annee: parseInt(annee),
-          immatriculation,
-          couleur,
-          puissance,
-          typeVehicule,
-          carburant,
-          transmission,
-          places: parseInt(places) || 5,
-          portes: parseInt(portes) || 5,
-          volumeCoffre,
-          ville,
-          adresse,
-          latitude: latitude ? parseFloat(latitude) : null,
-          longitude: longitude ? parseFloat(longitude) : null,
-          prixJour: parseFloat(prixJour),
-          prixSemaine: prixSemaine ? parseFloat(prixSemaine) : null,
-          prixMois: prixMois ? parseFloat(prixMois) : null,
-          kilometrageInclus: kilometrageInclus || "300 km/jour",
-          caution: parseFloat(caution) || 500,
-          images: imageUrls,
-          equipements: parsedEquipements,
-          caracteristiques: Array.isArray(parsedCaracteristiques)
-            ? parsedCaracteristiques
-            : [],
-          description,
-          agence: agence || user.companyName || user.commercialName,
-          conditionsLocation,
-          disponible: true,
-          statut: "active",
-          publishedAt: new Date(),
-        },
-      });
-
-      console.log("✅ Véhicule créé avec succès:", vehicule.id);
-
-      // Créer la notification Socket.io
-      if (req.io) {
-        req.io.emit("new-vehicule", {
-          type: "vehicule_created",
-          vehiculeId: vehicule.id,
-          marque: vehicule.marque,
-          modele: vehicule.modele,
-          ville: vehicule.ville,
-          prixJour: vehicule.prixJour,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      res.status(201).json({
-        success: true,
-        data: vehicule,
-        message: "Véhicule ajouté avec succès",
-      });
-    } catch (error) {
-      console.error("❌ Erreur création véhicule:", error);
-      res.status(500).json({
-        success: false,
-        error: error.message || "Erreur lors de la création du véhicule",
-      });
-    }
-  }
-);
 
 // PUT: Mettre à jour un véhicule - VERSION CORRIGÉE
 router.put(
@@ -721,46 +784,6 @@ router.get("/prestataire/:prestataireId", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Erreur lors de la récupération des véhicules",
-    });
-  }
-});
-
-// GET: Statistiques des véhicules
-router.get("/stats/global", async (req, res) => {
-  try {
-    const stats = await prisma.$queryRaw`
-      SELECT 
-        COUNT(*) as "totalVehicules",
-        COUNT(CASE WHEN disponible = true THEN 1 END) as "disponibles",
-        COUNT(CASE WHEN carburant = 'electrique' THEN 1 END) as "electriques",
-        COUNT(CASE WHEN carburant = 'hybride' THEN 1 END) as "hybrides",
-        AVG("prixJour") as "prixMoyen",
-        MIN("prixJour") as "prixMin",
-        MAX("prixJour") as "prixMax"
-      FROM "Vehicule"
-      WHERE statut = 'active'
-    `;
-
-    // Convertir les BigInt en nombres pour éviter l'erreur de sérialisation
-    const convertedStats = {
-      totalVehicules: Number(stats[0].totalVehicules),
-      disponibles: Number(stats[0].disponibles),
-      electriques: Number(stats[0].electriques),
-      hybrides: Number(stats[0].hybrides),
-      prixMoyen: stats[0].prixMoyen ? parseFloat(stats[0].prixMoyen) : 0,
-      prixMin: stats[0].prixMin ? parseFloat(stats[0].prixMin) : 0,
-      prixMax: stats[0].prixMax ? parseFloat(stats[0].prixMax) : 0,
-    };
-
-    res.json({
-      success: true,
-      data: convertedStats,
-    });
-  } catch (error) {
-    console.error("Erreur récupération stats:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des statistiques",
     });
   }
 });
