@@ -224,7 +224,8 @@ model User {
   alternanceStages  AlternanceStage[]
   candidatures      Candidature[] // Si c'est l'utilisateur qui candidate
 
-
+  projets Projet[]
+  
   vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
   reservationsVehiculesClient      ReservationVehicule[] @relation("ReservationVehiculeClient")
   reservationsVehiculesPrestataire ReservationVehicule[] @relation("ReservationVehiculePrestataire")
@@ -2529,4 +2530,21 @@ model Candidature {
   @@index([offreId, offreType])
   @@index([statut])
   @@index([createdAt])
+}
+model Projet {
+  id        String   @id @default(uuid())
+  idpro     String
+  titre     String
+  details   String
+  duree     DateTime
+  media     String?
+  status      String
+  categorie String?
+
+  // Relation avec User
+  pro       User     @relation(fields: [idpro], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([idpro])
 }
