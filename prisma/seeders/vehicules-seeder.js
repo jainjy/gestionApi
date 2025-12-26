@@ -1,4 +1,9 @@
 const { prisma } = require("../../lib/db");
+const {
+  CategorieVehicule,
+  CarburantType,
+  TransmissionType,
+} = require("@prisma/client");
 
 async function seedVehicules() {
   try {
@@ -9,7 +14,7 @@ async function seedVehicules() {
       where: {
         userType: { in: ["professional", "prestataire"] },
       },
-      take: 5,
+      take: 8,
     });
 
     if (prestataires.length === 0) {
@@ -18,19 +23,23 @@ async function seedVehicules() {
     }
 
     const vehiculesData = [
+      // ============ VOITURES ============
       {
+        categorie: CategorieVehicule.voiture,
         marque: "Toyota",
         modele: "Yaris",
         annee: 2023,
         immatriculation: "AB-123-CD",
         couleur: "Blanc",
-        puissance: "75ch",
-        typeVehicule: "economique",
-        carburant: "essence",
-        transmission: "manuelle",
-        places: 4,
+        typeVehicule: "économique",
+        carburant: CarburantType.essence,
+        transmission: TransmissionType.manuelle,
+        places: 5,
         portes: 5,
-        volumeCoffre: "350L",
+        cylindree: null,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: null,
         ville: "saint-denis",
         adresse: "123 Rue de Paris",
         latitude: -20.88231,
@@ -38,44 +47,30 @@ async function seedVehicules() {
         prixJour: 35,
         prixSemaine: 210,
         prixMois: 800,
-        kilometrageInclus: "300 km/jour",
         caution: 500,
+        disponible: true,
         images: [
           "https://images.unsplash.com/photo-1593941707882-a5bba5338fe2?w=800&auto=format&fit=crop",
         ],
-        equipements: {
-          climatisation: true,
-          gps: false,
-          bluetooth: true,
-          cameraRecul: true,
-          regulateurVitesse: false,
-        },
-        caracteristiques: [
-          "4 places",
-          "Climatisation",
-          "Bluetooth",
-          "Airbags",
-          "ABS",
-        ],
         description:
           "Voiture économique parfaite pour la ville, consommation réduite. Idéale pour les déplacements urbains.",
-        agence: "Location Réunion Auto",
-        conditionsLocation:
-          "Permis valide depuis plus de 1 an, carte de crédit obligatoire, caution de 500€.",
       },
       {
+        categorie: CategorieVehicule.voiture,
         marque: "Renault",
         modele: "Clio",
         annee: 2024,
         immatriculation: "EF-456-GH",
         couleur: "Gris",
-        puissance: "90ch",
         typeVehicule: "compacte",
-        carburant: "diesel",
-        transmission: "automatique",
+        carburant: CarburantType.diesel,
+        transmission: TransmissionType.automatique,
         places: 5,
         portes: 5,
-        volumeCoffre: "390L",
+        cylindree: null,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: null,
         ville: "saint-pierre",
         adresse: "456 Avenue du Général",
         latitude: -21.3393,
@@ -83,45 +78,30 @@ async function seedVehicules() {
         prixJour: 45,
         prixSemaine: 270,
         prixMois: 1000,
-        kilometrageInclus: "illimité",
         caution: 600,
+        disponible: true,
         images: [
           "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800&auto=format&fit=crop",
         ],
-        equipements: {
-          climatisation: true,
-          gps: true,
-          bluetooth: true,
-          cameraRecul: true,
-          regulateurVitesse: true,
-          toitOuvrant: true,
-        },
-        caracteristiques: [
-          "5 places",
-          "Climatisation",
-          "GPS",
-          "Toit ouvrant",
-          "Régulateur",
-        ],
         description:
           "Compacte spacieuse avec transmission automatique, idéale pour la famille. Confort et sécurité garantis.",
-        agence: "Auto Loc 974",
-        conditionsLocation:
-          "Âge minimum 21 ans, permis valide depuis 2 ans, dépôt de garantie obligatoire.",
       },
       {
+        categorie: CategorieVehicule.voiture,
         marque: "Peugeot",
         modele: "3008",
         annee: 2023,
         immatriculation: "IJ-789-KL",
         couleur: "Bleu",
-        puissance: "180ch",
         typeVehicule: "suv",
-        carburant: "hybride",
-        transmission: "automatique",
+        carburant: CarburantType.hybride,
+        transmission: TransmissionType.automatique,
         places: 5,
         portes: 5,
-        volumeCoffre: "520L",
+        cylindree: null,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: null,
         ville: "saint-paul",
         adresse: "789 Boulevard de l'Océan",
         latitude: -21.0097,
@@ -129,136 +109,31 @@ async function seedVehicules() {
         prixJour: 75,
         prixSemaine: 450,
         prixMois: 1600,
-        kilometrageInclus: "400 km/jour",
         caution: 800,
+        disponible: true,
         images: [
           "https://images.unsplash.com/photo-1563720223486-7a472e5c7b52?w=800&auto=format&fit=crop",
         ],
-        equipements: {
-          climatisationBiZone: true,
-          gps: true,
-          bluetooth: true,
-          camera360: true,
-          regulateurVitesseAdaptatif: true,
-          toitPanoramique: true,
-          quatreQuatre: true,
-        },
-        caracteristiques: [
-          "5 places",
-          "Climatisation bi-zone",
-          "GPS",
-          "Toit panoramique",
-          "4x4",
-        ],
         description:
           "SUV familial hybride, confort et espace pour vos aventures réunionnaises. Parfait pour explorer l'île.",
-        agence: "Premium Location",
-        conditionsLocation:
-          "Assurance tous risques recommandée, kilométrage limité à 400km/jour.",
       },
+      // ============ CAMIONS ============
       {
-        marque: "Mercedes",
-        modele: "Classe C",
-        annee: 2024,
-        immatriculation: "MN-012-OP",
-        couleur: "Noir",
-        puissance: "258ch",
-        typeVehicule: "luxe",
-        carburant: "essence",
-        transmission: "automatique",
-        places: 5,
-        portes: 4,
-        volumeCoffre: "455L",
-        ville: "saint-denis",
-        adresse: "101 Avenue de la Victoire",
-        latitude: -20.88231,
-        longitude: 55.45041,
-        prixJour: 120,
-        prixSemaine: 720,
-        prixMois: 2500,
-        kilometrageInclus: "illimité",
-        caution: 1500,
-        images: [
-          "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=800&auto=format&fit=crop",
-        ],
-        equipements: {
-          climatisationQuatreZones: true,
-          gpsPremium: true,
-          systemeAudioPremium: true,
-          siegesCuir: true,
-          assistanceConduite: true,
-          pharesLed: true,
-        },
-        caracteristiques: [
-          "5 places",
-          "Climatisation 4 zones",
-          "GPS premium",
-          "Cuir",
-          "Assistance conduite",
-        ],
-        description:
-          "Berline premium avec tous les équipements haut de gamme. Luxe et performance pour vos déplacements.",
-        agence: "Luxe Auto Réunion",
-        conditionsLocation:
-          "Âge minimum 25 ans, permis valide depuis 3 ans, assurance tous risques obligatoire.",
-      },
-      {
-        marque: "Renault",
-        modele: "Kangoo",
-        annee: 2022,
-        immatriculation: "QR-345-ST",
-        couleur: "Blanc",
-        puissance: "95ch",
-        typeVehicule: "utilitaire",
-        carburant: "diesel",
-        transmission: "manuelle",
-        places: 3,
-        portes: 5,
-        volumeCoffre: "3.9m³",
-        ville: "le-tampon",
-        adresse: "222 Route des Plaines",
-        latitude: -21.2775,
-        longitude: 55.5172,
-        prixJour: 55,
-        prixSemaine: 330,
-        prixMois: 1200,
-        kilometrageInclus: "300 km/jour",
-        caution: 700,
-        images: [
-          "https://images.unsplash.com/photo-1580274455191-1c62238fa333?w=800&auto=format&fit=crop",
-        ],
-        equipements: {
-          climatisation: true,
-          hayonElectrique: true,
-          cameraRecul: true,
-          systemeChargement: true,
-        },
-        caracteristiques: [
-          "3 places",
-          "Climatisation",
-          "Grand volume",
-          "Hayon",
-          "ABS",
-        ],
-        description:
-          "Utilitaire pratique pour le transport de marchandises, volume important. Parfait pour les professionnels.",
-        agence: "Pro Location 974",
-        conditionsLocation:
-          "Utilisation professionnelle autorisée, caution majorée pour les entreprises.",
-      },
-      {
+        categorie: CategorieVehicule.camion,
         marque: "Ford",
         modele: "Ranger",
         annee: 2023,
         immatriculation: "UV-678-WX",
         couleur: "Gris",
-        puissance: "213ch",
-        typeVehicule: "camion",
-        carburant: "diesel",
-        transmission: "automatique",
+        typeVehicule: "pick-up",
+        carburant: CarburantType.diesel,
+        transmission: TransmissionType.automatique,
         places: 5,
         portes: 4,
-        volumeCoffre: "Benne 1 tonne",
+        cylindree: 2198,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: 2100,
         ville: "saint-louis",
         adresse: "333 Route du Littoral",
         latitude: -21.286,
@@ -266,44 +141,281 @@ async function seedVehicules() {
         prixJour: 85,
         prixSemaine: 510,
         prixMois: 1800,
-        kilometrageInclus: "250 km/jour",
         caution: 1000,
+        disponible: true,
         images: [
           "https://images.unsplash.com/photo-1566474591191-8a583d6af81b?w=800&auto=format&fit=crop",
         ],
-        equipements: {
-          climatisation: true,
-          quatreQuatrePermanent: true,
-          treuilElectrique: true,
-          protectionCaisse: true,
-          benneAmovible: true,
-        },
-        caracteristiques: [
-          "5 places",
-          "Climatisation",
-          "4x4",
-          "Grande benne",
-          "Treuil",
-        ],
         description:
           "Pick-up robuste pour travaux et transport de matériel en tout terrain. Idéal pour les chantiers.",
-        agence: "Location Pro Réunion",
-        conditionsLocation:
-          "Conduite hors-route interdite, retour avec le réservoir plein obligatoire.",
       },
       {
+        categorie: CategorieVehicule.camion,
+        marque: "Renault",
+        modele: "Master",
+        annee: 2022,
+        immatriculation: "QR-345-ST",
+        couleur: "Blanc",
+        typeVehicule: "utilitaire",
+        carburant: CarburantType.diesel,
+        transmission: TransmissionType.manuelle,
+        places: 3,
+        portes: 5,
+        cylindree: 2298,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: 2800,
+        ville: "le-tampon",
+        adresse: "222 Route des Plaines",
+        latitude: -21.2775,
+        longitude: 55.5172,
+        prixJour: 65,
+        prixSemaine: 390,
+        prixMois: 1400,
+        caution: 800,
+        disponible: true,
+        images: [
+          "https://images.unsplash.com/photo-1580274455191-1c62238fa333?w=800&auto=format&fit=crop",
+        ],
+        description:
+          "Camion utilitaire pratique pour le transport de marchandises, volume important. Parfait pour les professionnels.",
+      },
+      // ============ MOTOS ============
+      {
+        categorie: CategorieVehicule.moto,
+        marque: "Yamaha",
+        modele: "MT-07",
+        annee: 2023,
+        immatriculation: "MO-123-RE",
+        couleur: "Noir",
+        typeVehicule: "roadster",
+        carburant: CarburantType.essence,
+        transmission: TransmissionType.manuelle,
+        places: 2,
+        portes: null,
+        cylindree: 689,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: 184,
+        ville: "saint-pierre",
+        adresse: "777 Route des Colimaçons",
+        latitude: -21.3393,
+        longitude: 55.4781,
+        prixJour: 40,
+        prixSemaine: 240,
+        prixMois: 900,
+        caution: 300,
+        disponible: true,
+        images: [
+          "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=800&auto=format&fit=crop",
+        ],
+        description:
+          "Roadster agile et polyvalent, parfait pour découvrir les routes sinueuses de La Réunion. Moto plaisir accessible.",
+      },
+      {
+        categorie: CategorieVehicule.moto,
+        marque: "Honda",
+        modele: "Africa Twin",
+        annee: 2024,
+        immatriculation: "MO-456-AD",
+        couleur: "Rouge",
+        typeVehicule: "trail",
+        carburant: CarburantType.essence,
+        transmission: TransmissionType.manuelle,
+        places: 2,
+        portes: null,
+        cylindree: 1084,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: 226,
+        ville: "saint-denis",
+        adresse: "888 Chemin des Hauts",
+        latitude: -20.88231,
+        longitude: 55.45041,
+        prixJour: 55,
+        prixSemaine: 330,
+        prixMois: 1200,
+        caution: 400,
+        disponible: true,
+        images: [
+          "https://images.unsplash.com/photo-1527847263472-aa5338d178b8?w=800&auto=format&fit=crop",
+        ],
+        description:
+          "Trail tout-terrain idéal pour explorer les pistes de l'île. Confortable sur route et performant en chemin.",
+      },
+      {
+        categorie: CategorieVehicule.moto,
+        marque: "Zero",
+        modele: "SR/F",
+        annee: 2024,
+        immatriculation: "MO-789-EL",
+        couleur: "Argent",
+        typeVehicule: "sportive",
+        carburant: CarburantType.electrique,
+        transmission: TransmissionType.automatique,
+        places: 2,
+        portes: null,
+        cylindree: null,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: 220,
+        ville: "saint-paul",
+        adresse: "999 Avenue de la Plage",
+        latitude: -21.0097,
+        longitude: 55.2697,
+        prixJour: 60,
+        prixSemaine: 360,
+        prixMois: 1300,
+        caution: 500,
+        disponible: true,
+        images: [
+          "https://images.unsplash.com/photo-1620748690536-eba2d67a10e6?w=800&auto=format&fit=crop",
+        ],
+        description:
+          "Moto électrique sportive avec une puissance instantanée. Silencieuse, écologique et performante pour découvrir l'île.",
+      },
+      // ============ VÉLOS ============
+      {
+        categorie: CategorieVehicule.velo,
+        marque: "Cube",
+        modele: "Stereo 160",
+        annee: 2023,
+        immatriculation: null, // Pas d'immatriculation pour les vélos
+        couleur: "Vert",
+        typeVehicule: "VTT",
+        carburant: null,
+        transmission: null,
+        places: 1,
+        portes: null,
+        cylindree: null,
+        typeVelo: "VTT",
+        assistanceElec: true,
+        poids: 22.5,
+        ville: "cilaos",
+        adresse: "111 Route du Bras Sec",
+        latitude: -21.1333,
+        longitude: 55.4667,
+        prixJour: 25,
+        prixSemaine: 150,
+        prixMois: 500,
+        caution: 150,
+        disponible: true,
+        images: [
+          "https://images.unsplash.com/photo-1576435728678-68d0fbf94e91?w=800&auto=format&fit=crop",
+        ],
+        description:
+          "VTT à assistance électrique haut de gamme pour affronter les sentiers de montagne de La Réunion. Autonomie 120km.",
+      },
+      {
+        categorie: CategorieVehicule.velo,
+        marque: "Trek",
+        modele: "Domane SL 6",
+        annee: 2024,
+        immatriculation: null,
+        couleur: "Bleu",
+        typeVehicule: "route",
+        carburant: null,
+        transmission: null,
+        places: 1,
+        portes: null,
+        cylindree: null,
+        typeVelo: "route",
+        assistanceElec: false,
+        poids: 8.2,
+        ville: "saint-leu",
+        adresse: "222 Boulevard de la Liane",
+        latitude: -21.1706,
+        longitude: 55.2883,
+        prixJour: 20,
+        prixSemaine: 120,
+        prixMois: 400,
+        caution: 100,
+        disponible: true,
+        images: [
+          "https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=800&auto=format&fit=crop",
+        ],
+        description:
+          "Vélo de route carbone ultra-léger pour les amateurs de cyclisme sur route. Parfait pour le tour de l'île.",
+      },
+      {
+        categorie: CategorieVehicule.velo,
+        marque: "Moustache",
+        modele: "Samedi 27 Xroad",
+        annee: 2023,
+        immatriculation: null,
+        couleur: "Orange",
+        typeVehicule: "VTC",
+        carburant: null,
+        transmission: null,
+        places: 1,
+        portes: null,
+        cylindree: null,
+        typeVelo: "VTC",
+        assistanceElec: true,
+        poids: 27.3,
+        ville: "saint-gilles",
+        adresse: "333 Rue du Général de Gaulle",
+        latitude: -21.0596,
+        longitude: 55.2253,
+        prixJour: 22,
+        prixSemaine: 130,
+        prixMois: 450,
+        caution: 120,
+        disponible: true,
+        images: [
+          "https://images.unsplash.com/photo-1532298229144-0ec0c57515c7?w=800&auto=format&fit=crop",
+        ],
+        description:
+          "VTC électrique polyvalent, confortable pour la ville comme pour les chemins. Idéal pour les balades côtières.",
+      },
+      {
+        categorie: CategorieVehicule.velo,
+        marque: "Specialized",
+        modele: "Turbo Levo SL",
+        annee: 2024,
+        immatriculation: null,
+        couleur: "Noir",
+        typeVehicule: "VTT électrique",
+        carburant: null,
+        transmission: null,
+        places: 1,
+        portes: null,
+        cylindree: null,
+        typeVelo: "VTT",
+        assistanceElec: true,
+        poids: 18.9,
+        ville: "saint-benoit",
+        adresse: "444 Chemin des Cascades",
+        latitude: -21.0339,
+        longitude: 55.7128,
+        prixJour: 28,
+        prixSemaine: 168,
+        prixMois: 600,
+        caution: 180,
+        disponible: true,
+        images: [
+          "https://images.unsplash.com/photo-1598335624134-5bceb5de202d?w=800&auto=format&fit=crop",
+        ],
+        description:
+          "VTT à assistance électrique léger et performant pour les trails techniques du Piton de la Fournaise.",
+      },
+      // ============ VOITURE ÉLECTRIQUE ============
+      {
+        categorie: CategorieVehicule.voiture,
         marque: "Nissan",
         modele: "Leaf",
         annee: 2024,
         immatriculation: "YZ-901-BC",
         couleur: "Bleu",
-        puissance: "150ch",
         typeVehicule: "compacte",
-        carburant: "electrique",
-        transmission: "automatique",
+        carburant: CarburantType.electrique,
+        transmission: TransmissionType.automatique,
         places: 5,
         portes: 5,
-        volumeCoffre: "435L",
+        cylindree: null,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: null,
         ville: "saint-pierre",
         adresse: "444 Avenue de la Paix",
         latitude: -21.3393,
@@ -311,99 +423,84 @@ async function seedVehicules() {
         prixJour: 60,
         prixSemaine: 360,
         prixMois: 1300,
-        kilometrageInclus: "illimité",
         caution: 600,
+        disponible: true,
         images: [
           "https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=800&auto=format&fit=crop",
         ],
-        equipements: {
-          climatisation: true,
-          ecranTactile: true,
-          rechargeRapide: true,
-          aidesConduite: true,
-          autonomie: "270km",
-        },
-        caracteristiques: [
-          "5 places",
-          "Climatisation",
-          "Autonomie 270km",
-          "Recharge rapide",
-          "Écran tactile",
-        ],
         description:
           "Voiture électrique silencieuse et économique, parfaite pour l'île. Écologique et performante.",
-        agence: "Eco Location Réunion",
-        conditionsLocation:
-          "Retour avec au moins 20% de batterie, borne de recharge incluse.",
       },
+      // ============ VOITURE LUXE ============
       {
-        marque: "Volkswagen",
-        modele: "Caravelle",
-        annee: 2023,
-        immatriculation: "DE-234-FG",
-        couleur: "Blanc",
-        puissance: "150ch",
-        typeVehicule: "minibus",
-        carburant: "diesel",
-        transmission: "manuelle",
-        places: 9,
-        portes: 5,
-        volumeCoffre: "Grand volume",
+        categorie: CategorieVehicule.voiture,
+        marque: "Mercedes",
+        modele: "Classe C",
+        annee: 2024,
+        immatriculation: "MN-012-OP",
+        couleur: "Noir",
+        typeVehicule: "luxe",
+        carburant: CarburantType.essence,
+        transmission: TransmissionType.automatique,
+        places: 5,
+        portes: 4,
+        cylindree: null,
+        typeVelo: null,
+        assistanceElec: null,
+        poids: null,
         ville: "saint-denis",
-        adresse: "555 Boulevard du Commerce",
+        adresse: "101 Avenue de la Victoire",
         latitude: -20.88231,
         longitude: 55.45041,
-        prixJour: 95,
-        prixSemaine: 570,
-        prixMois: 2000,
-        kilometrageInclus: "300 km/jour",
-        caution: 1200,
+        prixJour: 120,
+        prixSemaine: 720,
+        prixMois: 2500,
+        caution: 1500,
+        disponible: true,
         images: [
-          "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop",
-        ],
-        equipements: {
-          climatisationDoubleZone: true,
-          siegesAmovibles: true,
-          portesCoulissantes: true,
-          espaceChargement: true,
-        },
-        caracteristiques: [
-          "9 places",
-          "Climatisation",
-          "Grand espace",
-          "Sièges amovibles",
-          "Toit élevé",
+          "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=800&auto=format&fit=crop",
         ],
         description:
-          "Minibus 9 places idéal pour les groupes, familles ou équipes. Confortable et spacieux.",
-        agence: "Family Location",
-        conditionsLocation:
-          "Conducteur additionnel obligatoire pour les longs trajets, assurance groupe incluse.",
+          "Berline premium avec tous les équipements haut de gamme. Luxe et performance pour vos déplacements.",
       },
     ];
+
+    console.log(`🎯 Création de ${vehiculesData.length} véhicules...`);
 
     // Créer les véhicules
     for (let i = 0; i < vehiculesData.length; i++) {
       const prestataire = prestataires[i % prestataires.length];
       const vehiculeData = vehiculesData[i];
 
+      // Calculer une note aléatoire entre 3.5 et 5
+      const rating = 3.5 + Math.random() * 1.5;
+
+      // Nombre d'avis aléatoire
+      const nombreAvis = Math.floor(Math.random() * 30);
+
+      // Nombre de réservations aléatoire
+      const nombreReservations = Math.floor(Math.random() * 25);
+
       await prisma.vehicule.create({
         data: {
           prestataireId: prestataire.id,
           ...vehiculeData,
-          disponible: true,
           statut: "active",
-          rating: 4 + Math.random() * 1, // Note entre 4 et 5
-          nombreReservations: Math.floor(Math.random() * 20),
-          vues: Math.floor(Math.random() * 100),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          publishedAt: new Date(),
+          rating: parseFloat(rating.toFixed(1)),
+          nombreAvis: nombreAvis,
+          nombreReservations: nombreReservations,
         },
       });
 
+      const categorieEmoji = {
+        [CategorieVehicule.voiture]: "🚗",
+        [CategorieVehicule.camion]: "🚚",
+        [CategorieVehicule.moto]: "🏍️",
+        [CategorieVehicule.velo]: "🚲",
+      };
+
       console.log(
-        `✅ Véhicule ${i + 1} créé: ${vehiculeData.marque} ${vehiculeData.modele}`
+        `${categorieEmoji[vehiculeData.categorie]} Véhicule ${i + 1} créé: ${vehiculeData.marque} ${vehiculeData.modele} (${vehiculeData.categorie})`
       );
     }
 
@@ -412,22 +509,25 @@ async function seedVehicules() {
     const vehicules = await prisma.vehicule.findMany();
 
     for (const vehicule of vehicules) {
-      // Créer des périodes d'indisponibilité aléatoires
+      // Créer des périodes de disponibilité aléatoires
       const today = new Date();
       const createdDates = new Set(); // Tracker les combinaisons créées
 
-      // Ajouter quelques jours d'indisponibilité
-      for (let i = 0; i < 3; i++) {
+      // Ajouter quelques périodes de disponibilité (6 mois à venir)
+      for (let i = 0; i < 5; i++) {
         let startDate, endDate, dateKey;
         let attempts = 0;
 
         // Générer des dates uniques
         do {
+          const startDay = Math.floor(Math.random() * 180) + 1; // 1 à 180 jours dans le futur
+          const duration = Math.floor(Math.random() * 14) + 3; // 3 à 16 jours
+
           startDate = new Date(today);
-          startDate.setDate(today.getDate() + Math.floor(Math.random() * 20) + 5);
+          startDate.setDate(today.getDate() + startDay);
           endDate = new Date(startDate);
-          endDate.setDate(startDate.getDate() + Math.floor(Math.random() * 3) + 1);
-          
+          endDate.setDate(startDate.getDate() + duration);
+
           dateKey = `${startDate.getTime()}-${endDate.getTime()}`;
           attempts++;
         } while (createdDates.has(dateKey) && attempts < 10);
@@ -436,38 +536,47 @@ async function seedVehicules() {
         if (!createdDates.has(dateKey)) {
           createdDates.add(dateKey);
 
+          // Pour les vélos, moins de prix spéciaux
+          const isSpecialPrice =
+            vehicule.categorie === CategorieVehicule.velo
+              ? Math.random() > 0.9
+              : Math.random() > 0.8;
+
+          const prixSpecial = isSpecialPrice
+            ? vehicule.prixJour * (0.85 + Math.random() * 0.1)
+            : null;
+
           try {
-            await prisma.disponibiliteVehicule.upsert({
-              where: {
-                vehiculeId_dateDebut_dateFin: {
-                  vehiculeId: vehicule.id,
-                  dateDebut: startDate,
-                  dateFin: endDate,
-                },
-              },
-              update: {
-                disponible: Math.random() > 0.7,
-                prixSpecial: Math.random() > 0.8 ? vehicule.prixJour * 0.9 : null,
-              },
-              create: {
+            await prisma.disponibiliteVehicule.create({
+              data: {
                 vehiculeId: vehicule.id,
                 dateDebut: startDate,
                 dateFin: endDate,
-                disponible: Math.random() > 0.7,
-                prixSpecial: Math.random() > 0.8 ? vehicule.prixJour * 0.9 : null,
-                createdAt: new Date(),
+                disponible: true, // Toutes les périodes créées sont disponibles
+                prixSpecial: prixSpecial
+                  ? parseFloat(prixSpecial.toFixed(2))
+                  : null,
               },
             });
           } catch (error) {
-            console.warn(`⚠️ Disponibilité non créée pour ${vehicule.id}:`, error.message);
+            if (!error.message.includes("Unique constraint")) {
+              console.warn(
+                `⚠️ Disponibilité non créée pour ${vehicule.id}:`,
+                error.message
+              );
+            }
           }
         }
       }
     }
 
     console.log("🎉 Seeding des véhicules terminé !");
+    console.log(
+      `📊 ${vehiculesData.length} véhicules créés (voitures, camions, motos, vélos)`
+    );
   } catch (error) {
     console.error("❌ Erreur lors du seeding:", error);
+    throw error;
   } finally {
     await prisma.$disconnect();
   }

@@ -2150,25 +2150,34 @@ model RendezvousEntreprise {
 
 model Vehicule {
   id            String @id @default(uuid())
-  // Propriétaire/professionnel
+
   prestataireId String
   prestataire   User   @relation(fields: [prestataireId], references: [id], onDelete: Cascade)
 
-  // Informations générales
-  marque          String
-  modele          String
-  annee           Int
-  immatriculation String @unique
-  couleur         String
-  puissance       String // ex: "75ch"
+  // 🔥 NOUVEAU
+  categorie CategorieVehicule
 
-  // Caractéristiques techniques
-  typeVehicule String // "economique", "compacte", "berline", "suv", "luxe", "utilitaire", "camion", "minibus"
-  carburant    String // "essence", "diesel", "electrique", "hybride"
-  transmission String // "manuelle", "automatique"
-  places       Int     @default(5)
-  portes       Int     @default(5)
-  volumeCoffre String? // ex: "350L"
+  marque  String?
+  modele  String?
+  annee   Int?
+
+  immatriculation String? @unique // ❗ pas obligatoire pour vélo
+
+  couleur String?
+
+  // Caractéristiques
+  typeVehicule String?
+  carburant    CarburantType?
+  transmission TransmissionType?
+
+  places Int? // utile voiture/camion
+  portes Int?
+
+  // 🔥 Spécifique vélo / moto
+  cylindree       Int?
+  typeVelo        String? // "VTT", "VTC", "route", "électrique"
+  assistanceElec  Boolean?
+  poids           Float?
 
   // Localisation
   ville     String
@@ -2176,52 +2185,36 @@ model Vehicule {
   latitude  Float?
   longitude Float?
 
-  // Prix et conditions
-  prixJour          Float
-  prixSemaine       Float?
-  prixMois          Float?
-  kilometrageInclus String @default("300 km/jour") // ou "illimité"
-  caution           Float  @default(500)
+  // Prix
+  prixJour    Float
+  prixSemaine Float?
+  prixMois    Float?
 
-  // État et disponibilité
-  disponible Boolean  @default(true)
-  statut     String   @default("active") // "active", "maintenance", "vendu"
-  images     String[] // URLs des images
+  caution Float?
 
-  // Équipements (stockés en JSON pour flexibilité)
-  equipements      Json? // Liste des équipements: climatisation, GPS, etc.
-  caracteristiques String[] // Caractéristiques principales
+  // Disponibilité
+  disponible Boolean @default(true)
+  statut     String  @default("active")
 
-  // Informations commerciales
-  description        String?
-  agence             String? // Nom de l'agence/professionnel
-  conditionsLocation String? // Conditions spécifiques
+  images String[]
 
-  // Statistiques
+  description String?
+
   rating             Float @default(0)
   nombreAvis         Int   @default(0)
   nombreReservations Int   @default(0)
-  vues               Int   @default(0)
 
-  // Métadonnées
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   reservations   ReservationVehicule[]
   avis           AvisVehicule[]
   disponibilites DisponibiliteVehicule[]
 
-  @@index([prestataireId])
-  @@index([typeVehicule])
-  @@index([carburant])
-  @@index([transmission])
+  @@index([categorie])
   @@index([ville])
   @@index([prixJour])
-  @@index([disponible])
-  @@index([rating])
-  @@index([publishedAt])
 }
 
 model DisponibiliteVehicule {
@@ -2362,6 +2355,12 @@ enum TypeVehicule {
   camion
   minibus
   autre
+}
+enum CategorieVehicule {
+  voiture
+  camion
+  moto
+  velo
 }
 
 enum CarburantType {

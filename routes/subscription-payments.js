@@ -54,7 +54,7 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
       });
     }
 
-    // Créer le PaymentIntent avec support pour Google Pay/Apple Pay
+    // OPTION 1: Utiliser automatic_payment_methods (recommandé pour Google Pay/Apple Pay)
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount * 100, // Convertir en centimes
       currency: "eur",
@@ -68,10 +68,28 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
       },
       automatic_payment_methods: {
         enabled: true, // Active automatiquement Google Pay/Apple Pay
+        allow_redirects: "never", // Optionnel: éviter les redirects
       },
-      // Spécifiquement activer les méthodes de paiement rapides
-      payment_method_types: ["card", "apple_pay", "google_pay"],
+      // NE PAS inclure payment_method_types quand automatic_payment_methods est activé
     });
+
+    // OPTION 2: Si vous voulez spécifier manuellement les méthodes (sans automatic_payment_methods)
+    /*
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount * 100,
+      currency: "eur",
+      customer: customerId,
+      description: `Abonnement: ${plan.name}`,
+      metadata: {
+        userId: userId,
+        planId: planId,
+        planName: plan.name,
+        type: "subscription",
+      },
+      payment_method_types: ["card", "apple_pay", "google_pay"],
+      // NE PAS inclure automatic_payment_methods ici
+    });
+    */
 
     // Créer une transaction dans la base de données
     const transaction = await prisma.transaction.create({
@@ -89,7 +107,6 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
           planName: plan.name,
           planPrice: plan.price,
           planInterval: plan.interval,
-          paymentMethodTypes: ["card", "apple_pay", "google_pay"],
         },
       },
     });
