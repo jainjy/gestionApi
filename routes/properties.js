@@ -1,9 +1,32 @@
-// routes/properties.js - VERSION COMPLÈTE AVEC ROUTE SOCIAL
+// routes/properties.js - VERSION COMPLÈTE AVEC SHUR/SIDR/SODIAC/SEDRE/SEMAC
 const express = require('express')
 const router = express.Router()
 const { prisma } = require('../lib/db')
 const { authenticateToken } = require('../middleware/auth')
 const { createNotification } = require("../services/notificationService");
+
+// Constantes pour les types sociaux
+const SOCIAL_TYPES = {
+  SHLMR: 'SHLMR',
+  PSLA: 'PSLA',
+  SHUR: 'SHUR',
+  SIDR: 'SIDR',
+  SODIAC: 'SODIAC',
+  SEDRE: 'SEDRE',
+  SEMAC: 'SEMAC'
+};
+
+const ALL_SOCIAL_TYPES = Object.values(SOCIAL_TYPES);
+
+const SOCIAL_TYPE_LABELS = {
+  [SOCIAL_TYPES.SHLMR]: 'SHLMR (Société Immobilière)',
+  [SOCIAL_TYPES.PSLA]: 'PSLA (Prêt Social Location Accession)',
+  [SOCIAL_TYPES.SHUR]: 'SHUR (Société HLM de la Réunion)',
+  [SOCIAL_TYPES.SIDR]: 'SIDR (Société Immobilière Départementale de la Réunion)',
+  [SOCIAL_TYPES.SODIAC]: 'SODIAC (Société pour le Développement Immobilier et l\'Accession à la Copropriété)',
+  [SOCIAL_TYPES.SEDRE]: 'SEDRE (Société pour l\'Équipement et le Développement de la Réunion)',
+  [SOCIAL_TYPES.SEMAC]: 'SEMAC (Société d\'Économie Mixte d\'Aménagement et de Construction)'
+};
 
 // Fonction utilitaire pour mapper les propriétés
 const mapPropertyFields = (property) => ({
@@ -14,34 +37,33 @@ const mapPropertyFields = (property) => ({
 
 // Fonction pour déterminer le type de logement social
 const determineSocialType = (property) => {
-  if (property.isSHLMR) return 'SHLMR';
-  if (property.isPSLA) return 'PSLA';
+  if (property.isSHLMR) return SOCIAL_TYPES.SHLMR;
+  if (property.isPSLA) return SOCIAL_TYPES.PSLA;
   
   // Vérifier dans les features
   if (property.features && Array.isArray(property.features)) {
     const features = property.features.map(f => f.toUpperCase());
-    if (features.includes('SODIAC')) return 'SODIAC';
-    if (features.includes('SIDR')) return 'SIDR';
-    if (features.includes('SEDRE')) return 'SEDRE';
-    if (features.includes('SEMAC')) return 'SEMAC';
+    
+    // Vérifier chaque type social dans l'ordre
+    for (const type of ALL_SOCIAL_TYPES) {
+      if (features.includes(type)) return type;
+    }
   }
   
   // Vérifier dans la description
   if (property.description) {
     const desc = property.description.toUpperCase();
-    if (desc.includes('SODIAC')) return 'SODIAC';
-    if (desc.includes('SIDR')) return 'SIDR';
-    if (desc.includes('SEDRE')) return 'SEDRE';
-    if (desc.includes('SEMAC')) return 'SEMAC';
+    for (const type of ALL_SOCIAL_TYPES) {
+      if (desc.includes(type)) return type;
+    }
   }
   
   // Vérifier dans le titre
   if (property.title) {
     const title = property.title.toUpperCase();
-    if (title.includes('SODIAC')) return 'SODIAC';
-    if (title.includes('SIDR')) return 'SIDR';
-    if (title.includes('SEDRE')) return 'SEDRE';
-    if (title.includes('SEMAC')) return 'SEMAC';
+    for (const type of ALL_SOCIAL_TYPES) {
+      if (title.includes(type)) return type;
+    }
   }
   
   return null;
@@ -115,7 +137,14 @@ router.get('/', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     })
 
-    const mappedProperties = properties.map(mapPropertyFields);
+    const mappedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+      return {
+        ...mapped,
+        socialType: determineSocialType(property),
+        socialTypeLabel: SOCIAL_TYPE_LABELS[determineSocialType(property)] || null
+      };
+    });
 
     res.json(mappedProperties)
   } catch (error) {
@@ -135,7 +164,7 @@ router.get('/social', async (req, res) => {
       type,
       listingType,
       search,
-      socialType, // 'SHLMR', 'SODIAC', 'SIDR', 'SEDRE', 'SEMAC', 'all'
+      socialType, // 'SHLMR', 'PSLA', 'SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC', 'all'
       limit = 50
     } = req.query;
 
@@ -149,14 +178,14 @@ router.get('/social', async (req, res) => {
     if (socialType && socialType !== 'all') {
       const typeUpper = socialType.toUpperCase();
       
-      if (typeUpper === 'SHLMR') {
+      if (typeUpper === SOCIAL_TYPES.SHLMR) {
         where.isSHLMR = true;
       } 
-      else if (typeUpper === 'PSLA') {
+      else if (typeUpper === SOCIAL_TYPES.PSLA) {
         where.isPSLA = true;
       }
-      // Pour les autres types (SODIAC, SIDR, SEDRE, SEMAC), chercher dans features ou description
-      else {
+      // Pour les autres types (SHUR, SIDR, SODIAC, SEDRE, SEMAC), chercher dans features ou description
+      else if (ALL_SOCIAL_TYPES.includes(typeUpper)) {
         where.OR = [
           { features: { has: typeUpper } },
           { description: { contains: typeUpper, mode: 'insensitive' } },
@@ -171,9 +200,10 @@ router.get('/social', async (req, res) => {
         { isPSLA: true },
         {
           OR: [
-            { features: { hasSome: ['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'] } },
-            { description: { contains: 'SODIAC', mode: 'insensitive' } },
+            { features: { hasSome: ['SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC'] } },
+            { description: { contains: 'SHUR', mode: 'insensitive' } },
             { description: { contains: 'SIDR', mode: 'insensitive' } },
+            { description: { contains: 'SODIAC', mode: 'insensitive' } },
             { description: { contains: 'SEDRE', mode: 'insensitive' } },
             { description: { contains: 'SEMAC', mode: 'insensitive' } }
           ]
@@ -236,16 +266,18 @@ router.get('/social', async (req, res) => {
     // Ajouter le type social déterminé à chaque propriété
     const enhancedProperties = properties.map(property => {
       const mapped = mapPropertyFields(property);
+      const socialType = determineSocialType(property);
       return {
         ...mapped,
-        socialType: determineSocialType(property),
+        socialType: socialType,
+        socialTypeLabel: SOCIAL_TYPE_LABELS[socialType] || null,
         features: property.features || []
       };
     });
 
     // Si un type social est spécifié et n'est pas SHLMR/PSLA, filtrer à nouveau
     let filteredProperties = enhancedProperties;
-    if (socialType && socialType !== 'all' && !['SHLMR', 'PSLA'].includes(socialType.toUpperCase())) {
+    if (socialType && socialType !== 'all' && ![SOCIAL_TYPES.SHLMR, SOCIAL_TYPES.PSLA].includes(socialType.toUpperCase())) {
       filteredProperties = enhancedProperties.filter(property => 
         property.socialType === socialType.toUpperCase()
       );
@@ -254,7 +286,8 @@ router.get('/social', async (req, res) => {
     res.json({
       success: true,
       count: filteredProperties.length,
-      data: filteredProperties
+      data: filteredProperties,
+      socialTypes: SOCIAL_TYPE_LABELS
     });
   } catch (error) {
     console.error('Failed to fetch social properties:', error);
@@ -278,9 +311,10 @@ router.get('/social/types', async (req, res) => {
           { isPSLA: true },
           {
             OR: [
-              { features: { hasSome: ['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'] } },
-              { description: { contains: 'SODIAC', mode: 'insensitive' } },
+              { features: { hasSome: ['SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC'] } },
+              { description: { contains: 'SHUR', mode: 'insensitive' } },
               { description: { contains: 'SIDR', mode: 'insensitive' } },
+              { description: { contains: 'SODIAC', mode: 'insensitive' } },
               { description: { contains: 'SEDRE', mode: 'insensitive' } },
               { description: { contains: 'SEMAC', mode: 'insensitive' } }
             ]
@@ -301,12 +335,13 @@ router.get('/social/types', async (req, res) => {
 
     // Compter les types
     const typeCounts = {
-      SHLMR: 0,
-      PSLA: 0,
-      SODIAC: 0,
-      SIDR: 0,
-      SEDRE: 0,
-      SEMAC: 0,
+      [SOCIAL_TYPES.SHLMR]: 0,
+      [SOCIAL_TYPES.PSLA]: 0,
+      [SOCIAL_TYPES.SHUR]: 0,
+      [SOCIAL_TYPES.SIDR]: 0,
+      [SOCIAL_TYPES.SODIAC]: 0,
+      [SOCIAL_TYPES.SEDRE]: 0,
+      [SOCIAL_TYPES.SEMAC]: 0,
       TOTAL: 0
     };
 
@@ -331,6 +366,7 @@ router.get('/social/types', async (req, res) => {
       success: true,
       data: {
         counts: typeCounts,
+        labels: SOCIAL_TYPE_LABELS,
         cities: Object.entries(cities)
           .map(([city, count]) => ({ city, count }))
           .sort((a, b) => b.count - a.count),
@@ -410,7 +446,8 @@ router.get('/psla', async (req, res) => {
       const mapped = mapPropertyFields(property);
       return {
         ...mapped,
-        socialType: 'PSLA'
+        socialType: SOCIAL_TYPES.PSLA,
+        socialTypeLabel: SOCIAL_TYPE_LABELS[SOCIAL_TYPES.PSLA]
       };
     });
 
@@ -492,7 +529,8 @@ router.get('/shlmr', async (req, res) => {
       const mapped = mapPropertyFields(property);
       return {
         ...mapped,
-        socialType: 'SHLMR'
+        socialType: SOCIAL_TYPES.SHLMR,
+        socialTypeLabel: SOCIAL_TYPE_LABELS[SOCIAL_TYPES.SHLMR]
       };
     });
 
@@ -505,6 +543,121 @@ router.get('/shlmr', async (req, res) => {
     console.error('Failed to fetch SHLMR properties:', error);
     res.status(500).json({
       error: 'Failed to fetch SHLMR properties',
+      message: error.message
+    });
+  }
+});
+
+// GET /api/properties/specific/:type - Récupérer les propriétés par type social spécifique
+router.get('/specific/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const {
+      status,
+      city,
+      minPrice,
+      maxPrice,
+      search,
+      limit = 20
+    } = req.query;
+
+    const typeUpper = type.toUpperCase();
+    
+    // Vérifier si le type est valide
+    if (!ALL_SOCIAL_TYPES.includes(typeUpper)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Type social invalide',
+        validTypes: ALL_SOCIAL_TYPES
+      });
+    }
+
+    let where = {
+      isActive: true,
+      status: { in: ['for_sale', 'for_rent'] }
+    };
+
+    // Construire la condition selon le type
+    if (typeUpper === SOCIAL_TYPES.SHLMR) {
+      where.isSHLMR = true;
+    } else if (typeUpper === SOCIAL_TYPES.PSLA) {
+      where.isPSLA = true;
+    } else {
+      where.OR = [
+        { features: { has: typeUpper } },
+        { description: { contains: typeUpper, mode: 'insensitive' } },
+        { title: { contains: typeUpper, mode: 'insensitive' } }
+      ];
+    }
+
+    // Filtres
+    if (status) {
+      if (status === 'all') {
+        where.status = { in: ['for_sale', 'for_rent', 'pending', 'sold', 'rented'] };
+      } else {
+        where.status = status;
+      }
+    }
+    
+    if (city) where.city = { contains: city, mode: 'insensitive' };
+    
+    if (minPrice || maxPrice) {
+      where.price = {};
+      if (minPrice) where.price.gte = parseFloat(minPrice);
+      if (maxPrice) where.price.lte = parseFloat(maxPrice);
+    }
+
+    if (search) {
+      where.AND = [
+        where,
+        {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+            { address: { contains: search, mode: 'insensitive' } }
+          ]
+        }
+      ];
+    }
+
+    const properties = await prisma.property.findMany({
+      where,
+      include: {
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        favorites: true
+      },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit)
+    });
+
+    const mappedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+      return {
+        ...mapped,
+        socialType: typeUpper,
+        socialTypeLabel: SOCIAL_TYPE_LABELS[typeUpper]
+      };
+    });
+
+    res.json({
+      success: true,
+      type: typeUpper,
+      label: SOCIAL_TYPE_LABELS[typeUpper],
+      count: mappedProperties.length,
+      data: mappedProperties
+    });
+  } catch (error) {
+    console.error(`Failed to fetch ${req.params.type} properties:`, error);
+    res.status(500).json({
+      success: false,
+      error: `Failed to fetch ${req.params.type} properties`,
       message: error.message
     });
   }
@@ -550,8 +703,18 @@ router.post('/', authenticateToken, async (req, res) => {
     // Si un type social spécifique est fourni, l'ajouter aux features
     if (data.socialType) {
       const socialType = data.socialType.toUpperCase();
-      if (!propertyData.features.includes(socialType)) {
-        propertyData.features.push(socialType);
+      // Vérifier si c'est un type social valide (SHUR, SIDR, etc.)
+      if (['SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC'].includes(socialType)) {
+        if (!propertyData.features.includes(socialType)) {
+          propertyData.features.push(socialType);
+        }
+      }
+      // Si c'est PSLA ou SHLMR, on utilise les champs dédiés
+      else if (socialType === 'PSLA') {
+        propertyData.isPSLA = true;
+      }
+      else if (socialType === 'SHLMR') {
+        propertyData.isSHLMR = true;
       }
     }
 
@@ -580,7 +743,9 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     const responseProperty = mapPropertyFields(newProperty);
-    responseProperty.socialType = determineSocialType(newProperty);
+    const socialType = determineSocialType(newProperty);
+    responseProperty.socialType = socialType;
+    responseProperty.socialTypeLabel = SOCIAL_TYPE_LABELS[socialType] || null;
 
     res.status(201).json({
       success: true,
@@ -640,9 +805,11 @@ router.get('/user/:userId', async (req, res) => {
 
     const mappedProperties = properties.map(property => {
       const mapped = mapPropertyFields(property);
+      const socialType = determineSocialType(property);
       return {
         ...mapped,
-        socialType: determineSocialType(property)
+        socialType: socialType,
+        socialTypeLabel: SOCIAL_TYPE_LABELS[socialType] || null
       };
     });
 
@@ -668,6 +835,7 @@ router.get('/admin/all', authenticateToken, async (req, res) => {
       type,
       listingType,
       search,
+      socialType,
       sortBy = 'createdAt',
       sortOrder = 'desc'
     } = req.query
@@ -679,6 +847,25 @@ router.get('/admin/all', authenticateToken, async (req, res) => {
     if (type) where.type = type
     if (listingType) where.listingType = listingType
 
+    // Filtre par type social
+    if (socialType && socialType !== 'all') {
+      const typeUpper = socialType.toUpperCase();
+      
+      if (typeUpper === SOCIAL_TYPES.SHLMR) {
+        where.isSHLMR = true;
+      } 
+      else if (typeUpper === SOCIAL_TYPES.PSLA) {
+        where.isPSLA = true;
+      }
+      else if (ALL_SOCIAL_TYPES.includes(typeUpper)) {
+        where.OR = [
+          { features: { has: typeUpper } },
+          { description: { contains: typeUpper, mode: 'insensitive' } },
+          { title: { contains: typeUpper, mode: 'insensitive' } }
+        ];
+      }
+    }
+
     if (minPrice || maxPrice) {
       where.price = {}
       if (minPrice) where.price.gte = parseFloat(minPrice)
@@ -686,13 +873,20 @@ router.get('/admin/all', authenticateToken, async (req, res) => {
     }
 
     if (search) {
-      where.OR = [
+      const searchConditions = [
         { title: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
         { address: { contains: search, mode: 'insensitive' } },
         { owner: { firstName: { contains: search, mode: 'insensitive' } } },
         { owner: { lastName: { contains: search, mode: 'insensitive' } } }
       ]
+      
+      if (where.OR) {
+        where.AND = [where, { OR: searchConditions }];
+        delete where.OR;
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     const properties = await prisma.property.findMany({
@@ -718,9 +912,11 @@ router.get('/admin/all', authenticateToken, async (req, res) => {
 
     const mappedProperties = properties.map(property => {
       const mapped = mapPropertyFields(property);
+      const socialType = determineSocialType(property);
       return {
         ...mapped,
-        socialType: determineSocialType(property),
+        socialType: socialType,
+        socialTypeLabel: SOCIAL_TYPE_LABELS[socialType] || null,
         favoriteCount: property.favorites.length
       };
     });
@@ -788,9 +984,10 @@ router.get('/stats', authenticateToken, async (req, res) => {
             { isPSLA: true },
             {
               OR: [
-                { features: { hasSome: ['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'] } },
-                { description: { contains: 'SODIAC', mode: 'insensitive' } },
+                { features: { hasSome: ['SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC'] } },
+                { description: { contains: 'SHUR', mode: 'insensitive' } },
                 { description: { contains: 'SIDR', mode: 'insensitive' } },
+                { description: { contains: 'SODIAC', mode: 'insensitive' } },
                 { description: { contains: 'SEDRE', mode: 'insensitive' } },
                 { description: { contains: 'SEMAC', mode: 'insensitive' } }
               ]
@@ -799,15 +996,20 @@ router.get('/stats', authenticateToken, async (req, res) => {
         }
       });
 
-      socialStats = {
-        totalSocial: socialProperties.length,
-        shlmr: socialProperties.filter(p => p.isSHLMR).length,
-        psla: socialProperties.filter(p => p.isPSLA).length,
-        sodiac: socialProperties.filter(p => determineSocialType(p) === 'SODIAC').length,
-        sidr: socialProperties.filter(p => determineSocialType(p) === 'SIDR').length,
-        sedre: socialProperties.filter(p => determineSocialType(p) === 'SEDRE').length,
-        semac: socialProperties.filter(p => determineSocialType(p) === 'SEMAC').length
-      };
+      // Initialiser tous les types à 0
+      socialStats = {};
+      ALL_SOCIAL_TYPES.forEach(type => {
+        socialStats[type.toLowerCase()] = 0;
+      });
+      socialStats.totalSocial = socialProperties.length;
+
+      // Compter chaque type
+      socialProperties.forEach(property => {
+        const socialType = determineSocialType(property);
+        if (socialType && socialStats.hasOwnProperty(socialType.toLowerCase())) {
+          socialStats[socialType.toLowerCase()]++;
+        }
+      });
     }
 
     res.json({
@@ -856,7 +1058,9 @@ router.get('/:id', async (req, res) => {
     })
 
     const mappedProperty = mapPropertyFields(property);
-    mappedProperty.socialType = determineSocialType(property);
+    const socialType = determineSocialType(property);
+    mappedProperty.socialType = socialType;
+    mappedProperty.socialTypeLabel = SOCIAL_TYPE_LABELS[socialType] || null;
 
     res.json(mappedProperty)
   } catch (error) {
@@ -891,16 +1095,29 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Gestion du type social
     if (data.socialType) {
       const socialType = data.socialType.toUpperCase();
-      if (!updateData.features) {
-        updateData.features = [];
-      }
-      // Retirer les anciens types sociaux des features
-      updateData.features = updateData.features.filter(f => 
-        !['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'].includes(f.toUpperCase())
-      );
-      // Ajouter le nouveau type
-      if (!updateData.features.includes(socialType)) {
-        updateData.features.push(socialType);
+      
+      // Réinitialiser les champs dédiés
+      updateData.isPSLA = false;
+      updateData.isSHLMR = false;
+      
+      // Gérer selon le type
+      if (socialType === 'PSLA') {
+        updateData.isPSLA = true;
+      } else if (socialType === 'SHLMR') {
+        updateData.isSHLMR = true;
+      } else if (['SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC'].includes(socialType)) {
+        // Pour les autres types, utiliser le champ features
+        if (!updateData.features) {
+          updateData.features = [];
+        }
+        // Retirer les anciens types sociaux des features
+        updateData.features = updateData.features.filter(f => 
+          !['SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC'].includes(f.toUpperCase())
+        );
+        // Ajouter le nouveau type
+        if (!updateData.features.includes(socialType)) {
+          updateData.features.push(socialType);
+        }
       }
     }
 
@@ -924,7 +1141,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
     })
 
     const responseProperty = mapPropertyFields(updatedProperty);
-    responseProperty.socialType = determineSocialType(updatedProperty);
+    const socialType = determineSocialType(updatedProperty);
+    responseProperty.socialType = socialType;
+    responseProperty.socialTypeLabel = SOCIAL_TYPE_LABELS[socialType] || null;
 
     res.json(responseProperty)
   } catch (error) {
@@ -964,19 +1183,30 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       // Récupérer les features actuelles
       const currentProperty = await prisma.property.findUnique({
         where: { id },
-        select: { features: true }
+        select: { features: true, isPSLA: true, isSHLMR: true }
       });
       
+      // Réinitialiser les champs dédiés si nécessaire
+      if (socialType !== 'PSLA') updateData.isPSLA = false;
+      if (socialType !== 'SHLMR') updateData.isSHLMR = false;
+      
       let features = currentProperty?.features || [];
-      // Retirer les anciens types sociaux
-      features = features.filter(f => 
-        !['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'].includes(f.toUpperCase())
-      );
-      // Ajouter le nouveau type
-      if (!features.includes(socialType)) {
-        features.push(socialType);
+      
+      if (socialType === 'PSLA') {
+        updateData.isPSLA = true;
+      } else if (socialType === 'SHLMR') {
+        updateData.isSHLMR = true;
+      } else if (['SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC'].includes(socialType)) {
+        // Retirer les anciens types sociaux
+        features = features.filter(f => 
+          !['SHUR', 'SIDR', 'SODIAC', 'SEDRE', 'SEMAC'].includes(f.toUpperCase())
+        );
+        // Ajouter le nouveau type
+        if (!features.includes(socialType)) {
+          features.push(socialType);
+        }
+        updateData.features = features;
       }
-      updateData.features = features;
     }
 
     if (data.status === 'for_sale' || data.status === 'for_rent') {
@@ -999,7 +1229,9 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     })
 
     const responseProperty = mapPropertyFields(updatedProperty);
-    responseProperty.socialType = determineSocialType(updatedProperty);
+    const socialType = determineSocialType(updatedProperty);
+    responseProperty.socialType = socialType;
+    responseProperty.socialTypeLabel = SOCIAL_TYPE_LABELS[socialType] || null;
 
     res.json(responseProperty)
   } catch (error) {
@@ -1054,6 +1286,7 @@ router.get('/professional/all', authenticateToken, async (req, res) => {
       type,
       listingType,
       search,
+      socialType,
       sortBy = 'createdAt',
       sortOrder = 'desc',
       isActive = true
@@ -1074,6 +1307,25 @@ router.get('/professional/all', authenticateToken, async (req, res) => {
       where.status = status
     }
 
+    // Filtre par type social
+    if (socialType && socialType !== 'all') {
+      const typeUpper = socialType.toUpperCase();
+      
+      if (typeUpper === SOCIAL_TYPES.SHLMR) {
+        where.isSHLMR = true;
+      } 
+      else if (typeUpper === SOCIAL_TYPES.PSLA) {
+        where.isPSLA = true;
+      }
+      else if (ALL_SOCIAL_TYPES.includes(typeUpper)) {
+        where.OR = [
+          { features: { has: typeUpper } },
+          { description: { contains: typeUpper, mode: 'insensitive' } },
+          { title: { contains: typeUpper, mode: 'insensitive' } }
+        ];
+      }
+    }
+
     if (city) where.city = { contains: city, mode: 'insensitive' }
     if (type) where.type = type
     if (listingType) where.listingType = listingType
@@ -1085,12 +1337,19 @@ router.get('/professional/all', authenticateToken, async (req, res) => {
     }
 
     if (search) {
-      where.OR = [
+      const searchConditions = [
         { title: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
         { address: { contains: search, mode: 'insensitive' } },
         { city: { contains: search, mode: 'insensitive' } }
       ]
+      
+      if (where.OR) {
+        where.AND = [where, { OR: searchConditions }];
+        delete where.OR;
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     const properties = await prisma.property.findMany({
@@ -1114,9 +1373,11 @@ router.get('/professional/all', authenticateToken, async (req, res) => {
 
     const mappedProperties = properties.map(property => {
       const mapped = mapPropertyFields(property);
+      const socialType = determineSocialType(property);
       return {
         ...mapped,
-        socialType: determineSocialType(property),
+        socialType: socialType,
+        socialTypeLabel: SOCIAL_TYPE_LABELS[socialType] || null,
         favoriteCount: property.favorites.length,
         stats: {
           views: property.views || 0,
@@ -1135,5 +1396,26 @@ router.get('/professional/all', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch professional properties' })
   }
 })
+
+// GET /api/properties/social/info - Récupérer les informations sur les types sociaux
+router.get('/social/info', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        types: SOCIAL_TYPES,
+        labels: SOCIAL_TYPE_LABELS,
+        allTypes: ALL_SOCIAL_TYPES,
+        description: "Ce module gère les différents types de logements sociaux disponibles dans la région de la Réunion."
+      }
+    });
+  } catch (error) {
+    console.error('Failed to fetch social info:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch social info'
+    });
+  }
+});
 
 module.exports = router
