@@ -936,7 +936,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 })
 
-// PATCH /api/properties/:id - Mettre à jour partiellement une propriété
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params
