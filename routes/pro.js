@@ -10,7 +10,7 @@ router.get("/", async (req, res) => {
   try {
     const {
       page = 1,
-      limit = 12,
+      limit = 1000,
       search = "",
       metierId,
       city,
@@ -197,7 +197,7 @@ router.get("/metiers/disponibles", async (req, res) => {
 // ROUTES SPÉCIFIQUES PAR CATÉGORIE
 async function getProfessionalsByMetiers(res, req, metierFilters, category) {
   try {
-    const { page = 1, limit = 12, city, sort = "newest" } = req.query;
+    const { page = 1, limit = 1000, city, sort = "newest" } = req.query;
     const skip = (page - 1) * limit;
     const take = parseInt(limit);
 
