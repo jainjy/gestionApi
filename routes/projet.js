@@ -4,7 +4,7 @@ const fs = require('fs');
 const { prisma } = require('../lib/db');
 const { supabase } = require('../lib/supabase');
 const { authenticateToken, requireRole } = require('../middleware/auth');
-const { uploadVideo, uploadImage, cleanupTempFiles } = require('../middleware/uploadMedia');
+const { uploadVideo, uploadImage, cleanupTempFiles,uploadVideoOrImage  } = require('../middleware/uploadMedia');
 
 /**
  * 🔧 Upload Supabase
@@ -41,18 +41,80 @@ async function uploadToSupabase(file, folder) {
  * Création d'un projet (image OU vidéo)
  * =====================================================
  */
+// router.post(
+//   '/',
+//   authenticateToken,
+
+//   // 👉 choisir un seul middleware selon le besoin
+//   (req, res, next) => {
+//     const contentType = req.headers['content-type'] || '';
+//     if (contentType.includes('video')) {
+//       return uploadVideo(req, res, next);
+//     }
+//     return uploadImage(req, res, next);
+//   },
+
+//   cleanupTempFiles,
+
+//   async (req, res) => {
+//     try {
+//       const { titre, details, duree, categorie, status } = req.body;
+//       const userId = req.user.id;
+
+//       if (!titre || !details || !duree) {
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Champs requis manquants',
+//         });
+//       }
+
+//       let mediaUrl = null;
+
+//       /**
+//        * 📤 Upload media vers Supabase
+//        */
+//       if (req.files?.video) {
+//         mediaUrl = await uploadToSupabase(req.files.video[0], 'videos');
+//       } else if (req.files?.image) {
+//         mediaUrl = await uploadToSupabase(req.files.image[0], 'images');
+//       }
+
+//       /**
+//        * 🧠 Insertion Prisma
+//        */
+//      const projet = await prisma.Projet.create({
+//         data: {
+//           idpro: userId,
+//           titre,
+//           details,
+//           duree: new Date(duree),
+//           media: mediaUrl,
+//           categorie: categorie || null,
+//           status: status || 'active',
+//         },
+//       });
+
+//       return res.status(201).json({
+//         success: true,
+//         message: 'Projet créé avec succès',
+//         data: projet,
+//       });
+
+//     } catch (error) {
+//       console.error('❌ Erreur création projet:', error);
+//       return res.status(500).json({
+//         success: false,
+//         message: 'Erreur serveur',
+//         error: error.message,
+//       });
+//     }
+//   }
+// );
+
 router.post(
   '/',
   authenticateToken,
-
-  // 👉 choisir un seul middleware selon le besoin
-  (req, res, next) => {
-    const contentType = req.headers['content-type'] || '';
-    if (contentType.includes('video')) {
-      return uploadVideo(req, res, next);
-    }
-    return uploadImage(req, res, next);
-  },
+  uploadVideoOrImage,
 
   cleanupTempFiles,
 
@@ -70,19 +132,14 @@ router.post(
 
       let mediaUrl = null;
 
-      /**
-       * 📤 Upload media vers Supabase
-       */
       if (req.files?.video) {
         mediaUrl = await uploadToSupabase(req.files.video[0], 'videos');
-      } else if (req.files?.image) {
+      } 
+      else if (req.files?.image) {
         mediaUrl = await uploadToSupabase(req.files.image[0], 'images');
       }
 
-      /**
-       * 🧠 Insertion Prisma
-       */
-     const projet = await prisma.Projet.create({
+      const projet = await prisma.Projet.create({
         data: {
           idpro: userId,
           titre,
@@ -96,7 +153,6 @@ router.post(
 
       return res.status(201).json({
         success: true,
-        message: 'Projet créé avec succès',
         data: projet,
       });
 
@@ -104,8 +160,7 @@ router.post(
       console.error('❌ Erreur création projet:', error);
       return res.status(500).json({
         success: false,
-        message: 'Erreur serveur',
-        error: error.message,
+        message: error.message,
       });
     }
   }
@@ -158,19 +213,45 @@ router.get(
   authenticateToken,
   requireRole('user'),
   async (req, res) => {
-    const { idpro } = req.params;
+    try {
+      const { idpro } = req.params;
 
-    const pro = await prisma.user.findUnique({ where: { id: idpro } });
-    if (!pro) return res.status(404).json({ success: false });
+      const pro = await prisma.user.findUnique({
+        where: { id: idpro },
+      });
 
-    const projets = await prisma.projet.findMany({
-      where: { idpro, status: 'active' },
-      orderBy: { createdAt: 'desc' },
-    });
+      if (!pro) {
+        return res.status(404).json({
+          success: false,
+          message: 'Professionnel introuvable',
+        });
+      }
 
-    res.json({ success: true, professionnel: pro, data: projets });
+      const projets = await prisma.projet.findMany({
+        where: {
+          idpro,
+          status: {
+            in: ['active', 'inactive'], // ✅ LES DEUX
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return res.json({
+        success: true,
+        professionnel: pro,
+        data: projets,
+      });
+    } catch (error) {
+      console.error('❌ Erreur récupération projets:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erreur serveur',
+      });
+    }
   }
 );
+
 
 //modifier le projet  
 router.put(
