@@ -6,17 +6,27 @@ const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../lib/email");
 const stripe = require("../utils/stripe");
 const { authenticateToken } = require("../middleware/auth");
-const rateLimit = require("express-rate-limit"); // AJOUT
+const rateLimit = require("express-rate-limit");
+
+// 🔧 CORRECTION: Configuration rate-limit corrigée pour passwordReset
 const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 heure
   max: 3,
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
-
+  
+  // ⚠️ CORRECTION: Utilisation correcte de keyGenerator
   keyGenerator: (req) => {
     const email = req.body?.email || "unknown";
-    return `${req.ip}:${email}`;
+    // Utilise la fonction ipKeyGenerator fournie par express-rate-limit
+    const ip = req.ip || req.socket.remoteAddress;
+    return `${ip}:${email}`;
+  },
+  
+  // ⚠️ CORRECTION: Ajout de validate pour éviter l'erreur IPv6
+  validate: {
+    ip: false
   },
 
   message: {
@@ -28,15 +38,24 @@ const passwordResetLimiter = rateLimit({
     res.status(options.statusCode).json(options.message);
   },
 });
+
+// 🔧 CORRECTION: Configuration rate-limit corrigée pour verifyToken
 const verifyTokenLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 heure
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
 
+  // ⚠️ CORRECTION: Utilisation correcte de keyGenerator
   keyGenerator: (req) => {
-    const token = req.query?.token || req.body?.token || "unknown";
-    return `${req.ip}:${token}`;
+    const token = req.params?.token || req.query?.token || req.body?.token || "unknown";
+    const ip = req.ip || req.socket.remoteAddress;
+    return `${ip}:${token}`;
+  },
+  
+  // ⚠️ CORRECTION: Ajout de validate pour éviter l'erreur IPv6
+  validate: {
+    ip: false
   },
 
   message: {
