@@ -2432,7 +2432,8 @@ model Formation {
   updatedAt           DateTime  @updatedAt
 
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
 
   @@index([proId])
   @@index([status])
@@ -2466,7 +2467,8 @@ model Emploi {
   updatedAt         DateTime  @updatedAt
 
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
 
   @@index([proId])
   @@index([status])
@@ -2503,7 +2505,8 @@ model AlternanceStage {
   updatedAt         DateTime  @updatedAt
 
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
 
   @@index([proId])
   @@index([status])
@@ -2515,46 +2518,55 @@ model AlternanceStage {
 }
 
 model Candidature {
-  id                  Int      @id @default(autoincrement())
-  userId              String
-  offreId             Int
-  offreType           String
-  statut              String   @default("en_attente")
-  offreType           String    // "formation", "emploi", "alternance"
+  id Int @id @default(autoincrement())
+
+  userId String
+
+  // 🔑 Relations explicites
+  formationId       Int?
+  emploiId          Int?
+  alternanceStageId Int?
+
+  offreType           OffreType
+  statut              String    @default("en_attente")
   titreOffre          String
   messageMotivation   String?
   cvUrl               String?
   lettreMotivationUrl String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
 
-  // Relation seulement avec User
-  nomCandidat         String?
-  emailCandidat       String?
-  telephoneCandidat   String?
-  
-  // Métadonnées
-  dateEntretien       DateTime?
-  note                Float?
-  feedback            String?
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Infos candidat (snapshot RGPD-friendly)
+  nomCandidat       String?
+  emailCandidat     String?
+  telephoneCandidat String?
+
+  // Métadonnées RH
+  dateEntretien DateTime?
+  note          Float?
+  feedback      String?
+
   // Documents supplémentaires
-  documents          Json?
-  
+  documents Json?
+
   // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // Relations spécifiques selon le type d'offre
-  formation       Formation?       @relation(fields: [offreId, offreType], references: [id, "type"], map: "candidature_formation")
-  emploi          Emploi?          @relation(fields: [offreId, offreType], references: [id, "type"], map: "candidature_emploi")
-  alternanceStage AlternanceStage? @relation(fields: [offreId, offreType], references: [id, "type"], map: "candidature_alternance")
-  
-  @@unique([userId, offreId, offreType])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  formation       Formation?       @relation(fields: [formationId], references: [id])
+  emploi          Emploi?          @relation(fields: [emploiId], references: [id])
+  alternanceStage AlternanceStage? @relation(fields: [alternanceStageId], references: [id])
+
   @@index([userId])
-  @@index([offreId, offreType])
+  @@index([offreType])
   @@index([statut])
   @@index([createdAt])
-  @@index([offreType])
   @@map("candidatures")
+}
+
+enum OffreType {
+  FORMATION
+  EMPLOI
+  ALTERNANCE
 }
 
 model Projet {
