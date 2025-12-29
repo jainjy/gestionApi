@@ -334,18 +334,53 @@ const logUpload = (req, res, next) => {
   next();
 };
 
+const uploadVideoOrImage = (req, res, next) => {
+  const uploadMiddleware = createMulterConfig([
+    { name: 'video', maxCount: 1 },
+    { name: 'image', maxCount: 1 },
+    { name: 'thumbnail', maxCount: 1 },
+  ]);
+
+  uploadMiddleware(req, res, (err) => {
+    if (err) {
+      console.error('❌ Erreur upload média:', err.message);
+      if (req.files) manualCleanup(req.files);
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+      });
+    }
+
+    if (!req.files?.video && !req.files?.image) {
+      return res.status(400).json({
+        success: false,
+        message: 'Aucun fichier image ou vidéo reçu',
+      });
+    }
+
+    console.log('✅ Média reçu:', {
+      video: req.files?.video?.[0]?.originalname,
+      image: req.files?.image?.[0]?.originalname,
+    });
+
+    next();
+  });
+};
+
 module.exports = {
   upload: multer({
-    storage: storage,
-    fileFilter: fileFilter,
-    limits: { fileSize: 500 * 1024 * 1024 } // 500MB max par défaut
+    storage,
+    fileFilter,
+    limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max
   }),
+
   uploadAudio,
   uploadVideo,
   uploadImage,
+  uploadVideoOrImage, // ✅ AJOUTÉ ICI
   cleanupTempFiles,
   manualCleanup,
   validateFiles,
   logUpload,
-  getFileSizeLimit
+  getFileSizeLimit,
 };
