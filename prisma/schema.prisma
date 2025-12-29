@@ -2520,6 +2520,8 @@ model Candidature {
   offreId             Int
   offreType           String
   statut              String   @default("en_attente")
+  offreType           String    // "formation", "emploi", "alternance"
+  titreOffre          String
   messageMotivation   String?
   cvUrl               String?
   lettreMotivationUrl String?
@@ -2527,13 +2529,31 @@ model Candidature {
   updatedAt           DateTime @updatedAt
 
   // Relation seulement avec User
+  nomCandidat         String?
+  emailCandidat       String?
+  telephoneCandidat   String?
+  
+  // Métadonnées
+  dateEntretien       DateTime?
+  note                Float?
+  feedback            String?
+  
+  // Documents supplémentaires
+  documents          Json?
+  
+  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  // Relations spécifiques selon le type d'offre
+  formation       Formation?       @relation(fields: [offreId, offreType], references: [id, "type"], map: "candidature_formation")
+  emploi          Emploi?          @relation(fields: [offreId, offreType], references: [id, "type"], map: "candidature_emploi")
+  alternanceStage AlternanceStage? @relation(fields: [offreId, offreType], references: [id, "type"], map: "candidature_alternance")
+  
   @@unique([userId, offreId, offreType])
   @@index([userId])
   @@index([offreId, offreType])
   @@index([statut])
   @@index([createdAt])
+  @@index([offreType])
   @@map("candidatures")
 }
 

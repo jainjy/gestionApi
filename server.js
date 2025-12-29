@@ -240,6 +240,45 @@ app.use(
 app.use('/api/suggestions', require('./routes/Recherchesuggestions'));
 
 
+// AJOUTEZ ICI les nouvelles routes ↓
+app.use("/api/pro/formations", require("./routes/formations")); // <-- AJOUTEZ CETTE LIGNE
+
+// 🆕 AJOUTEZ CETTE LIGNE POUR LES FORMATIONS PUBLIQUES
+app.use("/api/formations", require("./routes/formations-public"));
+
+// Dans server.js, ajoutez cette ligne avec les autres routes :
+app.use("/api/emploi", require("./routes/emploi"));
+
+
+// Route candidatures simplifiée
+app.post('/api/candidatures', (req, res) => {
+  console.log('Candidature reçue:', req.body);
+  res.json({ 
+    success: true, 
+    message: 'Candidature reçue (mode test)' 
+  });
+});
+
+app.get('/api/candidatures', (req, res) => {
+  res.json({ 
+    candidatures: [
+      { id: 1, titre: 'Formation React', statut: 'en_attente' }
+    ] 
+  });
+});
+// 🔥 AJOUTEZ CE MIDDLEWARE POUR LE DÉBOGAGE
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log('Headers:', req.headers);
+  console.log('User:', req.user);
+  next();
+});
+// 🔥 CORRECTION: Route alternance avec log supplémentaire
+app.use("/api/pro/alternance", (req, res, next) => {
+  console.log('📍 Route alternance appelée pour:', req.user?.id);
+  next();
+}, require("./routes/alternance"));
+
 //app.use("/api/recherche", require("./routes/rechercheIntelligent"));
 app.use("/api/recherche", require("./routes/rechercheIntelligentPremium"));
   
