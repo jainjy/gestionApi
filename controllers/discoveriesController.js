@@ -170,7 +170,7 @@ exports.getAllDiscoveries = async (req, res, next) => {
       priceMax,
       ratingMin,
       ratingMax,
-      userId, // Nouveau filtre
+      userId,
       page = 1,
       limit = 10,
       sortBy = "createdAt",
@@ -185,7 +185,7 @@ exports.getAllDiscoveries = async (req, res, next) => {
     if (type) where.type = type;
     if (difficulty) where.difficulty = difficulty;
     if (featured !== undefined) where.featured = featured === "true";
-    if (userId) where.userId = userId; // Filtrer par utilisateur
+    if (userId) where.userId = userId;
 
     // Filtre par prix
     if (priceMin !== undefined || priceMax !== undefined) {
@@ -984,7 +984,7 @@ exports.searchDiscoveries = async (req, res, next) => {
       ratingRange = {},
       status = [],
       featured,
-      userId, // Nouveau paramètre
+      userId,
       limit = 20,
       offset = 0,
       includeUser = true,
@@ -1121,147 +1121,110 @@ exports.exportDiscoveries = async (req, res, next) => {
             lastName: true,
             email: true,
             companyName: true,
+            phone: true,
           },
         },
       },
       orderBy: { createdAt: "desc" },
     });
-    // Exporter les découvertes
-    exports.exportDiscoveries = async (req, res, next) => {
+
+    const formattedDiscoveries = discoveries.map(formatDiscoveryResponse);
+
+    if (format === "csv") {
+      // Implémenter l'export CSV
+      const { Parser } = require("json2csv");
+
+      // Définir les champs CSV
+      const fields = [
+        "id",
+        "title",
+        "type",
+        "location",
+        "city",
+        "difficulty",
+        "duration",
+        "price",
+        "currency",
+        "rating",
+        "status",
+        "featured",
+        "organizer",
+        "contactEmail",
+        "contactPhone",
+        "visits",
+        "revenue",
+        "maxVisitors",
+        "groupSizeMin",
+        "groupSizeMax",
+        "guideIncluded",
+        "transportIncluded",
+        "mealIncluded",
+        "createdAt",
+        "user.id",
+        "user.firstName",
+        "user.lastName",
+        "user.email",
+        "user.companyName",
+      ];
+
+      // Options pour json2csv
+      const opts = { fields };
+
       try {
-        const userId = req.user.id;
-        const userRole = req.user.role;
-        const { format = "json", filters = {} } = req.query;
+        const parser = new Parser(opts);
+        const csv = parser.parse(
+          formattedDiscoveries.map((discovery) => ({
+            ...discovery,
+            "user.id": discovery.user?.id || "",
+            "user.firstName": discovery.user?.firstName || "",
+            "user.lastName": discovery.user?.lastName || "",
+            "user.email": discovery.user?.email || "",
+            "user.companyName": discovery.user?.companyName || "",
+            // Formater les dates
+            createdAt: discovery.createdAt
+              ? new Date(discovery.createdAt).toISOString()
+              : "",
+            // Formater les booléens
+            guideIncluded: discovery.guideIncluded ? "Oui" : "Non",
+            transportIncluded: discovery.transportIncluded ? "Oui" : "Non",
+            mealIncluded: discovery.mealIncluded ? "Oui" : "Non",
+            featured: discovery.featured ? "Oui" : "Non",
+            // Convertir les tableaux en chaînes
+            tags: Array.isArray(discovery.tags)
+              ? discovery.tags.join("; ")
+              : "",
+            highlights: Array.isArray(discovery.highlights)
+              ? discovery.highlights.join("; ")
+              : "",
+          }))
+        );
 
-        const where = {};
+        // Nom du fichier avec date
+        const filename = `discoveries_export_${new Date()
+          .toISOString()
+          .split("T")[0]}.csv`;
 
-        // Si pas professional, exporter seulement les découvertes de l'utilisateur
-        if (userRole !== "professional") {
-          where.userId = userId;
-        }
-
-        // Appliquer les filtres
-        if (filters.status) where.status = filters.status;
-        if (filters.type) where.type = filters.type;
-        if (filters.difficulty) where.difficulty = filters.difficulty;
-
-        const discoveries = await prisma.discovery.findMany({
-          where,
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                companyName: true,
-                phone: true,
-              },
-            },
-          },
-          orderBy: { createdAt: "desc" },
-        });
-
-        const formattedDiscoveries = discoveries.map(formatDiscoveryResponse);
-
-        if (format === "csv") {
-          // Implémenter l'export CSV
-          const { Parser } = require("json2csv");
-
-          // Définir les champs CSV
-          const fields = [
-            "id",
-            "title",
-            "type",
-            "location",
-            "city",
-            "difficulty",
-            "duration",
-            "price",
-            "currency",
-            "rating",
-            "status",
-            "featured",
-            "organizer",
-            "contactEmail",
-            "contactPhone",
-            "visits",
-            "revenue",
-            "maxVisitors",
-            "groupSizeMin",
-            "groupSizeMax",
-            "guideIncluded",
-            "transportIncluded",
-            "mealIncluded",
-            "createdAt",
-            "user.id",
-            "user.firstName",
-            "user.lastName",
-            "user.email",
-            "user.companyName",
-          ];
-
-          // Options pour json2csv
-          const opts = { fields };
-
-          try {
-            const parser = new Parser(opts);
-            const csv = parser.parse(
-              formattedDiscoveries.map((discovery) => ({
-                ...discovery,
-                "user.id": discovery.user?.id || "",
-                "user.firstName": discovery.user?.firstName || "",
-                "user.lastName": discovery.user?.lastName || "",
-                "user.email": discovery.user?.email || "",
-                "user.companyName": discovery.user?.companyName || "",
-                // Formater les dates
-                createdAt: discovery.createdAt
-                  ? new Date(discovery.createdAt).toISOString()
-                  : "",
-                // Formater les booléens
-                guideIncluded: discovery.guideIncluded ? "Oui" : "Non",
-                transportIncluded: discovery.transportIncluded ? "Oui" : "Non",
-                mealIncluded: discovery.mealIncluded ? "Oui" : "Non",
-                featured: discovery.featured ? "Oui" : "Non",
-                // Convertir les tableaux en chaînes
-                tags: Array.isArray(discovery.tags)
-                  ? discovery.tags.join("; ")
-                  : "",
-                highlights: Array.isArray(discovery.highlights)
-                  ? discovery.highlights.join("; ")
-                  : "",
-              }))
-            );
-
-            // Nom du fichier avec date
-            const filename = `discoveries_export_${new Date().toISOString().split("T")[0]}.csv`;
-
-            res.setHeader("Content-Type", "text/csv");
-            res.setHeader(
-              "Content-Disposition",
-              `attachment; filename="${filename}"`
-            );
-            res.status(200).send(csv);
-          } catch (error) {
-            console.error("Erreur génération CSV:", error);
-            return res.status(500).json({
-              success: false,
-              message: "Erreur lors de la génération du fichier CSV",
-            });
-          }
-        } else {
-          res.json({
-            success: true,
-            data: formattedDiscoveries,
-            count: formattedDiscoveries.length,
-            exportedAt: new Date().toISOString(),
-          });
-        }
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${filename}"`
+        );
+        res.status(200).send(csv);
       } catch (error) {
-        console.error("Erreur exportDiscoveries:", error);
-        next(error);
+        console.error("Erreur génération CSV:", error);
+        return res.status(500).json({
+          success: false,
+          message: "Erreur lors de la génération du fichier CSV",
+        });
       }
-    };
+    } else {
+      res.json({
+        success: true,
+        data: formattedDiscoveries,
+        count: formattedDiscoveries.length,
+        exportedAt: new Date().toISOString(),
+      });
+    }
   } catch (error) {
     console.error("Erreur exportDiscoveries:", error);
     next(error);
