@@ -170,17 +170,17 @@ model User {
   audits                    Audit[]
   notifications             Notification[]
   notificationsProprietaire Notification[]            @relation("UserProprietaireRelation")
-
+  refreshTokens             RefreshToken[] // Relation pour la gestion sécurisée des sessions
   // RELATION POUR PODCAST 
-  podcasts             Podcast[] // Podcasts créés par l'utilisateur
-  videos               Video[] // Vidéos créées par l'utilisateur
-  mediaFavorites       UserMediaFavorite[] // Favoris médias de l'utilisateur
-  wellBeingStats       WellBeingStats? // Statistiques bien-être
-  ProfessionalSettings ProfessionalSettings?
-  Document             Document[]
-  ContratType          ContratType[]
-  DocumentArchive      DocumentArchive[]
-  reservationsCours    ReservationCours[]
+  podcasts                  Podcast[] // Podcasts créés par l'utilisateur
+  videos                    Video[] // Vidéos créées par l'utilisateur
+  mediaFavorites            UserMediaFavorite[] // Favoris médias de l'utilisateur
+  wellBeingStats            WellBeingStats? // Statistiques bien-être
+  ProfessionalSettings      ProfessionalSettings?
+  Document                  Document[]
+  ContratType               ContratType[]
+  DocumentArchive           DocumentArchive[]
+  reservationsCours         ReservationCours[]
 
   // relation pour coursdomicil
   courses            Course[]            @relation("UserCourses")
@@ -198,6 +198,10 @@ model User {
   financementPartenaires FinancementPartenaire[]
 
   rendezvousEntreprise RendezvousEntreprise[] // Liste des rendez-vous demandés pour l'entreprise
+
+  // RELATIONS POUR EVENTS ET DISCOVERIES
+  eventsDisco Event[] // Événements créés par l'utilisateur dans discovery et dans event
+  discoveries Discovery[] // Découvertes créées par l'utilisateur
 
   // ======================
   // NOUVELLES RELATIONS POUR ACTIVITÉS - VERSION CORRIGÉE
@@ -217,18 +221,28 @@ model User {
   expertDemandesConseil  DemandeConseil[]   @relation("ExpertDemandesConseil")
   suivisConseil          SuiviConseil[]
 
+  portraitsCreated PortraitLocal[] // Portraits créés par l'utilisateur
+  portraitShares   PortraitShare[] // Partages effectués
+  portraitListens  PortraitListen[] // Écoutes des portraits
+  portraitComments PortraitComment[] // Commentaires sur les portraits
 
   // AJOUTEZ CES RELATIONS À LA FIN DU MODÈLE USER :
-  formations        Formation[]
-  emplois           Emploi[]
-  alternanceStages  AlternanceStage[]
-  candidatures      Candidature[] // Si c'est l'utilisateur qui candidate
+  formations       Formation[]
+  emplois          Emploi[]
+  alternanceStages AlternanceStage[]
+  candidatures     Candidature[] // Si c'est l'utilisateur qui candidate
 
+  projets Projet[]
 
   vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
   reservationsVehiculesClient      ReservationVehicule[] @relation("ReservationVehiculeClient")
   reservationsVehiculesPrestataire ReservationVehicule[] @relation("ReservationVehiculePrestataire")
   avisVehicules                    AvisVehicule[] // Avis laissés sur les véhicules
+  experiencesCreated               Experience[]          @relation("ExperienceCreatedBy")
+  experiencesGuided                Experience[]          @relation("ExperienceGuide")
+  experienceBookings               ExperienceBooking[]
+  experienceReviews                ExperienceReview[]
+  experienceFavorites              ExperienceFavorite[]
 
   @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
@@ -247,6 +261,22 @@ model PasswordResetRequest {
 
   @@index([emailHash])
   @@index([createdAt])
+}
+
+//===================
+// SÉCURITÉ - REFRESH TOKENS (Correction MED-04)
+//===================
+model RefreshToken {
+  id         String    @id @default(uuid())
+  token      String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  revokedAt  DateTime? // Si présent, le token est invalide
+  createdAt  DateTime  @default(now())
+  replacedBy String? // Pour la rotation de token (sécurité avancée)
+
+  @@index([userId])
 }
 
 // ======================
@@ -2149,26 +2179,35 @@ model RendezvousEntreprise {
 }
 
 model Vehicule {
-  id            String @id @default(uuid())
-  // Propriétaire/professionnel
+  id String @id @default(uuid())
+
   prestataireId String
   prestataire   User   @relation(fields: [prestataireId], references: [id], onDelete: Cascade)
 
-  // Informations générales
-  marque          String
-  modele          String
-  annee           Int
-  immatriculation String @unique
-  couleur         String
-  puissance       String // ex: "75ch"
+  // 🔥 NOUVEAU
+  categorie CategorieVehicule
 
-  // Caractéristiques techniques
-  typeVehicule String // "economique", "compacte", "berline", "suv", "luxe", "utilitaire", "camion", "minibus"
-  carburant    String // "essence", "diesel", "electrique", "hybride"
-  transmission String // "manuelle", "automatique"
-  places       Int     @default(5)
-  portes       Int     @default(5)
-  volumeCoffre String? // ex: "350L"
+  marque String?
+  modele String?
+  annee  Int?
+
+  immatriculation String? @unique // ❗ pas obligatoire pour vélo
+
+  couleur String?
+
+  // Caractéristiques
+  typeVehicule String?
+  carburant    CarburantType?
+  transmission TransmissionType?
+
+  places Int? // utile voiture/camion
+  portes Int?
+
+  // 🔥 Spécifique vélo / moto
+  cylindree      Int?
+  typeVelo       String? // "VTT", "VTC", "route", "électrique"
+  assistanceElec Boolean?
+  poids          Float?
 
   // Localisation
   ville     String
@@ -2176,52 +2215,38 @@ model Vehicule {
   latitude  Float?
   longitude Float?
 
-  // Prix et conditions
-  prixJour          Float
-  prixSemaine       Float?
-  prixMois          Float?
-  kilometrageInclus String @default("300 km/jour") // ou "illimité"
-  caution           Float  @default(500)
+  // Prix
+  prixJour    Float
+  prixSemaine Float?
+  prixMois    Float?
 
-  // État et disponibilité
-  disponible Boolean  @default(true)
-  statut     String   @default("active") // "active", "maintenance", "vendu"
-  images     String[] // URLs des images
+  caution Float?
 
-  // Équipements (stockés en JSON pour flexibilité)
-  equipements      Json? // Liste des équipements: climatisation, GPS, etc.
-  caracteristiques String[] // Caractéristiques principales
+  // Disponibilité
+  disponible Boolean @default(true)
+  statut     String  @default("active")
 
-  // Informations commerciales
-  description        String?
-  agence             String? // Nom de l'agence/professionnel
-  conditionsLocation String? // Conditions spécifiques
+  images String[]
 
-  // Statistiques
+  description String?
+
   rating             Float @default(0)
   nombreAvis         Int   @default(0)
   nombreReservations Int   @default(0)
-  vues               Int   @default(0)
 
-  // Métadonnées
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   reservations   ReservationVehicule[]
   avis           AvisVehicule[]
   disponibilites DisponibiliteVehicule[]
 
-  @@index([prestataireId])
+  @@index([categorie])
   @@index([typeVehicule])
-  @@index([carburant])
-  @@index([transmission])
   @@index([ville])
   @@index([prixJour])
   @@index([disponible])
-  @@index([rating])
-  @@index([publishedAt])
 }
 
 model DisponibiliteVehicule {
@@ -2364,6 +2389,13 @@ enum TypeVehicule {
   autre
 }
 
+enum CategorieVehicule {
+  voiture
+  camion
+  moto
+  velo
+}
+
 enum CarburantType {
   essence
   diesel
@@ -2394,8 +2426,6 @@ enum StatutPaiementLocation {
   echec
 }
 
-
-
 // ======================
 // GESTION EMPLOI ET FORMATIONS - VERSION CORRIGÉE ET SIMPLIFIÉE
 // ======================
@@ -2425,15 +2455,16 @@ model Formation {
   applications        Int       @default(0)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
-  
+
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
-  
-  @@map("formations")
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
+
   @@index([proId])
   @@index([status])
   @@index([category])
   @@index([createdAt])
+  @@map("formations")
 }
 
 model Emploi {
@@ -2459,17 +2490,18 @@ model Emploi {
   vues              Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  
+
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
-  
-  @@map("emplois")
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
+
   @@index([proId])
   @@index([status])
   @@index([typeContrat])
   @@index([secteur])
   @@index([urgent])
   @@index([createdAt])
+  @@map("emplois")
 }
 
 model AlternanceStage {
@@ -2496,38 +2528,558 @@ model AlternanceStage {
   vues              Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  
+
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
-  
-  @@map("alternance_stages")
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
+
   @@index([proId])
   @@index([status])
   @@index([type])
   @@index([niveauEtude])
   @@index([urgent])
   @@index([createdAt])
+  @@map("alternance_stages")
 }
 
 model Candidature {
-  id                  Int       @id @default(autoincrement())
-  userId              String
-  offreId             Int
-  offreType           String
+  id Int @id @default(autoincrement())
+
+  userId String
+
+  // 🔑 Relations explicites
+  formationId       Int?
+  emploiId          Int?
+  alternanceStageId Int?
+
+  offreType           OffreType
   statut              String    @default("en_attente")
+  titreOffre          String
   messageMotivation   String?
   cvUrl               String?
   lettreMotivationUrl String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  
-  // Relation seulement avec User
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@unique([userId, offreId, offreType])
-  @@map("candidatures")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Infos candidat (snapshot RGPD-friendly)
+  nomCandidat       String?
+  emailCandidat     String?
+  telephoneCandidat String?
+
+  // Métadonnées RH
+  dateEntretien DateTime?
+  note          Float?
+  feedback      String?
+
+  // Documents supplémentaires
+  documents Json?
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  formation       Formation?       @relation(fields: [formationId], references: [id])
+  emploi          Emploi?          @relation(fields: [emploiId], references: [id])
+  alternanceStage AlternanceStage? @relation(fields: [alternanceStageId], references: [id])
+
   @@index([userId])
-  @@index([offreId, offreType])
+  @@index([offreType])
   @@index([statut])
+  @@index([createdAt])
+  @@map("candidatures")
+}
+
+enum OffreType {
+  FORMATION
+  EMPLOI
+  ALTERNANCE
+}
+
+model Projet {
+  id        String   @id @default(uuid())
+  idpro     String
+  titre     String
+  details   String
+  duree     DateTime
+  media     String?
+  status    String
+  categorie String?
+
+  // Relation avec User
+  pro       User     @relation(fields: [idpro], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([idpro])
+}
+
+// ======================
+// PORTRAITS LOCAUX - NOUVEAU MODÈLE
+// ======================
+model PortraitLocal {
+  id          String  @id @default(uuid())
+  name        String
+  age         Int
+  generation  String // "anciens", "actuels", "jeunes"
+  country     String  @default("Réunion")
+  location    String // ex: "Salazie", "Saint-Paul", etc.
+  profession  String
+  description String? // Description détaillée (optionnelle)
+  story       String // Histoire complète
+  shortStory  String // Version courte pour les cartes
+  quote       String // Citation
+  color       String // Couleur thématique (amber, blue, emerald, etc.)
+  featured    Boolean @default(false)
+  isActive    Boolean @default(true)
+
+  // Informations géographiques
+  latitude  Float?
+  longitude Float?
+  region    String?
+
+  // Catégorisation
+  categories String[] // Ex: ["artisanat", "agriculture", "musique"]
+  tags       String[] // Mots-clés pour la recherche
+
+  // Images (stockées en tableau)
+  images String[]
+
+  // Interview audio
+  interviewAudioUrl String?
+  interviewDuration String? // Format: "24:15"
+  interviewTopics   String[] // Sujets abordés
+
+  // Sagesse et connaissances
+  wisdom String[] // Citations de sagesse
+
+  // Réseaux sociaux
+  instagramHandle String?
+  facebookHandle  String?
+  youtubeHandle   String?
+
+  // Statistiques
+  views   Int @default(0)
+  shares  Int @default(0)
+  listens Int @default(0)
+
+  // Métadonnées
+  language  String   @default("fr")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId String? // Optionnel : utilisateur qui a créé/validé le portrait
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Relations avec les modèles de statistiques
+  portraitShares   PortraitShare[]
+  portraitListens  PortraitListen[]
+  portraitComments PortraitComment[]
+
+  @@index([generation])
+  @@index([country])
+  @@index([location])
+  @@index([featured])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([categories])
+  @@map("portraits_locaux")
+}
+
+// ======================
+// STATISTIQUES DE PARTAGE DES PORTRAITS
+// ======================
+model PortraitShare {
+  id         String   @id @default(uuid())
+  portraitId String
+  userId     String?
+  platform   String // "instagram", "facebook", "youtube", "whatsapp", etc.
+  sharedAt   DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  portrait PortraitLocal @relation(fields: [portraitId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([portraitId])
+  @@index([userId])
+  @@index([platform])
+  @@index([sharedAt])
+  @@map("portrait_shares")
+}
+
+// ======================
+// ÉCOUTES DES PORTRAITS
+// ======================
+model PortraitListen {
+  id         String   @id @default(uuid())
+  portraitId String
+  userId     String?
+  duration   Int // Durée d'écoute en secondes
+  completed  Boolean  @default(false) // Écoute complète ou non
+  listenedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  portrait PortraitLocal @relation(fields: [portraitId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([portraitId])
+  @@index([userId])
+  @@index([listenedAt])
+  @@index([completed])
+  @@map("portrait_listens")
+}
+
+// ======================
+// COMMENTAIRES SUR LES PORTRAITS - VERSION CORRIGÉE
+// ======================
+model PortraitComment {
+  id         String   @id @default(uuid())
+  portraitId String
+  userId     String
+  content    String
+  parentId   String? // Pour les réponses aux commentaires
+  likes      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isEdited   Boolean  @default(false)
+
+  portrait PortraitLocal     @relation(fields: [portraitId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   PortraitComment?  @relation(name: "PortraitCommentReplies", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replies  PortraitComment[] @relation(name: "PortraitCommentReplies")
+
+  @@index([portraitId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([createdAt])
+  @@map("portrait_comments")
+}
+
+// ======================
+// EVENT & DISCOVERY
+// ======================
+
+model Event {
+  id                   Int         @id @default(autoincrement())
+  title                String      @db.VarChar(255)
+  description          String?     @db.Text
+  date                 DateTime
+  startTime            String?     @db.VarChar(10)
+  endTime              String?     @db.VarChar(10)
+  location             String      @db.VarChar(255)
+  address              String?     @db.VarChar(255)
+  city                 String?     @db.VarChar(100)
+  postalCode           String?     @db.VarChar(20)
+  category             String      @db.VarChar(100)
+  subCategory          String?     @db.VarChar(100)
+  capacity             Int         @default(0)
+  price                Float       @default(0)
+  discountPrice        Float?      @default(0)
+  currency             String      @default("EUR")
+  image                String?     @db.VarChar(500)
+  images               Json?       @default("[]")
+  featured             Boolean     @default(false)
+  status               EventStatus @default(DRAFT)
+  organizer            String?     @db.VarChar(255)
+  contactEmail         String?     @db.VarChar(255)
+  contactPhone         String?     @db.VarChar(20)
+  website              String?     @db.VarChar(255)
+  tags                 Json?       @default("[]")
+  requirements         String?     @db.Text
+  highlights           Json?       @default("[]")
+  duration             String?     @db.VarChar(50)
+  difficulty           Difficulty?
+  targetAudience       Json?       @default("[]")
+  includes             Json?       @default("[]")
+  notIncludes          Json?       @default("[]")
+  cancellationPolicy   String?     @db.Text
+  refundPolicy         String?     @db.Text
+  visibility           Visibility  @default(PUBLIC)
+  registrationDeadline DateTime?
+  earlyBirdDeadline    DateTime?
+  earlyBirdPrice       Float?      @default(0)
+
+  // Stats
+  participants Int   @default(0)
+  revenue      Float @default(0)
+
+  // RELATION USER
+  userId String? @db.VarChar(36)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([category])
+  @@index([featured])
+  @@index([visibility])
+  @@index([userId])
+}
+
+model Discovery {
+  id              Int             @id @default(autoincrement())
+  title           String          @db.VarChar(255)
+  description     String?         @db.Text
+  type            String          @db.VarChar(100)
+  location        String          @db.VarChar(255)
+  address         String?         @db.VarChar(255)
+  city            String?         @db.VarChar(100)
+  postalCode      String?         @db.VarChar(20)
+  difficulty      Difficulty
+  duration        String?         @db.VarChar(100)
+  rating          Float           @default(0)
+  image           String?         @db.VarChar(500)
+  images          Json?           @default("[]")
+  featured        Boolean         @default(false)
+  status          DiscoveryStatus @default(DRAFT)
+  organizer       String?         @db.VarChar(255)
+  contactEmail    String?         @db.VarChar(255)
+  contactPhone    String?         @db.VarChar(20)
+  website         String?         @db.VarChar(255)
+  tags            Json?           @default("[]")
+  highlights      Json?           @default("[]")
+  recommendations String?         @db.Text
+  bestSeason      Json?           @default("[]")
+  bestTime        Json?           @default("[]")
+  accessibility   String?         @db.Text
+  equipment       Json?           @default("[]")
+  safety          String?         @db.Text
+  price           Float?          @default(0)
+  currency        String          @default("EUR")
+  includes        Json?           @default("[]")
+  notIncludes     Json?           @default("[]")
+
+  // Group info
+  groupSizeMin      Int?  @default(1)
+  groupSizeMax      Int?  @default(10)
+  ageRestrictionMin Int?
+  ageRestrictionMax Int?
+  languages         Json? @default("[]")
+
+  // Services
+  guideIncluded        Boolean @default(false)
+  transportIncluded    Boolean @default(false)
+  mealIncluded         Boolean @default(false)
+  parkingAvailable     Boolean @default(false)
+  wifiAvailable        Boolean @default(false)
+  familyFriendly       Boolean @default(false)
+  petFriendly          Boolean @default(false)
+  wheelchairAccessible Boolean @default(false)
+
+  // Sustainability
+  sustainabilityRating Float?  @default(0)
+  carbonFootprint      String? @db.VarChar(100)
+
+  // Additional fields from your interface
+  coordinates      Json? @default("{}")
+  includedServices Json? @default("[]")
+  requirements     Json? @default("[]")
+  maxVisitors      Int?  @default(0)
+  availableDates   Json? @default("[]")
+
+  // Stats
+  visits  Int   @default(0)
+  revenue Float @default(0)
+
+  // RELATION USER
+  userId String? @db.VarChar(36)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([featured])
+  @@index([difficulty])
+  @@index([userId])
+}
+
+enum EventStatus {
+  DRAFT
+  ACTIVE
+  UPCOMING
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum DiscoveryStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  ACTIVE
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+  INVITE_ONLY
+}
+
+// ======================
+// MODÈLE POUR LES SÉJOURS & EXPÉRIENCES (VERSION SIMPLIFIÉE)
+// ======================
+
+model Experience {
+  id           String   @id @default(uuid())
+  title        String
+  slug         String   @unique
+  category     String // aventure, bienetre, marine, culture, luxe
+  description  String
+  duration     String
+  location     String
+  price        Float
+  highlights   String[]
+  images       String[]
+  difficulty   String // Facile, Intermédiaire, Intense, Extrême
+  groupSize    String
+  season       String
+  included     String[] // Ce qui est inclus
+  requirements String[] // Prérequis
+  rating       Float    @default(0)
+  reviewCount  Int      @default(0)
+  viewCount    Int      @default(0)
+  isActive     Boolean  @default(true)
+  isFeatured   Boolean  @default(false)
+
+  // Relations directes avec User (au lieu de ActivityGuide)
+  createdById String // ID de l'utilisateur qui a créé l'expérience
+  guideId     String? // Optionnel: ID du guide si l'utilisateur est un guide
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  createdBy User                 @relation("ExperienceCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  guide     User?                @relation("ExperienceGuide", fields: [guideId], references: [id], onDelete: SetNull)
+  bookings  ExperienceBooking[]
+  reviews   ExperienceReview[]
+  faqs      ExperienceFAQ[]
+  media     ExperienceMedia[]
+  favorites ExperienceFavorite[]
+
+  @@index([category])
+  @@index([createdById])
+  @@index([guideId])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([createdAt])
+  @@index([price])
+  @@index([difficulty])
+}
+
+model ExperienceBooking {
+  id                 String    @id @default(uuid())
+  experienceId       String
+  userId             String
+  checkIn            DateTime
+  checkOut           DateTime
+  guests             Int
+  totalAmount        Float
+  specialRequests    String?
+  status             String    @default("pending") // pending, confirmed, cancelled, completed, expired
+  confirmationNumber String    @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  cancelledAt        DateTime?
+  confirmedAt        DateTime?
+  completedAt        DateTime?
+
+  // Relations
+  experience Experience        @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review     ExperienceReview?
+
+  @@index([experienceId])
+  @@index([userId])
+  @@index([status])
+  @@index([confirmationNumber])
+  @@index([createdAt])
+  @@index([checkIn])
+  @@index([checkOut])
+}
+
+model ExperienceReview {
+  id           String   @id @default(uuid())
+  experienceId String
+  userId       String
+  bookingId    String?  @unique // Lié à une réservation spécifique
+  rating       Int // 1-5
+  comment      String?
+  images       String[]
+  verified     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  experience Experience         @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking    ExperienceBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@unique([experienceId, userId])
+  @@index([experienceId])
+  @@index([userId])
+  @@index([rating])
+  @@index([createdAt])
+  @@index([verified])
+}
+
+model ExperienceFAQ {
+  id           String   @id @default(uuid())
+  experienceId String
+  question     String
+  answer       String
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@index([experienceId])
+  @@index([order])
+  @@index([isActive])
+}
+
+model ExperienceMedia {
+  id           String   @id @default(uuid())
+  experienceId String
+  url          String
+  type         String // image, video
+  caption      String?
+  sortOrder    Int      @default(0)
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@index([experienceId])
+  @@index([sortOrder])
+  @@index([isPrimary])
+}
+
+model ExperienceFavorite {
+  id           String   @id @default(uuid())
+  experienceId String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, experienceId])
+  @@index([userId])
+  @@index([experienceId])
   @@index([createdAt])
 }

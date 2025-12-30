@@ -1,4 +1,4 @@
-// server.js - VERSION MISE À JOUR
+// server.js - VERSION MISE À JOUR AVEC EXPÉRIENCES TOURISTIQUES
 require("dotenv").config();
 const path = require("path");
 const express = require("express");
@@ -15,7 +15,6 @@ const { authenticateToken } = require("./middleware/auth");
 require("./cron/subscriptionCron.js");
 
 const artCreationRoutes = require('./routes/art-creation');
-
 
 // Initialisation des variables nécessaires
 const app = express();
@@ -360,6 +359,13 @@ app.use("/api/activity-actions", require("./routes/activity-actions"));
 app.use("/api/guide-contact", require("./routes/guide-contact"));
 app.use("/api/activity-availability", require("./routes/activity-availability"));
 
+// ======================
+// 🆕 ROUTES SÉJOURS & EXPÉRIENCES TOURISTIQUES
+// ======================
+app.use("/api/experiences", require("./routes/experiences"));
+app.use("/api/experience-bookings", require("./routes/experience-bookings"));
+app.use("/api/experience-reviews", require("./routes/experience-reviews"));
+
 // Route pour l'upload de fichiers dans les messages
 app.post(
   "/api/upload/message-file",
@@ -439,6 +445,9 @@ app.get("/health", (req, res) => {
       "activity-actions",
       "guide-contact",
       "activity-availability",
+      "experiences",
+      "experience-bookings",
+      "experience-reviews",
       "rendez-vous-entreprise",
     ],
     websocket: {
@@ -471,7 +480,11 @@ app.use("*", (req, res) => {
       "/api/activity-bookings/*",
       "/api/activity-actions/*",
       "/api/guide-contact/*",
-      "/api/activity-availability/*"
+      "/api/activity-availability/*",
+      // 🆕 AJOUT DES ROUTES EXPÉRIENCES
+      "/api/experiences/*",
+      "/api/experience-bookings/*",
+      "/api/experience-reviews/*"
     ]
   });
 });
@@ -491,5 +504,5 @@ server.listen(PORT, async () => {
   console.log(`🚀 Serveur démarré sur le port: ${PORT}`);
   console.log(`🔌 WebSocket disponible sur: ws://localhost:${PORT}`);
   console.log(`🏥 Route santé: http://localhost:${PORT}/health`);
+  console.log(`🎯 Routes expériences activées: /api/experiences/*`);
 });
-
