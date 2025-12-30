@@ -67,21 +67,28 @@ const eventValidationRules = [
     .isFloat({ min: 0 })
     .withMessage('Le prix early bird doit être un nombre positif'),
   
-  // Enums
+  // CORRIGÉ : Utiliser les valeurs de l'enum EventStatus en MAJUSCULES
   body('status')
     .optional()
-    .isIn(['draft', 'active', 'upcoming', 'completed', 'cancelled', 'archived'])
-    .withMessage('Statut invalide'),
+    .isIn(['DRAFT', 'ACTIVE', 'UPCOMING', 'COMPLETED', 'CANCELLED', 'ARCHIVED'])
+    .withMessage('Statut invalide. Valeurs autorisées: DRAFT, ACTIVE, UPCOMING, COMPLETED, CANCELLED, ARCHIVED'),
   
+  // CORRIGÉ : Utiliser les valeurs de l'enum Difficulty en MAJUSCULES
   body('difficulty')
     .optional()
-    .isIn(['easy', 'medium', 'hard'])
-    .withMessage('Difficulté invalide'),
+    .isIn(['EASY', 'MEDIUM', 'HARD'])
+    .withMessage('Difficulté invalide. Valeurs autorisées: EASY, MEDIUM, HARD'),
   
+  // CORRIGÉ : Utiliser les valeurs de l'enum Visibility en MAJUSCULES
   body('visibility')
     .optional()
-    .isIn(['public', 'private', 'invite_only'])
-    .withMessage('Visibilité invalide'),
+    .isIn(['PUBLIC', 'PRIVATE', 'INVITE_ONLY'])
+    .withMessage('Visibilité invalide. Valeurs autorisées: PUBLIC, PRIVATE, INVITE_ONLY'),
+  
+  body('currency')
+    .optional()
+    .isIn(['EUR', 'USD', 'MGA', 'GBP', 'JPY', 'CNY'])
+    .withMessage('Devise invalide'),
   
   // Email
   body('contactEmail')
@@ -132,6 +139,66 @@ const eventValidationRules = [
     })
     .withMessage('Les images doivent être un tableau'),
   
+  body('highlights')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les highlights doivent être un tableau'),
+  
+  body('targetAudience')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Le public cible doit être un tableau'),
+  
+  body('includes')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les inclusions doivent être un tableau'),
+  
+  body('notIncludes')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les exclusions doivent être un tableau'),
+  
   // Dates optionnelles
   body('registrationDeadline')
     .optional()
@@ -168,11 +235,12 @@ const discoveryValidationRules = [
     .isLength({ max: 255 })
     .withMessage('Le lieu ne doit pas dépasser 255 caractères'),
   
+  // CORRIGÉ : Utiliser les valeurs de l'enum Difficulty en MAJUSCULES
   body('difficulty')
     .notEmpty()
     .withMessage('La difficulté est requise')
-    .isIn(['easy', 'medium', 'hard'])
-    .withMessage('Difficulté invalide'),
+    .isIn(['EASY', 'MEDIUM', 'HARD'])
+    .withMessage('Difficulté invalide. Valeurs autorisées: EASY, MEDIUM, HARD'),
   
   body('duration')
     .optional()
@@ -200,31 +268,37 @@ const discoveryValidationRules = [
     .isFloat({ min: 0, max: 5 })
     .withMessage('La note de durabilité doit être entre 0 et 5'),
   
-  body('groupSize.min')
+  // CORRIGÉ : Utiliser les noms de champ du modèle
+  body('groupSizeMin')
     .optional()
     .isInt({ min: 1 })
     .withMessage('La taille minimale du groupe doit être au moins 1'),
   
-  body('groupSize.max')
+  body('groupSizeMax')
     .optional()
     .isInt({ min: 1 })
     .withMessage('La taille maximale du groupe doit être au moins 1'),
   
-  body('ageRestriction.min')
+  body('ageRestrictionMin')
     .optional()
     .isInt({ min: 0 })
     .withMessage('L\'âge minimum doit être un nombre positif'),
   
-  body('ageRestriction.max')
+  body('ageRestrictionMax')
     .optional()
     .isInt({ min: 0 })
     .withMessage('L\'âge maximum doit être un nombre positif'),
   
-  // Enums
+  // CORRIGÉ : Utiliser les valeurs de l'enum DiscoveryStatus en MAJUSCULES
   body('status')
     .optional()
-    .isIn(['draft', 'published', 'archived', 'active'])
-    .withMessage('Statut invalide'),
+    .isIn(['DRAFT', 'PUBLISHED', 'ARCHIVED', 'ACTIVE'])
+    .withMessage('Statut invalide. Valeurs autorisées: DRAFT, PUBLISHED, ARCHIVED, ACTIVE'),
+  
+  body('currency')
+    .optional()
+    .isIn(['EUR', 'USD', 'MGA', 'GBP', 'JPY', 'CNY'])
+    .withMessage('Devise invalide'),
   
   // Email
   body('contactEmail')
@@ -275,6 +349,51 @@ const discoveryValidationRules = [
     })
     .withMessage('Les images doivent être un tableau'),
   
+  body('highlights')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les highlights doivent être un tableau'),
+  
+  body('bestSeason')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les meilleures saisons doivent être un tableau'),
+  
+  body('bestTime')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les meilleurs moments doivent être un tableau'),
+  
   body('availableDates')
     .optional()
     .custom((value) => {
@@ -290,6 +409,96 @@ const discoveryValidationRules = [
     })
     .withMessage('Les dates disponibles doivent être un tableau'),
   
+  body('languages')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les langues doivent être un tableau'),
+  
+  body('equipment')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('L\'équipement doit être un tableau'),
+  
+  body('includes')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les inclusions doivent être un tableau'),
+  
+  body('notIncludes')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les exclusions doivent être un tableau'),
+  
+  body('includedServices')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les services inclus doivent être un tableau'),
+  
+  body('requirements')
+    .optional()
+    .custom((value) => {
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed);
+        } catch {
+          return true;
+        }
+      }
+      return Array.isArray(value);
+    })
+    .withMessage('Les exigences doivent être un tableau'),
+  
   // Coordonnées
   body('coordinates')
     .optional()
@@ -297,14 +506,14 @@ const discoveryValidationRules = [
       if (typeof value === 'string') {
         try {
           const parsed = JSON.parse(value);
-          return typeof parsed === 'object' && parsed !== null && 'lat' in parsed && 'lng' in parsed;
+          return typeof parsed === 'object' && parsed !== null;
         } catch {
           return true;
         }
       }
-      return typeof value === 'object' && value !== null && 'lat' in value && 'lng' in value;
+      return typeof value === 'object' && value !== null;
     })
-    .withMessage('Les coordonnées doivent être un objet avec lat et lng'),
+    .withMessage('Les coordonnées doivent être un objet'),
   
   // Booléens
   body('guideIncluded')
