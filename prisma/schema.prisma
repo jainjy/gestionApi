@@ -217,12 +217,16 @@ model User {
   expertDemandesConseil  DemandeConseil[]   @relation("ExpertDemandesConseil")
   suivisConseil          SuiviConseil[]
 
+  portraitsCreated PortraitLocal[] // Portraits créés par l'utilisateur
+  portraitShares   PortraitShare[] // Partages effectués
+  portraitListens  PortraitListen[] // Écoutes des portraits
+  portraitComments PortraitComment[] // Commentaires sur les portraits
 
   // AJOUTEZ CES RELATIONS À LA FIN DU MODÈLE USER :
-  formations        Formation[]
-  emplois           Emploi[]
-  alternanceStages  AlternanceStage[]
-  candidatures      Candidature[] // Si c'est l'utilisateur qui candidate
+  formations       Formation[]
+  emplois          Emploi[]
+  alternanceStages AlternanceStage[]
+  candidatures     Candidature[] // Si c'est l'utilisateur qui candidate
 
   projets Projet[]
 
@@ -2150,7 +2154,7 @@ model RendezvousEntreprise {
 }
 
 model Vehicule {
-  id            String @id @default(uuid())
+  id String @id @default(uuid())
 
   prestataireId String
   prestataire   User   @relation(fields: [prestataireId], references: [id], onDelete: Cascade)
@@ -2158,9 +2162,9 @@ model Vehicule {
   // 🔥 NOUVEAU
   categorie CategorieVehicule
 
-  marque  String?
-  modele  String?
-  annee   Int?
+  marque String?
+  modele String?
+  annee  Int?
 
   immatriculation String? @unique // ❗ pas obligatoire pour vélo
 
@@ -2175,10 +2179,10 @@ model Vehicule {
   portes Int?
 
   // 🔥 Spécifique vélo / moto
-  cylindree       Int?
-  typeVelo        String? // "VTT", "VTC", "route", "électrique"
-  assistanceElec  Boolean?
-  poids           Float?
+  cylindree      Int?
+  typeVelo       String? // "VTT", "VTC", "route", "électrique"
+  assistanceElec Boolean?
+  poids          Float?
 
   // Localisation
   ville     String
@@ -2359,6 +2363,7 @@ enum TypeVehicule {
   minibus
   autre
 }
+
 enum CategorieVehicule {
   voiture
   camion
@@ -2396,8 +2401,6 @@ enum StatutPaiementLocation {
   echec
 }
 
-
-
 // ======================
 // GESTION EMPLOI ET FORMATIONS - VERSION CORRIGÉE ET SIMPLIFIÉE
 // ======================
@@ -2427,15 +2430,16 @@ model Formation {
   applications        Int       @default(0)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
-  
+
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
-  
-  @@map("formations")
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
+
   @@index([proId])
   @@index([status])
   @@index([category])
   @@index([createdAt])
+  @@map("formations")
 }
 
 model Emploi {
@@ -2461,17 +2465,18 @@ model Emploi {
   vues              Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  
+
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
-  
-  @@map("emplois")
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
+
   @@index([proId])
   @@index([status])
   @@index([typeContrat])
   @@index([secteur])
   @@index([urgent])
   @@index([createdAt])
+  @@map("emplois")
 }
 
 model AlternanceStage {
@@ -2498,41 +2503,72 @@ model AlternanceStage {
   vues              Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  
+
   // Relation seulement avec User
-  user User @relation(fields: [proId], references: [id], onDelete: Cascade)
-  
-  @@map("alternance_stages")
+  user         User          @relation(fields: [proId], references: [id], onDelete: Cascade)
+  candidatures Candidature[]
+
   @@index([proId])
   @@index([status])
   @@index([type])
   @@index([niveauEtude])
   @@index([urgent])
   @@index([createdAt])
+  @@map("alternance_stages")
 }
 
 model Candidature {
-  id                  Int       @id @default(autoincrement())
-  userId              String
-  offreId             Int
-  offreType           String
+  id Int @id @default(autoincrement())
+
+  userId String
+
+  // 🔑 Relations explicites
+  formationId       Int?
+  emploiId          Int?
+  alternanceStageId Int?
+
+  offreType           OffreType
   statut              String    @default("en_attente")
+  titreOffre          String
   messageMotivation   String?
   cvUrl               String?
   lettreMotivationUrl String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  
-  // Relation seulement avec User
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@unique([userId, offreId, offreType])
-  @@map("candidatures")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Infos candidat (snapshot RGPD-friendly)
+  nomCandidat       String?
+  emailCandidat     String?
+  telephoneCandidat String?
+
+  // Métadonnées RH
+  dateEntretien DateTime?
+  note          Float?
+  feedback      String?
+
+  // Documents supplémentaires
+  documents Json?
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  formation       Formation?       @relation(fields: [formationId], references: [id])
+  emploi          Emploi?          @relation(fields: [emploiId], references: [id])
+  alternanceStage AlternanceStage? @relation(fields: [alternanceStageId], references: [id])
+
   @@index([userId])
-  @@index([offreId, offreType])
+  @@index([offreType])
   @@index([statut])
   @@index([createdAt])
+  @@map("candidatures")
 }
+
+enum OffreType {
+  FORMATION
+  EMPLOI
+  ALTERNANCE
+}
+
 model Projet {
   id        String   @id @default(uuid())
   idpro     String
@@ -2540,7 +2576,7 @@ model Projet {
   details   String
   duree     DateTime
   media     String?
-  status      String
+  status    String
   categorie String?
 
   // Relation avec User
@@ -2549,4 +2585,148 @@ model Projet {
   updatedAt DateTime @updatedAt
 
   @@index([idpro])
+}
+
+// ======================
+// PORTRAITS LOCAUX - NOUVEAU MODÈLE
+// ======================
+model PortraitLocal {
+  id          String  @id @default(uuid())
+  name        String
+  age         Int
+  generation  String // "anciens", "actuels", "jeunes"
+  country     String  @default("Réunion")
+  location    String // ex: "Salazie", "Saint-Paul", etc.
+  profession  String
+  description String? // Description détaillée (optionnelle)
+  story       String // Histoire complète
+  shortStory  String // Version courte pour les cartes
+  quote       String // Citation
+  color       String // Couleur thématique (amber, blue, emerald, etc.)
+  featured    Boolean @default(false)
+  isActive    Boolean @default(true)
+
+  // Informations géographiques
+  latitude  Float?
+  longitude Float?
+  region    String?
+
+  // Catégorisation
+  categories String[] // Ex: ["artisanat", "agriculture", "musique"]
+  tags       String[] // Mots-clés pour la recherche
+
+  // Images (stockées en tableau)
+  images String[]
+
+  // Interview audio
+  interviewAudioUrl String?
+  interviewDuration String? // Format: "24:15"
+  interviewTopics   String[] // Sujets abordés
+
+  // Sagesse et connaissances
+  wisdom String[] // Citations de sagesse
+
+  // Réseaux sociaux
+  instagramHandle String?
+  facebookHandle  String?
+  youtubeHandle   String?
+
+  // Statistiques
+  views   Int @default(0)
+  shares  Int @default(0)
+  listens Int @default(0)
+
+  // Métadonnées
+  language  String   @default("fr")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId String? // Optionnel : utilisateur qui a créé/validé le portrait
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Relations avec les modèles de statistiques
+  portraitShares   PortraitShare[]
+  portraitListens  PortraitListen[]
+  portraitComments PortraitComment[]
+
+  @@index([generation])
+  @@index([country])
+  @@index([location])
+  @@index([featured])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([categories])
+  @@map("portraits_locaux")
+}
+
+// ======================
+// STATISTIQUES DE PARTAGE DES PORTRAITS
+// ======================
+model PortraitShare {
+  id         String   @id @default(uuid())
+  portraitId String
+  userId     String?
+  platform   String // "instagram", "facebook", "youtube", "whatsapp", etc.
+  sharedAt   DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  portrait PortraitLocal @relation(fields: [portraitId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([portraitId])
+  @@index([userId])
+  @@index([platform])
+  @@index([sharedAt])
+  @@map("portrait_shares")
+}
+
+// ======================
+// ÉCOUTES DES PORTRAITS
+// ======================
+model PortraitListen {
+  id         String   @id @default(uuid())
+  portraitId String
+  userId     String?
+  duration   Int // Durée d'écoute en secondes
+  completed  Boolean  @default(false) // Écoute complète ou non
+  listenedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  portrait PortraitLocal @relation(fields: [portraitId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([portraitId])
+  @@index([userId])
+  @@index([listenedAt])
+  @@index([completed])
+  @@map("portrait_listens")
+}
+
+// ======================
+// COMMENTAIRES SUR LES PORTRAITS - VERSION CORRIGÉE
+// ======================
+model PortraitComment {
+  id         String   @id @default(uuid())
+  portraitId String
+  userId     String
+  content    String
+  parentId   String? // Pour les réponses aux commentaires
+  likes      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isEdited   Boolean  @default(false)
+
+  portrait PortraitLocal     @relation(fields: [portraitId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   PortraitComment?  @relation(name: "PortraitCommentReplies", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replies  PortraitComment[] @relation(name: "PortraitCommentReplies")
+
+  @@index([portraitId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([createdAt])
+  @@map("portrait_comments")
 }
