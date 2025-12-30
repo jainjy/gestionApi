@@ -85,7 +85,8 @@ router.get('/photographie/categories', async (req, res) => {
 });
 
 // ✅ ROUTE PRINCIPALE POUR LES PHOTOGRAPHES
-router.get('/products', async (req, res) => {
+router.get('/photographers', async (req, res) => {
+
   try {
     const { 
       search = '', 
@@ -1031,5 +1032,7 @@ router.get('/artisanat/products', async (req, res) => {
     });
   }
 });
+const ProduitsArtEtCreation = require('./ProduitsArtEtCreation');
 
+router.use('/products', ProduitsArtEtCreation);
 module.exports = router;
