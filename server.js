@@ -232,7 +232,7 @@ app.use("/api/transactions", require("./routes/transactions"));
 app.use("/api/projets", require("./routes/projet"));
 //droit de famille
 app.use("/api/droitFamille", require("./routes/droitFamille"));
-
+app.use("/api/patrimoine", require("./routes/Patrimoine"));
 app.use(
   "/api/subscription-payments",
   require("./routes/subscription-payments")
