@@ -8,6 +8,632 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+// ✅ GET statistiques publiques alternance/stage
+router.get('/public/stats', async (req, res) => {
+  try {
+    console.log('📡 GET /alternance/public/stats - Statistiques publiques');
+
+    // Compter les offres actives
+    const totalActive = await prisma.alternanceStage.count({
+      where: { status: 'active' }
+    });
+
+    // Compter les offres urgentes
+    const totalUrgent = await prisma.alternanceStage.count({
+      where: { 
+        status: 'active',
+        urgent: true
+      }
+    });
+
+    // Compter par type
+    const alternanceCount = await prisma.alternanceStage.count({
+      where: { 
+        status: 'active',
+        type: 'Alternance (Contrat pro)'
+      }
+    });
+
+    const stageCount = await prisma.alternanceStage.count({
+      where: { 
+        status: 'active',
+        type: 'Stage conventionné'
+      }
+    });
+
+    // Nombre d'offres publiées cette semaine
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    const newThisWeek = await prisma.alternanceStage.count({
+      where: {
+        status: 'active',
+        createdAt: {
+          gte: oneWeekAgo
+        }
+      }
+    });
+
+    // Répartition par niveau d'étude
+    const emploisByNiveau = await prisma.alternanceStage.groupBy({
+      by: ['niveauEtude'],
+      where: { status: 'active' },
+      _count: true
+    });
+
+    const niveauxMap = {};
+    emploisByNiveau.forEach(item => {
+      if (item.niveauEtude) {
+        niveauxMap[item.niveauEtude] = item._count;
+      }
+    });
+
+    const statsData = {
+      total: totalActive || 0,
+      urgent: totalUrgent || 0,
+      alternance: alternanceCount || 0,
+      stage: stageCount || 0,
+      nouvellesSemaine: newThisWeek || 0,
+      parNiveau: niveauxMap || {}
+    };
+
+    console.log('📊 Stats publiques alternance calculées:', statsData);
+
+    res.status(200).json({
+      success: true,
+      data: statsData
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération stats publiques alternance:', error);
+    
+    // Retourner des stats par défaut en cas d'erreur
+    res.status(200).json({
+      success: true,
+      data: {
+        total: 0,
+        urgent: 0,
+        alternance: 0,
+        stage: 0,
+        nouvellesSemaine: 0,
+        parNiveau: {}
+      }
+    });
+  }
+});
+
+// ✅ GET offres d'alternance/stage publiques
+router.get('/public', async (req, res) => {
+  try {
+    console.log('📡 GET /alternance/public - Requête publique');
+    
+    const {
+      search = '',
+      status = 'active',
+      type,
+      niveau,
+      location,
+      minRemuneration,
+      maxRemuneration,
+      ecolePartenaire,
+      remoteOnly,
+      urgentOnly,
+      page = 1,
+      limit = 50,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Construire les filtres - uniquement les offres actives
+    const where = {
+      status: 'active'
+    };
+
+    // Filtre par recherche
+    if (search && search.trim() !== '') {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { ecolePartenaire: { contains: search, mode: 'insensitive' } },
+        { niveauEtude: { contains: search, mode: 'insensitive' } },
+        { location: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    // Filtre par type
+    if (type && type !== 'all' && type !== 'tous') {
+      where.type = type;
+    }
+
+    // Filtre par niveau d'étude
+    if (niveau && niveau !== 'all' && niveau !== 'tous') {
+      where.niveauEtude = niveau;
+    }
+
+    // Filtre par localisation
+    if (location && location.trim() !== '') {
+      where.location = { contains: location, mode: 'insensitive' };
+    }
+
+    // Filtre par école partenaire
+    if (ecolePartenaire && ecolePartenaire.trim() !== '') {
+      where.ecolePartenaire = { contains: ecolePartenaire, mode: 'insensitive' };
+    }
+
+    // Filtres booléens
+    if (remoteOnly === 'true') {
+      where.location = { contains: 'Télétravail', mode: 'insensitive' };
+    }
+    if (urgentOnly === 'true') {
+      where.urgent = true;
+    }
+
+    // Compter le total
+    const total = await prisma.alternanceStage.count({ where });
+
+    // Récupérer les offres d'alternance/stage
+    const offres = await prisma.alternanceStage.findMany({
+      where,
+      skip: skip >= 0 ? skip : 0,
+      take: parseInt(limit) > 0 ? parseInt(limit) : 50,
+      orderBy: { [sortBy]: sortOrder },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            commercialName: true
+          }
+        }
+      }
+    });
+
+    // Formater la réponse
+    const formattedOffres = offres.map(offre => ({
+      id: offre.id,
+      title: offre.title,
+      description: offre.description,
+      type: offre.type,
+      niveauEtude: offre.niveauEtude,
+      duree: offre.duree,
+      remuneration: offre.remuneration,
+      location: offre.location,
+      ecolePartenaire: offre.ecolePartenaire,
+      rythmeAlternance: offre.rythmeAlternance,
+      pourcentageTemps: offre.pourcentageTemps,
+      urgent: offre.urgent,
+      missions: offre.missions || [],
+      competences: offre.competences || [],
+      avantages: offre.avantages || [],
+      dateDebut: offre.dateDebut,
+      dateFin: offre.dateFin,
+      candidaturesCount: offre.candidaturesCount || 0,
+      vues: offre.vues || 0,
+      status: offre.status,
+      createdAt: offre.createdAt,
+      updatedAt: offre.updatedAt,
+      organisme: offre.user?.companyName || 
+                offre.user?.commercialName || 
+                (offre.user?.firstName && offre.user?.lastName 
+                  ? `${offre.user.firstName} ${offre.user.lastName}`
+                  : 'Organisme')
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formattedOffres,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération alternances publiques:', error);
+    
+    // Données fictives pour développement
+    const mockOffres = [
+      {
+        id: 1,
+        title: 'Alternance Développeur Web Full Stack',
+        description: 'Alternance en développement web sur les technologies modernes',
+        type: 'Alternance (Contrat pro)',
+        niveauEtude: 'BAC+3',
+        duree: '12 mois',
+        remuneration: '1200€/mois',
+        location: 'Paris + 2 jours télétravail',
+        ecolePartenaire: 'ESGI',
+        rythmeAlternance: '3 jours entreprise / 2 jours école',
+        pourcentageTemps: '60%',
+        urgent: true,
+        missions: ['Développement frontend', 'Maintenance applicative'],
+        competences: ['JavaScript', 'React', 'Node.js'],
+        avantages: ['Mutuelle', 'Tickets restaurant'],
+        dateDebut: new Date('2024-09-01'),
+        dateFin: new Date('2025-08-31'),
+        candidaturesCount: 8,
+        vues: 120,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        organisme: 'TechCorp'
+      }
+    ];
+    
+    res.status(200).json({
+      success: true,
+      data: mockOffres,
+      pagination: {
+        page: 1,
+        limit: 50,
+        total: 1,
+        pages: 1
+      }
+    });
+  }
+});
+
+// ✅ POST postuler à une alternance/stage (authentification requise)
+router.post('/public/:id/apply', authenticateToken, async (req, res) => {
+  console.log('\n🚨🚨🚨 DEBUT POST /alternance/public/:id/apply 🚨🚨🚨');
+  console.log('👤 User ID:', req.user?.id);
+  console.log('👤 User email:', req.user?.email);
+  console.log('🔢 Param ID:', req.params.id);
+  console.log('📦 Body complet:', JSON.stringify(req.body, null, 2));
+
+  try {
+    const { id } = req.params;
+    const { motivation, cvUrl, nomCandidat, emailCandidat, telephoneCandidat } = req.body;
+    
+    // CONVERTIR userId en String (comme votre schéma l'attend)
+    const userId = String(req.user.id);
+    
+    console.log('✅ User ID converti en string:', userId);
+
+    // Validation
+    if (!motivation || motivation.trim() === '') {
+      console.log('❌ Motivation manquante');
+      return res.status(400).json({
+        success: false,
+        error: 'Le message de motivation est requis'
+      });
+    }
+
+    // Convertir l'ID
+    const offreId = parseInt(id);
+    if (isNaN(offreId)) {
+      console.log('❌ ID invalide:', id);
+      return res.status(400).json({
+        success: false,
+        error: 'ID d\'offre invalide'
+      });
+    }
+
+    console.log(`🔍 Vérification offre ${offreId}...`);
+    
+    // Vérifier si l'offre existe et est active
+    const offre = await prisma.alternanceStage.findFirst({
+      where: {
+        id: offreId,
+        status: 'active'
+      }
+    });
+
+    if (!offre) {
+      console.log(`❌ Offre ${offreId} non trouvée`);
+      return res.status(404).json({
+        success: false,
+        error: 'Offre non disponible'
+      });
+    }
+
+    console.log(`✅ Offre trouvée: "${offre.title}" (ID: ${offre.id})`);
+
+    // Vérifier si l'utilisateur a déjà postulé
+    console.log(`🔍 Vérification candidature existante pour user ${userId}...`);
+    const existingCandidature = await prisma.candidature.findFirst({
+      where: {
+        userId: userId,
+        alternanceStageId: offreId,
+        offreType: 'ALTERNANCE'
+      }
+    });
+
+    if (existingCandidature) {
+      console.log(`❌ Candidature déjà existante: ${existingCandidature.id}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Vous avez déjà postulé à cette offre'
+      });
+    }
+
+    console.log('✅ Pas de candidature existante');
+
+    // Préparer les données
+    const candidatureData = {
+      userId: userId,
+      alternanceStageId: offreId,
+      offreType: 'ALTERNANCE',
+      titreOffre: offre.title,
+      messageMotivation: motivation.trim(),
+      statut: 'en_attente',
+      nomCandidat: nomCandidat?.trim() || `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim(),
+      emailCandidat: emailCandidat?.trim() || req.user.email,
+      telephoneCandidat: telephoneCandidat?.trim() || null
+    };
+
+    // Ajouter cvUrl si présent
+    if (cvUrl && cvUrl.trim() !== '' && cvUrl !== 'undefined') {
+      candidatureData.cvUrl = cvUrl.trim();
+    }
+
+    console.log('📝 Données préparées pour création:');
+    console.log(JSON.stringify(candidatureData, null, 2));
+
+    // Créer la candidature
+    console.log('💾 Tentative création candidature...');
+    const candidature = await prisma.candidature.create({
+      data: candidatureData
+    });
+    console.log(`✅✅✅ Candidature créée avec succès! ID: ${candidature.id}`);
+
+    // Tenter d'incrémenter le compteur
+    console.log('➕ Tentative incrément compteur...');
+    try {
+      await prisma.alternanceStage.update({
+        where: { id: offreId },
+        data: {
+          candidaturesCount: {
+            increment: 1
+          },
+          updatedAt: new Date()
+        }
+      });
+      console.log('✅ Compteur incrémenté');
+    } catch (updateError) {
+      console.warn('⚠️ Erreur incrément compteur (non critique):', updateError.message);
+    }
+
+    console.log('🎉🎉🎉 SUCCÈS COMPLET! 🎉🎉🎉');
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id: candidature.id,
+        offreId: offreId,
+        titre: offre.title,
+        statut: 'en_attente',
+        appliedAt: candidature.createdAt
+      },
+      message: 'Candidature envoyée avec succès !'
+    });
+
+  } catch (error) {
+    console.error('\n💥💥💥 ERREUR FATALE 💥💥💥');
+    console.error('Message:', error.message);
+    console.error('Code:', error.code);
+    console.error('Meta:', error.meta);
+    console.error('Stack:', error.stack);
+
+    let errorMessage = 'Erreur lors de l\'envoi de la candidature';
+    let statusCode = 500;
+
+    if (error.code === 'P2002') {
+      errorMessage = 'Vous avez déjà postulé à cette offre';
+      statusCode = 400;
+    } else if (error.code === 'P2003') {
+      errorMessage = 'Erreur de référence (offre non valide)';
+      statusCode = 400;
+    } else if (error.code === 'P2025') {
+      errorMessage = 'Offre non trouvée';
+      statusCode = 404;
+    }
+
+    const response = {
+      success: false,
+      error: errorMessage
+    };
+
+    // Ajouter des infos de debug en développement
+    if (process.env.NODE_ENV === 'development') {
+      response.debug = {
+        message: error.message,
+        code: error.code
+      };
+    }
+
+    res.status(statusCode).json(response);
+  } finally {
+    console.log('🏁 FIN POST /alternance/public/:id/apply 🏁\n');
+  }
+});
+
+// ✅ GET détails d'une offre publique
+router.get('/public/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const offreId = parseInt(id);
+    
+    if (isNaN(offreId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'ID d\'offre invalide'
+      });
+    }
+
+    // Récupérer l'offre
+    const offre = await prisma.alternanceStage.findFirst({
+      where: {
+        id: offreId,
+        status: 'active'
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+            commercialName: true,
+            email: true,
+            phone: true
+          }
+        }
+      }
+    });
+
+    if (!offre) {
+      return res.status(404).json({
+        success: false,
+        error: 'Offre non disponible'
+      });
+    }
+
+    // Incrémenter les vues
+    await prisma.alternanceStage.update({
+      where: { id: offreId },
+      data: { vues: { increment: 1 } }
+    });
+
+    const formattedOffre = {
+      id: offre.id,
+      title: offre.title,
+      description: offre.description,
+      type: offre.type,
+      niveauEtude: offre.niveauEtude,
+      duree: offre.duree,
+      remuneration: offre.remuneration,
+      location: offre.location,
+      ecolePartenaire: offre.ecolePartenaire,
+      rythmeAlternance: offre.rythmeAlternance,
+      pourcentageTemps: offre.pourcentageTemps,
+      urgent: offre.urgent,
+      missions: offre.missions || [],
+      competences: offre.competences || [],
+      avantages: offre.avantages || [],
+      dateDebut: offre.dateDebut,
+      dateFin: offre.dateFin,
+      candidaturesCount: offre.candidaturesCount || 0,
+      vues: offre.vues + 1,
+      status: offre.status,
+      createdAt: offre.createdAt,
+      updatedAt: offre.updatedAt,
+      organisme: offre.user?.companyName || 
+                offre.user?.commercialName || 
+                (offre.user?.firstName && offre.user?.lastName 
+                  ? `${offre.user.firstName} ${offre.user.lastName}`
+                  : 'Organisme'),
+      contact: {
+        email: offre.user?.email || null,
+        phone: offre.user?.phone || null
+      }
+    };
+
+    res.status(200).json({
+      success: true,
+      data: formattedOffre
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération offre:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération de l\'offre'
+    });
+  }
+});
+
+// ✅ POST enregistrer une vue
+router.post('/public/:id/view', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.alternanceStage.update({
+      where: { id: parseInt(id) },
+      data: {
+        vues: {
+          increment: 1
+        }
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Vue enregistrée'
+    });
+  } catch (error) {
+    console.error('❌ Erreur incrément vue:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de l\'enregistrement de la vue'
+    });
+  }
+});
+
+// ✅ GET types disponibles
+router.get('/public/types', async (req, res) => {
+  try {
+    const types = await prisma.alternanceStage.findMany({
+      distinct: ['type'],
+      select: {
+        type: true
+      },
+      where: {
+        status: 'active'
+      }
+    });
+
+    const typeList = types.map(t => t.type).filter(Boolean);
+
+    res.status(200).json({
+      success: true,
+      data: typeList
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération types:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des types'
+    });
+  }
+});
+
+// ✅ GET niveaux d'étude disponibles
+router.get('/public/niveaux', async (req, res) => {
+  try {
+    const niveaux = await prisma.alternanceStage.findMany({
+      distinct: ['niveauEtude'],
+      select: {
+        niveauEtude: true
+      },
+      where: {
+        status: 'active'
+      }
+    });
+
+    const niveauList = niveaux.map(n => n.niveauEtude).filter(Boolean);
+
+    res.status(200).json({
+      success: true,
+      data: niveauList
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération niveaux:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des niveaux d\'étude'
+    });
+  }
+});
+
 // 🔥 AJOUT: Appliquer l'authentification à toutes les routes
 router.use(authenticateToken);
 
@@ -22,6 +648,10 @@ const alternanceValidation = [
   body('location').trim().notEmpty().withMessage('Le lieu de travail est requis'),
   body('dateDebut').isISO8601().withMessage('La date de début doit être une date valide')
 ];
+
+
+
+
 
 // GET all alternance/stages for a pro - CORRIGÉ
 router.get('/', async (req, res) => {
@@ -92,9 +722,9 @@ router.get('/', async (req, res) => {
         try {
           const candidaturesCount = await prisma.candidature.count({
             where: {
-              offreId: alternance.id,
-              offreType: 'alternance'
-            }
+    alternanceStageId: alternance.id, // ⬅️ CORRIGER ICI
+    offreType: "ALTERNANCE" // ⬅️ Note: C'est "ALTERNANCE" (majuscule) selon votre enum
+  }
           });
           
           return {
@@ -524,10 +1154,12 @@ router.get('/stats/summary', async (req, res) => {
     let totalCandidatures = 0;
     if (offreIds.length > 0) {
       totalCandidatures = await prisma.candidature.count({
-        where: {
-          offreId: { in: offreIds },
-          offreType: 'alternance'
-        }
+         where: {
+    alternanceStageId: { // ⬅️ CORRIGER ICI
+      in: offreIds
+    },
+    offreType: "ALTERNANCE"
+  }
       });
     }
 

@@ -1,10 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
+const { authenticateToken } = require('../middleware/auth'); // Assurez-vous que ce middleware existe
 
 const prisma = new PrismaClient();
 
-// ✅ Récupérer toutes les formations publiques (GET /)
+// ======================
+// ROUTES PUBLIQUES
+// ======================
+
+// ✅ Récupérer toutes les formations publiques
 router.get('/', async (req, res) => {
   try {
     console.log('📡 GET /formations - Requête publique reçue');
@@ -29,14 +34,9 @@ router.get('/', async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    console.log('📊 Paramètres de filtrage:', { 
-      search, status, category, format, 
-      minPrice, maxPrice, page: pageNum, limit: limitNum 
-    });
-
     // Construire les filtres
     const where = {
-      status: 'active' // Seulement les formations actives
+      status: 'active'
     };
 
     // Filtre par recherche
@@ -77,13 +77,10 @@ router.get('/', async (req, res) => {
       where.isOnline = true;
     }
 
-    console.log('🔍 Where clause:', JSON.stringify(where, null, 2));
-
     // Compter le total
     const total = await prisma.formation.count({ where });
-    console.log(`📈 Total formations: ${total}`);
 
-    // Récupérer les formations avec les relations nécessaires
+    // Récupérer les formations
     const formations = await prisma.formation.findMany({
       where,
       skip: skip >= 0 ? skip : 0,
@@ -101,8 +98,6 @@ router.get('/', async (req, res) => {
         }
       }
     });
-
-    console.log(`✅ ${formations.length} formations trouvées`);
 
     // Formater la réponse
     const formattedFormations = formations.map(formation => ({
@@ -129,15 +124,13 @@ router.get('/', async (req, res) => {
       applications: formation.applications,
       createdAt: formation.createdAt,
       updatedAt: formation.updatedAt,
-      // Informations de l'organisme
       organisme: formation.user?.companyName || 
                 formation.user?.commercialName || 
                 (formation.user?.firstName && formation.user?.lastName 
                   ? `${formation.user.firstName} ${formation.user.lastName}`
                   : 'Organisme'),
-      // Pour la compatibilité avec le frontend
-      rating: 4.5, // Valeur par défaut
-      reviews: 0   // Valeur par défaut
+      rating: 4.5,
+      reviews: 0
     }));
 
     res.status(200).json({
@@ -153,12 +146,9 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Erreur récupération formations publiques:', error);
-    console.error('❌ Détails:', error.message);
     
-    // En mode développement, retourner des données fictives
+    // Données fictives pour développement
     if (process.env.NODE_ENV === 'development') {
-      console.log('⚠️ Retour de données fictives pour le développement');
-      
       const mockFormations = [
         {
           id: 1,
@@ -171,8 +161,8 @@ router.get('/', async (req, res) => {
           maxParticipants: 25,
           currentParticipants: 15,
           certification: 'RNCP niveau 6',
-          startDate: '2024-01-15T00:00:00.000Z',
-          endDate: '2024-07-15T00:00:00.000Z',
+          startDate: new Date('2024-01-15'),
+          endDate: new Date('2024-07-15'),
           location: '100% en ligne',
           requirements: 'Bonne maîtrise de l\'ordinateur, logique algorithmique',
           program: ['HTML/CSS avancé', 'JavaScript moderne', 'React & Node.js', 'Bases de données'],
@@ -180,104 +170,41 @@ router.get('/', async (req, res) => {
           isCertified: true,
           isFinanced: true,
           isOnline: true,
-          rating: 4.8,
-          reviews: 124,
           views: 1000,
           applications: 50,
-          createdAt: '2023-12-01T00:00:00.000Z',
-          updatedAt: '2023-12-01T00:00:00.000Z',
+          createdAt: new Date('2023-12-01'),
+          updatedAt: new Date('2023-12-01'),
           organisme: 'OpenClassrooms'
-        },
-        {
-          id: 2,
-          title: 'Gestion de Projet Agile',
-          description: 'Maîtrisez les méthodologies Agile et Scrum',
-          category: 'Management & Leadership',
-          format: 'Hybride',
-          duration: '3 mois',
-          price: 1850,
-          maxParticipants: 18,
-          currentParticipants: 12,
-          certification: 'Certificat CNAM',
-          startDate: '2024-02-20T00:00:00.000Z',
-          endDate: '2024-05-20T00:00:00.000Z',
-          location: 'Paris + Distanciel',
-          requirements: 'Expérience en gestion de projet recommandée',
-          program: ['Introduction Agile', 'Méthodologie Scrum', 'Ateliers pratiques'],
-          status: 'active',
-          isCertified: true,
-          isFinanced: true,
-          isOnline: false,
-          rating: 4.6,
-          reviews: 89,
-          views: 800,
-          applications: 35,
-          createdAt: '2023-12-01T00:00:00.000Z',
-          updatedAt: '2023-12-01T00:00:00.000Z',
-          organisme: 'CNAM'
-        },
-        {
-          id: 3,
-          title: 'CAP Électricien',
-          description: 'Formation complète avec stages en entreprise',
-          category: 'Bâtiment & Construction',
-          format: 'Présentiel',
-          duration: '12 mois',
-          price: 4500,
-          maxParticipants: 15,
-          currentParticipants: 10,
-          certification: 'Diplôme d\'État',
-          startDate: '2024-01-10T00:00:00.000Z',
-          endDate: '2025-01-10T00:00:00.000Z',
-          location: 'Lyon',
-          requirements: 'Niveau 3ème minimum',
-          program: ['Électricité bâtiment', 'Normes sécurité', 'Installations électriques'],
-          status: 'active',
-          isCertified: true,
-          isFinanced: true,
-          isOnline: false,
-          rating: 4.9,
-          reviews: 156,
-          views: 1200,
-          applications: 40,
-          createdAt: '2023-12-01T00:00:00.000Z',
-          updatedAt: '2023-12-01T00:00:00.000Z',
-          organisme: 'AFPA'
         }
       ];
-
+      
       res.status(200).json({
         success: true,
         data: mockFormations,
         pagination: {
           page: 1,
           limit: 50,
-          total: mockFormations.length,
+          total: 1,
           pages: 1
         }
       });
     } else {
       res.status(500).json({
         success: false,
-        error: 'Erreur lors de la récupération des formations',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        error: 'Erreur lors de la récupération des formations'
       });
     }
   }
 });
 
-// ✅ Récupérer une formation publique par ID - VERSION CORRIGÉE
+// ✅ Récupérer une formation publique par ID
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    console.log(`📡 GET /formations/${id} - Détails formation`);
-
-    // Vérifier et convertir l'ID
     const formationId = parseInt(id);
     
     if (isNaN(formationId)) {
-      console.log(`❌ ID invalide: ${id}`);
       return res.status(400).json({
         success: false,
         error: 'ID de formation invalide'
@@ -287,7 +214,7 @@ router.get('/:id', async (req, res) => {
     // Récupérer la formation
     const formation = await prisma.formation.findFirst({
       where: {
-        id: formationId, // ✅ AJOUTÉ: Condition id
+        id: formationId,
         status: 'active'
       },
       include: {
@@ -306,20 +233,17 @@ router.get('/:id', async (req, res) => {
     });
 
     if (!formation) {
-      console.log(`❌ Formation ${id} non trouvée ou inactive`);
       return res.status(404).json({
         success: false,
         error: 'Formation non disponible'
       });
     }
 
-    // Incrémenter le compteur de vues
+    // Incrémenter les vues
     await prisma.formation.update({
       where: { id: formationId },
       data: { views: { increment: 1 } }
     });
-
-    console.log(`✅ Formation ${id} trouvée, vues incrémentées`);
 
     // Formater la réponse
     const formattedFormation = {
@@ -342,7 +266,7 @@ router.get('/:id', async (req, res) => {
       isCertified: formation.isCertified,
       isFinanced: formation.isFinanced,
       isOnline: formation.isOnline,
-      views: formation.views + 1, // +1 pour la vue actuelle
+      views: formation.views + 1,
       applications: formation.applications,
       createdAt: formation.createdAt,
       updatedAt: formation.updatedAt,
@@ -374,93 +298,184 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ✅ Postuler à une formation
-router.post('/:id/apply', async (req, res) => {
+// ✅ POST Candidature à une formation (CORRECTION SIMILAIRE À EMPLOI)
+router.post('/:id/apply', authenticateToken, async (req, res) => {
+  console.log('\n🚀 NOUVELLE CANDIDATURE FORMATION =============');
+  console.log('User ID:', req.user?.id, 'Type:', typeof req.user?.id);
+  console.log('Params:', req.params);
+  console.log('Body:', req.body);
+  console.log('===================================\n');
+
   try {
     const { id } = req.params;
-    const { motivation } = req.body;
+    const { motivation, cvUrl, nomCandidat, emailCandidat, telephoneCandidat } = req.body;
     
-    console.log(`📡 POST /formations/${id}/apply - Candidature`);
+    // CONVERTIR userId en String
+    const userId = String(req.user.id);
+    
+    console.log('✅ User ID converti en string:', userId);
 
-    // Vérifier si la formation existe et est active
-    const formation = await prisma.formation.findFirst({
-      where: {
-        id: parseInt(id),
-        status: 'active'
-      }
+    // Validation simple
+    if (!motivation || motivation.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Le message de motivation est requis'
+      });
+    }
+
+    // Convertir l'ID
+    const formationId = parseInt(id);
+    if (isNaN(formationId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'ID de formation invalide'
+      });
+    }
+
+    // Vérifier si la formation existe
+    const formation = await prisma.formation.findUnique({
+      where: { id: formationId }
     });
 
-    if (!formation) {
-      console.log(`❌ Formation ${id} non trouvée ou inactive`);
+    if (!formation || formation.status !== 'active') {
       return res.status(404).json({
         success: false,
         error: 'Formation non disponible'
       });
     }
 
-    // Vérifier l'authentification pour les candidatures
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-      console.log('❌ Pas de token pour la candidature');
-      return res.status(401).json({
+    // Vérifier si l'utilisateur a déjà postulé
+    const existingCandidature = await prisma.candidature.findFirst({
+      where: {
+        userId: userId,
+        formationId: formationId,
+        offreType: 'FORMATION'
+      }
+    });
+
+    if (existingCandidature) {
+      return res.status(400).json({
         success: false,
-        error: 'Veuillez vous connecter pour postuler'
+        error: 'Vous avez déjà postulé à cette formation'
       });
     }
 
-    // Ici, vous devriez vérifier le token JWT et récupérer l'utilisateur
-    // Pour l'instant, on simule une application réussie
-    
-    // Vérifier si l'utilisateur a déjà postulé (vous devriez vérifier dans la table Candidature)
-    // Pour l'instant, on suppose que c'est la première candidature
+    // Préparer les données pour création
+    const candidatureData = {
+      userId: userId,
+      formationId: formationId,
+      offreType: 'FORMATION',
+      titreOffre: formation.title,
+      messageMotivation: motivation.trim(),
+      statut: 'en_attente',
+      nomCandidat: nomCandidat?.trim() || `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim(),
+      emailCandidat: emailCandidat?.trim() || req.user.email,
+      telephoneCandidat: telephoneCandidat?.trim() || null,
+      cvUrl: (cvUrl && cvUrl.trim() !== '' && cvUrl !== 'undefined') ? cvUrl.trim() : null
+    };
 
-    // Incrémenter le compteur de candidatures
-    await prisma.formation.update({
-      where: { id: parseInt(id) },
-      data: {
-        applications: { increment: 1 },
-        currentParticipants: { increment: 1 }
-      }
+    console.log('📝 Données candidature formation:', candidatureData);
+
+    // Créer la candidature
+    const candidature = await prisma.candidature.create({
+      data: candidatureData
     });
 
-    console.log(`✅ Candidature enregistrée pour formation ${id}`);
+    console.log('✅ Candidature formation créée avec succès! ID:', candidature.id);
 
+    // Mettre à jour le compteur de candidatures
+    try {
+      await prisma.formation.update({
+        where: { id: formationId },
+        data: {
+          applications: {
+            increment: 1
+          },
+          currentParticipants: {
+            increment: 1
+          }
+        }
+      });
+      console.log('✅ Compteur candidatures formation mis à jour');
+    } catch (counterError) {
+      console.warn('⚠️ Erreur mise à jour compteur (non critique):', counterError.message);
+    }
+
+    // Réponse de succès
     res.status(201).json({
       success: true,
-      message: 'Candidature envoyée avec succès !',
       data: {
-        formationId: id,
-        formationTitle: formation.title,
-        appliedAt: new Date().toISOString(),
-        status: 'pending'
-      }
+        id: candidature.id,
+        formationId: formationId,
+        titre: formation.title,
+        statut: 'en_attente',
+        appliedAt: candidature.createdAt
+      },
+      message: 'Candidature envoyée avec succès !'
     });
 
   } catch (error) {
-    console.error('❌ Erreur postulation formation:', error);
+    console.error('💥 ERREUR DÉTAILLÉE:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      stack: error.stack
+    });
     
-    res.status(500).json({
+    // Messages d'erreur spécifiques
+    let errorMessage = 'Erreur lors de l\'envoi de la candidature';
+    let statusCode = 500;
+    
+    if (error.code === 'P2002') {
+      errorMessage = 'Vous avez déjà postulé à cette formation';
+      statusCode = 400;
+    } else if (error.code === 'P2003') {
+      errorMessage = 'Erreur de référence (formation non valide)';
+      statusCode = 400;
+    } else if (error.code === 'P2025') {
+      errorMessage = 'Formation non trouvée';
+      statusCode = 404;
+    }
+    
+    res.status(statusCode).json({
       success: false,
-      error: 'Erreur lors de la postulation'
+      error: errorMessage,
+      // Debug info en développement
+      ...(process.env.NODE_ENV === 'development' && {
+        debug: {
+          message: error.message,
+          code: error.code,
+          meta: error.meta
+        }
+      })
     });
   }
 });
 
-// ✅ Recherche avancée de formations
-router.get('/search/advanced', async (req, res) => {
+// ✅ POST enregistrer une vue
+router.post('/:id/view', async (req, res) => {
   try {
-    const filters = req.query;
-    console.log('🔍 Recherche avancée:', filters);
+    const { id } = req.params;
 
-    // Cette route peut être utilisée pour des recherches plus complexes
-    // Pour l'instant, redirige vers la route principale
-    res.redirect(`/api/formations?${new URLSearchParams(filters).toString()}`);
+    await prisma.formation.update({
+      where: { id: parseInt(id) },
+      data: {
+        views: {
+          increment: 1
+        }
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Vue enregistrée'
+    });
   } catch (error) {
-    console.error('❌ Erreur recherche avancée:', error);
+    console.error('❌ Erreur incrément vue:', error);
+    
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la recherche'
+      error: 'Erreur lors de l\'enregistrement de la vue'
     });
   }
 });
@@ -517,6 +532,100 @@ router.get('/formats/list', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la récupération des formats'
+    });
+  }
+});
+
+// ✅ GET statistiques publiques des formations
+router.get('/stats/public', async (req, res) => {
+  try {
+    console.log('📡 GET /formations/stats/public - Statistiques publiques');
+
+    // Compter les formations actives
+    const totalActive = await prisma.formation.count({
+      where: { status: 'active' }
+    });
+
+    // Compter les formations certifiées
+    const totalCertified = await prisma.formation.count({
+      where: { 
+        status: 'active',
+        isCertified: true
+      }
+    });
+
+    // Compter les formations financées
+    const totalFinanced = await prisma.formation.count({
+      where: { 
+        status: 'active',
+        isFinanced: true
+      }
+    });
+
+    // Compter les formations en ligne
+    const totalOnline = await prisma.formation.count({
+      where: { 
+        status: 'active',
+        isOnline: true
+      }
+    });
+
+    // Nombre de formations publiées cette semaine
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    const newThisWeek = await prisma.formation.count({
+      where: {
+        status: 'active',
+        createdAt: {
+          gte: oneWeekAgo
+        }
+      }
+    });
+
+    // Répartition par catégorie
+    const formationsByCategory = await prisma.formation.groupBy({
+      by: ['category'],
+      where: { status: 'active' },
+      _count: true
+    });
+
+    const categoriesMap = {};
+    formationsByCategory.forEach(item => {
+      if (item.category) {
+        categoriesMap[item.category] = item._count;
+      }
+    });
+
+    const statsData = {
+      total: totalActive || 0,
+      certified: totalCertified || 0,
+      financed: totalFinanced || 0,
+      online: totalOnline || 0,
+      nouvellesSemaine: newThisWeek || 0,
+      parCategorie: categoriesMap || {}
+    };
+
+    console.log('📊 Stats publiques calculées:', statsData);
+
+    res.status(200).json({
+      success: true,
+      data: statsData
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération stats publiques:', error);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        total: 0,
+        certified: 0,
+        financed: 0,
+        online: 0,
+        nouvellesSemaine: 0,
+        parCategorie: {}
+      }
     });
   }
 });
