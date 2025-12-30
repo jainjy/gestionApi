@@ -871,6 +871,20 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params
     const data = req.body
 
+    // Vérifier que l'utilisateur est le propriétaire ou un admin
+    const property = await prisma.property.findUnique({
+      where: { id },
+      select: { ownerId: true }
+    })
+
+    if (!property) {
+      return res.status(404).json({ error: 'Property not found' })
+    }
+
+    if (property.ownerId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized. Only the owner or admin can modify this property.' })
+    }
+
     const updateData = { ...data }
 
     if (data.price) updateData.price = parseFloat(data.price)
@@ -942,6 +956,20 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params
     const data = req.body
 
+    // Vérifier que l'utilisateur est le propriétaire ou un admin
+    const property = await prisma.property.findUnique({
+      where: { id },
+      select: { ownerId: true, features: true }
+    })
+
+    if (!property) {
+      return res.status(404).json({ error: 'Property not found' })
+    }
+
+    if (property.ownerId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized. Only the owner or admin can modify this property.' })
+    }
+
     const updateData = { ...data }
 
     if (data.price) updateData.price = parseFloat(data.price)
@@ -962,13 +990,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     // Gestion du type social
     if (data.socialType) {
       const socialType = data.socialType.toUpperCase();
-      // Récupérer les features actuelles
-      const currentProperty = await prisma.property.findUnique({
-        where: { id },
-        select: { features: true }
-      });
-      
-      let features = currentProperty?.features || [];
+      let features = property.features || [];
       // Retirer les anciens types sociaux
       features = features.filter(f => 
         !['SODIAC', 'SIDR', 'SEDRE', 'SEMAC'].includes(f.toUpperCase())
