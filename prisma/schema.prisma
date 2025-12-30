@@ -199,6 +199,10 @@ model User {
 
   rendezvousEntreprise RendezvousEntreprise[] // Liste des rendez-vous demandés pour l'entreprise
 
+  // RELATIONS POUR EVENTS ET DISCOVERIES
+  eventsDisco Event[] // Événements créés par l'utilisateur dans discovery et dans event
+  discoveries Discovery[] // Découvertes créées par l'utilisateur
+
   // ======================
   // NOUVELLES RELATIONS POUR ACTIVITÉS - VERSION CORRIGÉE
   // ======================
@@ -2800,6 +2804,10 @@ model Event {
   participants Int   @default(0)
   revenue      Float @default(0)
 
+  // RELATION USER
+  userId String? @db.VarChar(36)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2808,6 +2816,7 @@ model Event {
   @@index([category])
   @@index([featured])
   @@index([visibility])
+  @@index([userId])
 }
 
 model Discovery {
@@ -2875,6 +2884,10 @@ model Discovery {
   visits  Int   @default(0)
   revenue Float @default(0)
 
+  // RELATION USER
+  userId String? @db.VarChar(36)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2883,6 +2896,7 @@ model Discovery {
   @@index([type])
   @@index([featured])
   @@index([difficulty])
+  @@index([userId])
 }
 
 enum EventStatus {
