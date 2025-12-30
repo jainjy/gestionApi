@@ -7,8 +7,15 @@ const { sendPasswordResetEmail } = require("../lib/email");
 const stripe = require("../utils/stripe");
 const { authenticateToken } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit");
+const jwt = require("jsonwebtoken");
+// Fonction de validation
+function isPasswordStrong(password) {
+    // Min 8 chars, 1 majuscule, 1 minuscule, 1 chiffre
+    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d\W]{8,}$/;
+    return regex.test(password);
+}
 
-// 🔧 CORRECTION: Configuration rate-limit corrigée pour passwordReset
+// Création du limiteur pour passwordReset
 const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 heure
   max: 3,
@@ -37,6 +44,15 @@ const passwordResetLimiter = rateLimit({
   handler: (req, res, next, options) => {
     res.status(options.statusCode).json(options.message);
   },
+});
+
+// Création du limiteur pour le login
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 tentatives max par IP
+  message: { error: "Trop de tentatives de connexion. Réessayez dans 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // 🔧 CORRECTION: Configuration rate-limit corrigée pour verifyToken
@@ -69,7 +85,7 @@ const verifyTokenLimiter = rateLimit({
 });
 
 // POST /api/auth/login - Connexion
-router.post("/login", async (req, res) => {
+router.post("/login",loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -131,8 +147,6 @@ router.post("/login", async (req, res) => {
           })
         : user;
 
-    const token = `real-jwt-token-${updatedUser.id}`;
-
     // Préparer la réponse utilisateur
     const userResponse = {
       id: updatedUser.id,
@@ -151,9 +165,31 @@ router.post("/login", async (req, res) => {
       subscriptionStatus: subscriptionStatus, // AJOUT: Status de l'abonnement
     };
 
+    // 1. Générer l'Access Token (Court : 15min à 1h)
+    const accessToken = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    // 2. Générer le Refresh Token (Long : 7 jours)
+    const refreshToken = crypto.randomBytes(40).toString("hex");
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // 3. Stocker le Refresh Token en base (Sécurité MED-04)
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
+
     res.json({
       user: userResponse,
-      token,
+      token: accessToken, // Access Token pour le header Authorization
+      refreshToken: refreshToken, // À stocker côté client (localStorage ou Cookie)
       ...(subscriptionStatus === "expired" && {
         message: "Votre abonnement a expiré",
       }),
@@ -197,6 +233,14 @@ router.post("/signup", async (req, res) => {
         error: "Tous les champs obligatoires doivent être remplis",
       });
     }
+    // Dans la route
+    if (!isPasswordStrong(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Le mot de passe doit faire 8 caractères min. avec majuscule, minuscule et chiffre.",
+      });
+    }
 
     // Vérifier l'email
     const existingUser = await prisma.user.findUnique({
@@ -233,8 +277,26 @@ router.post("/signup", async (req, res) => {
       },
     });
 
-    // Générer le token
-    const token = `real-jwt-token-${user.id}`;
+    // 1. Générer l'Access Token (Court : 15min à 1h)
+    const accessToken = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    // 2. Générer le Refresh Token (Long : 7 jours)
+    const refreshToken = crypto.randomBytes(40).toString("hex");
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // 3. Stocker le Refresh Token en base (Sécurité MED-04)
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
 
     res.status(201).json({
       message: "Utilisateur créé avec succès",
@@ -253,8 +315,10 @@ router.post("/signup", async (req, res) => {
         address: user.address,
         city: user.city,
       },
-      token,
+      token: accessToken, // Access Token pour le header Authorization
+      refreshToken: refreshToken, // À stocker côté client (localStorage ou Cookie)
     });
+
   } catch (error) {
     console.error("Registration error:", error);
     res.status(500).json({
@@ -278,6 +342,14 @@ router.post("/signup-pro", async (req, res) => {
     ) {
       return res.status(400).json({
         error: "Tous les champs obligatoires doivent être remplis",
+      });
+    }
+    // Dans la route
+    if (!isPasswordStrong(utilisateur.password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Le mot de passe doit faire 8 caractères min. avec majuscule, minuscule et chiffre.",
       });
     }
     // Vérifier si l'email existe déjà
@@ -331,7 +403,7 @@ router.post("/signup-pro", async (req, res) => {
           },
         },
       },
-    });
+    }); 
     // Créer un abonnement essai gratuit de 2 mois
     const startDate = new Date();
     const endDate = new Date(startDate);
@@ -346,9 +418,31 @@ router.post("/signup-pro", async (req, res) => {
         planId: planId,
       },
     });
+
     // Générer le token
-    const token = `real-jwt-token-${user.id}`;
-    res.json({
+    // 1. Générer l'Access Token (Court : 15min à 1h)
+    const accessToken = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    // 2. Générer le Refresh Token (Long : 7 jours)
+    const refreshToken = crypto.randomBytes(40).toString("hex");
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // 3. Stocker le Refresh Token en base (Sécurité MED-04)
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
+
+    res.status(201).json({
+      message: "Utilisateur créé avec essai gratuit de 2 mois",
       user: {
         id: user.id,
         email: user.email,
@@ -365,8 +459,8 @@ router.post("/signup-pro", async (req, res) => {
         siret: user.siret,
         city: user.city,
       },
-      token,
-      message: "Utilisateur créé avec essai gratuit de 2 mois",
+      token: accessToken, // Access Token pour le header Authorization
+      refreshToken: refreshToken, // À stocker côté client (localStorage ou Cookie)
     });
   } catch (error) {
     console.error("Pro signup error:", error);
@@ -424,9 +518,6 @@ router.post("/confirm-payment", async (req, res) => {
           data: { status: "active" },
         });
 
-        // Générer le token
-        const token = `real-jwt-token-${transaction.userId}`;
-
         // Récupérer l'utilisateur mis à jour
         const user = await prisma.user.findUnique({
           where: { id: transaction.userId },
@@ -436,6 +527,28 @@ router.post("/confirm-payment", async (req, res) => {
                 metier: true,
               },
             },
+          },
+        });
+        
+        // Générer le token
+        // 1. Générer l'Access Token (Court : 15min à 1h)
+        const accessToken = jwt.sign(
+          { userId: user.id, role: user.role },
+          process.env.JWT_SECRET,
+          { expiresIn: "15m" }
+        );
+
+        // 2. Générer le Refresh Token (Long : 7 jours)
+        const refreshToken = crypto.randomBytes(40).toString("hex");
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+
+        // 3. Stocker le Refresh Token en base (Sécurité MED-04)
+        await prisma.refreshToken.create({
+          data: {
+            token: refreshToken,
+            userId: user.id,
+            expiresAt: expiresAt,
           },
         });
 
@@ -454,7 +567,8 @@ router.post("/confirm-payment", async (req, res) => {
             companyName: user.companyName,
             metiers: user.metiers,
           },
-          token,
+          token: accessToken, // Access Token pour le header Authorization
+          refreshToken: refreshToken, // À stocker côté client (localStorage ou Cookie)
         });
       }
     }
@@ -620,10 +734,12 @@ router.post("/reset-password", async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    // Dans la route
+    if (!isPasswordStrong(newPassword)) {
       return res.status(400).json({
         success: false,
-        message: "Le mot de passe doit contenir au moins 6 caractères",
+        message:
+          "Le mot de passe doit faire 8 caractères min. avec majuscule, minuscule et chiffre.",
       });
     }
 
@@ -658,11 +774,14 @@ router.post("/reset-password", async (req, res) => {
     });
 
     // 🔥 AJOUT: Supprimer les tentatives enregistrées pour cet email
-    const emailHash = crypto.createHash('sha256').update(user.email).digest('hex');
+    const emailHash = crypto
+      .createHash("sha256")
+      .update(user.email)
+      .digest("hex");
     await prisma.passwordResetRequest.deleteMany({
       where: {
-        emailHash: emailHash
-      }
+        emailHash: emailHash,
+      },
     });
 
     res.json({
@@ -681,37 +800,54 @@ router.post("/reset-password", async (req, res) => {
 // POST /api/auth/refresh - Rafraîchir le token
 router.post("/refresh", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: "Token manquant" });
+    const { refreshToken } = req.body; // Envoyer le refreshToken dans le corps
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: "Refresh token requis" });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const userId = token.replace("real-jwt-token-", "");
-
-    // Vérifier si l'utilisateur existe toujours
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true },
+    // Chercher le token en base et vérifier s'il est révoqué ou expiré
+    const storedToken = await prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      include: { user: true }
     });
 
-    if (!user) {
-      return res.status(401).json({ error: "Utilisateur non trouvé" });
+    if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
+      return res.status(401).json({ error: "Refresh token invalide ou expiré" });
     }
 
-    // Générer un nouveau token
-    const newToken = `real-jwt-token-${user.id}`;
+    // Générer un nouvel Access Token
+    const newAccessToken = jwt.sign(
+      { userId: storedToken.user.id, role: storedToken.user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
 
-    res.json({ token: newToken });
+    res.json({ token: newAccessToken });
   } catch (error) {
-    console.error("Refresh token error:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
 // POST /api/auth/logout - Déconnexion
-router.post("/logout", (req, res) => {
-  res.json({ success: true, message: "Déconnexion réussie" });
+router.post("/logout", async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    
+    if (refreshToken) {
+      // Invalider le token en base de données
+      await prisma.refreshToken.updateMany({
+        where: { token: refreshToken },
+        data: { revokedAt: new Date() }
+      });
+    }
+
+    res.json({ success: true, message: "Déconnexion réussie" });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors de la déconnexion" });
+  }
 });
 
-module.exports = router;
+
+
+module.exports = router;  

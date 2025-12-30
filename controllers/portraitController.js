@@ -1,6 +1,7 @@
 // controllers/portraitController.js
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const { uploadToSupabase } = require("../middleware/upload");
 
 // Récupérer tous les portraits avec pagination
 exports.getAllPortraits = async (req, res) => {
@@ -14,18 +15,27 @@ exports.getAllPortraits = async (req, res) => {
       featured,
       search,
       categories,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      isActive = undefined, // Nouveau paramètre pour l'admin
     } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    // Construire les filtres
-    const where = {
-      isActive: true
-    };
 
-    if (generation && generation !== 'tous') {
+    // Construire les filtres
+    const where = {};
+
+    // Dans l'admin, on peut vouloir voir tous ou seulement les actifs
+    if (isActive !== undefined) {
+      where.isActive = isActive === "true" || isActive === true;
+    } else {
+      // Par défaut, montrer seulement les actifs pour les utilisateurs normaux
+      if (!req.user?.role || req.user.role !== "admin") {
+        where.isActive = true;
+      }
+    }
+
+    if (generation && generation !== "tous") {
       where.generation = generation;
     }
 
@@ -38,22 +48,22 @@ exports.getAllPortraits = async (req, res) => {
     }
 
     if (featured) {
-      where.featured = featured === 'true';
+      where.featured = featured === "true";
     }
 
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { profession: { contains: search, mode: 'insensitive' } },
-        { story: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
+        { name: { contains: search, mode: "insensitive" } },
+        { profession: { contains: search, mode: "insensitive" } },
+        { story: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
       ];
     }
 
     if (categories) {
-      const categoryArray = categories.split(',');
+      const categoryArray = categories.split(",");
       where.categories = {
-        hasSome: categoryArray
+        hasSome: categoryArray,
       };
     }
 
@@ -66,7 +76,7 @@ exports.getAllPortraits = async (req, res) => {
       skip,
       take: parseInt(limit),
       orderBy: {
-        [sortBy]: sortOrder
+        [sortBy]: sortOrder,
       },
       include: {
         portraitComments: {
@@ -77,21 +87,21 @@ exports.getAllPortraits = async (req, res) => {
                 id: true,
                 firstName: true,
                 lastName: true,
-                avatar: true
-              }
-            }
+                avatar: true,
+              },
+            },
           },
-          orderBy: { createdAt: 'desc' },
-          take: 5
+          orderBy: { createdAt: "desc" },
+          take: 5,
         },
         _count: {
           select: {
             portraitComments: true,
             portraitShares: true,
-            portraitListens: true
-          }
-        }
-      }
+            portraitListens: true,
+          },
+        },
+      },
     });
 
     res.json({
@@ -101,14 +111,14 @@ exports.getAllPortraits = async (req, res) => {
         total,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil(total / parseInt(limit))
-      }
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
     });
   } catch (error) {
-    console.error('Error getting portraits:', error);
+    console.error("Error getting portraits:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la récupération des portraits'
+      error: "Erreur lors de la récupération des portraits",
     });
   }
 };
@@ -129,8 +139,8 @@ exports.getPortraitById = async (req, res) => {
                 id: true,
                 firstName: true,
                 lastName: true,
-                avatar: true
-              }
+                avatar: true,
+              },
             },
             replies: {
               include: {
@@ -139,29 +149,37 @@ exports.getPortraitById = async (req, res) => {
                     id: true,
                     firstName: true,
                     lastName: true,
-                    avatar: true
-                  }
-                }
+                    avatar: true,
+                  },
+                },
               },
-              orderBy: { createdAt: 'asc' }
-            }
+              orderBy: { createdAt: "asc" },
+            },
           },
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: "desc" },
         },
         _count: {
           select: {
             portraitComments: true,
             portraitShares: true,
-            portraitListens: true
-          }
-        }
-      }
+            portraitListens: true,
+          },
+        },
+      },
     });
 
     if (!portrait) {
       return res.status(404).json({
         success: false,
-        error: 'Portrait non trouvé'
+        error: "Portrait non trouvé",
+      });
+    }
+
+    // Vérifier les permissions
+    if (!portrait.isActive && (!req.user?.role || req.user.role !== "admin")) {
+      return res.status(403).json({
+        success: false,
+        error: "Ce portrait n'est pas disponible",
       });
     }
 
@@ -169,21 +187,60 @@ exports.getPortraitById = async (req, res) => {
     await prisma.portraitLocal.update({
       where: { id },
       data: {
-        views: { increment: 1 }
-      }
+        views: { increment: 1 },
+      },
     });
 
     res.json({
       success: true,
-      data: portrait
+      data: portrait,
     });
   } catch (error) {
-    console.error('Error getting portrait:', error);
+    console.error("Error getting portrait:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la récupération du portrait'
+      error: "Erreur lors de la récupération du portrait",
     });
   }
+};
+
+// Fonction helper pour uploader les fichiers
+const handleFileUploads = async (files, existingImages = []) => {
+  const uploadedImages = [...existingImages];
+
+  // Traiter les images uploadées
+  if (files.images) {
+    for (const image of files.images) {
+      try {
+        const uploadedImage = await uploadToSupabase(image, "portrait-images");
+        uploadedImages.push(uploadedImage.url);
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        throw new Error(
+          `Erreur lors de l'upload de l'image: ${image.originalname}`
+        );
+      }
+    }
+  }
+
+  // Traiter l'audio de l'interview
+  let interviewAudioUrl = null;
+  if (files.interviewAudio && files.interviewAudio[0]) {
+    try {
+      const uploadedAudio = await uploadToSupabase(
+        files.interviewAudio[0],
+        "portrait-audio"
+      );
+      interviewAudioUrl = uploadedAudio.url;
+    } catch (error) {
+      console.error("Error uploading audio:", error);
+      throw new Error(
+        `Erreur lors de l'upload de l'audio: ${files.interviewAudio[0].originalname}`
+      );
+    }
+  }
+
+  return { uploadedImages, interviewAudioUrl };
 };
 
 // Créer un portrait (admin)
@@ -202,8 +259,8 @@ exports.createPortrait = async (req, res) => {
       quote,
       color,
       featured,
-      images,
-      interviewAudioUrl,
+      existingImages = [],
+      interviewAudioUrl: existingAudioUrl,
       interviewDuration,
       interviewTopics,
       wisdom,
@@ -215,59 +272,104 @@ exports.createPortrait = async (req, res) => {
       latitude,
       longitude,
       region,
-      isActive
+      isActive,
     } = req.body;
 
     // Validation basique
     if (!name || !age || !generation || !location || !profession || !story) {
       return res.status(400).json({
         success: false,
-        error: 'Les champs obligatoires sont manquants'
+        error:
+          "Les champs obligatoires (nom, âge, génération, localisation, profession, histoire) sont manquants",
       });
     }
+
+    // Gérer les fichiers uploadés
+    let finalImages = Array.isArray(existingImages) ? existingImages : [];
+    let finalAudioUrl = existingAudioUrl || null;
+
+    if (req.files) {
+      try {
+        const uploadResult = await handleFileUploads(req.files, finalImages);
+        finalImages = uploadResult.uploadedImages;
+        if (uploadResult.interviewAudioUrl) {
+          finalAudioUrl = uploadResult.interviewAudioUrl;
+        }
+      } catch (uploadError) {
+        return res.status(400).json({
+          success: false,
+          error: uploadError.message,
+        });
+      }
+    }
+
+    // Parser les données
+    const parsedCategories = Array.isArray(categories)
+      ? categories
+      : categories
+        ? JSON.parse(categories)
+        : [];
+
+    const parsedTags = Array.isArray(tags)
+      ? tags
+      : tags
+        ? JSON.parse(tags)
+        : [];
+
+    const parsedInterviewTopics = Array.isArray(interviewTopics)
+      ? interviewTopics
+      : interviewTopics
+        ? JSON.parse(interviewTopics)
+        : [];
+
+    const parsedWisdom = Array.isArray(wisdom)
+      ? wisdom
+      : wisdom
+        ? JSON.parse(wisdom)
+        : [];
 
     const portrait = await prisma.portraitLocal.create({
       data: {
         name,
         age: parseInt(age),
         generation,
-        country: country || 'Réunion',
+        country: country || "Réunion",
         location,
         profession,
-        description: description || story.substring(0, 200) + '...',
+        description: description || story.substring(0, 200) + "...",
         story,
-        shortStory: shortStory || story.substring(0, 150) + '...',
+        shortStory: shortStory || story.substring(0, 150) + "...",
         quote,
-        color: color || 'blue',
-        featured: featured === true || featured === 'true',
-        images: Array.isArray(images) ? images : [],
-        interviewAudioUrl,
+        color: color || "blue",
+        featured: featured === true || featured === "true",
+        images: finalImages,
+        interviewAudioUrl: finalAudioUrl,
         interviewDuration,
-        interviewTopics: Array.isArray(interviewTopics) ? interviewTopics : [],
-        wisdom: Array.isArray(wisdom) ? wisdom : [],
+        interviewTopics: parsedInterviewTopics,
+        wisdom: parsedWisdom,
         instagramHandle,
         facebookHandle,
         youtubeHandle,
-        categories: Array.isArray(categories) ? categories : [],
-        tags: Array.isArray(tags) ? tags : [],
+        categories: parsedCategories,
+        tags: parsedTags,
         latitude: latitude ? parseFloat(latitude) : null,
         longitude: longitude ? parseFloat(longitude) : null,
         region,
         isActive: isActive !== false,
-        userId: req.user?.id
-      }
+        userId: req.user?.id,
+      },
     });
 
     res.status(201).json({
       success: true,
       data: portrait,
-      message: 'Portrait créé avec succès'
+      message: "Portrait créé avec succès",
     });
   } catch (error) {
-    console.error('Error creating portrait:', error);
+    console.error("Error creating portrait:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la création du portrait'
+      error: "Erreur lors de la création du portrait",
     });
   }
 };
@@ -280,48 +382,108 @@ exports.updatePortrait = async (req, res) => {
 
     // Vérifier si le portrait existe
     const existingPortrait = await prisma.portraitLocal.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!existingPortrait) {
       return res.status(404).json({
         success: false,
-        error: 'Portrait non trouvé'
+        error: "Portrait non trouvé",
       });
     }
 
+    // Gérer les fichiers uploadés
+    let finalImages = Array.isArray(updateData.existingImages)
+      ? updateData.existingImages
+      : existingPortrait.images;
+
+    let finalAudioUrl =
+      updateData.existingAudioUrl || existingPortrait.interviewAudioUrl;
+
+    if (req.files) {
+      try {
+        const uploadResult = await handleFileUploads(req.files, finalImages);
+        finalImages = uploadResult.uploadedImages;
+        if (uploadResult.interviewAudioUrl) {
+          finalAudioUrl = uploadResult.interviewAudioUrl;
+        }
+      } catch (uploadError) {
+        return res.status(400).json({
+          success: false,
+          error: uploadError.message,
+        });
+      }
+    }
+
+    // Parser les données
+    const parsedCategories = Array.isArray(updateData.categories)
+      ? updateData.categories
+      : updateData.categories
+        ? JSON.parse(updateData.categories)
+        : existingPortrait.categories;
+
+    const parsedTags = Array.isArray(updateData.tags)
+      ? updateData.tags
+      : updateData.tags
+        ? JSON.parse(updateData.tags)
+        : existingPortrait.tags;
+
+    const parsedInterviewTopics = Array.isArray(updateData.interviewTopics)
+      ? updateData.interviewTopics
+      : updateData.interviewTopics
+        ? JSON.parse(updateData.interviewTopics)
+        : existingPortrait.interviewTopics;
+
+    const parsedWisdom = Array.isArray(updateData.wisdom)
+      ? updateData.wisdom
+      : updateData.wisdom
+        ? JSON.parse(updateData.wisdom)
+        : existingPortrait.wisdom;
+
+    // Préparer les données de mise à jour
+    const dataToUpdate = {
+      ...updateData,
+      images: finalImages,
+      interviewAudioUrl: finalAudioUrl,
+      categories: parsedCategories,
+      tags: parsedTags,
+      interviewTopics: parsedInterviewTopics,
+      wisdom: parsedWisdom,
+    };
+
     // Convertir les types si nécessaire
-    if (updateData.age) {
-      updateData.age = parseInt(updateData.age);
+    if (dataToUpdate.age) {
+      dataToUpdate.age = parseInt(dataToUpdate.age);
     }
-    if (updateData.latitude) {
-      updateData.latitude = parseFloat(updateData.latitude);
+    if (dataToUpdate.latitude) {
+      dataToUpdate.latitude = parseFloat(dataToUpdate.latitude);
     }
-    if (updateData.longitude) {
-      updateData.longitude = parseFloat(updateData.longitude);
+    if (dataToUpdate.longitude) {
+      dataToUpdate.longitude = parseFloat(dataToUpdate.longitude);
     }
-    if (updateData.featured !== undefined) {
-      updateData.featured = updateData.featured === true || updateData.featured === 'true';
+    if (dataToUpdate.featured !== undefined) {
+      dataToUpdate.featured =
+        dataToUpdate.featured === true || dataToUpdate.featured === "true";
     }
-    if (updateData.isActive !== undefined) {
-      updateData.isActive = updateData.isActive !== false;
+    if (dataToUpdate.isActive !== undefined) {
+      dataToUpdate.isActive = dataToUpdate.isActive !== false;
     }
 
     const portrait = await prisma.portraitLocal.update({
       where: { id },
-      data: updateData
+      data: dataToUpdate,
     });
 
     res.json({
       success: true,
       data: portrait,
-      message: 'Portrait mis à jour avec succès'
+      message: "Portrait mis à jour avec succès",
     });
   } catch (error) {
-    console.error('Error updating portrait:', error);
+    console.error("Error updating portrait:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la mise à jour du portrait'
+      error: "Erreur lors de la mise à jour du portrait",
     });
   }
 };
@@ -333,31 +495,31 @@ exports.deletePortrait = async (req, res) => {
 
     // Vérifier si le portrait existe
     const existingPortrait = await prisma.portraitLocal.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!existingPortrait) {
       return res.status(404).json({
         success: false,
-        error: 'Portrait non trouvé'
+        error: "Portrait non trouvé",
       });
     }
 
     // Soft delete: marquer comme inactif
     await prisma.portraitLocal.update({
       where: { id },
-      data: { isActive: false }
+      data: { isActive: false },
     });
 
     res.json({
       success: true,
-      message: 'Portrait supprimé avec succès'
+      message: "Portrait supprimé avec succès",
     });
   } catch (error) {
-    console.error('Error deleting portrait:', error);
+    console.error("Error deleting portrait:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la suppression du portrait'
+      error: "Erreur lors de la suppression du portrait",
     });
   }
 };
@@ -371,22 +533,22 @@ exports.getPortraitStats = async (req, res) => {
       _sum: {
         views: true,
         shares: true,
-        listens: true
-      }
+        listens: true,
+      },
     });
 
     // Statistiques par génération
     const generationStats = await prisma.portraitLocal.groupBy({
-      by: ['generation'],
+      by: ["generation"],
       where: { isActive: true },
-      _count: true
+      _count: true,
     });
 
     // Statistiques par pays
     const countryStats = await prisma.portraitLocal.groupBy({
-      by: ['country'],
+      by: ["country"],
       where: { isActive: true },
-      _count: true
+      _count: true,
     });
 
     res.json({
@@ -397,14 +559,14 @@ exports.getPortraitStats = async (req, res) => {
         totalShares: stats._sum.shares || 0,
         totalListens: stats._sum.listens || 0,
         byGeneration: generationStats,
-        byCountry: countryStats
-      }
+        byCountry: countryStats,
+      },
     });
   } catch (error) {
-    console.error('Error getting portrait stats:', error);
+    console.error("Error getting portrait stats:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la récupération des statistiques'
+      error: "Erreur lors de la récupération des statistiques",
     });
   }
 };
@@ -419,7 +581,7 @@ exports.getPortraitComments = async (req, res) => {
     const comments = await prisma.portraitComment.findMany({
       where: {
         portraitId,
-        parentId: null
+        parentId: null,
       },
       include: {
         user: {
@@ -427,8 +589,8 @@ exports.getPortraitComments = async (req, res) => {
             id: true,
             firstName: true,
             lastName: true,
-            avatar: true
-          }
+            avatar: true,
+          },
         },
         replies: {
           include: {
@@ -437,26 +599,26 @@ exports.getPortraitComments = async (req, res) => {
                 id: true,
                 firstName: true,
                 lastName: true,
-                avatar: true
-              }
-            }
+                avatar: true,
+              },
+            },
           },
-          orderBy: { createdAt: 'asc' }
+          orderBy: { createdAt: "asc" },
         },
         _count: {
-          select: { replies: true }
-        }
+          select: { replies: true },
+        },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       skip,
-      take: parseInt(limit)
+      take: parseInt(limit),
     });
 
     const total = await prisma.portraitComment.count({
       where: {
         portraitId,
-        parentId: null
-      }
+        parentId: null,
+      },
     });
 
     res.json({
@@ -466,14 +628,14 @@ exports.getPortraitComments = async (req, res) => {
         total,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil(total / parseInt(limit))
-      }
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
     });
   } catch (error) {
-    console.error('Error getting comments:', error);
+    console.error("Error getting comments:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la récupération des commentaires'
+      error: "Erreur lors de la récupération des commentaires",
     });
   }
 };
@@ -486,13 +648,13 @@ exports.createPortraitComment = async (req, res) => {
 
     // Vérifier si le portrait existe
     const portrait = await prisma.portraitLocal.findUnique({
-      where: { id: portraitId }
+      where: { id: portraitId },
     });
 
     if (!portrait) {
       return res.status(404).json({
         success: false,
-        error: 'Portrait non trouvé'
+        error: "Portrait non trouvé",
       });
     }
 
@@ -500,20 +662,20 @@ exports.createPortraitComment = async (req, res) => {
     if (!content || content.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Le contenu du commentaire est requis'
+        error: "Le contenu du commentaire est requis",
       });
     }
 
     // Vérifier si c'est une réponse à un commentaire
     if (parentId) {
       const parentComment = await prisma.portraitComment.findUnique({
-        where: { id: parentId }
+        where: { id: parentId },
       });
 
       if (!parentComment) {
         return res.status(404).json({
           success: false,
-          error: 'Commentaire parent non trouvé'
+          error: "Commentaire parent non trouvé",
         });
       }
     }
@@ -523,7 +685,7 @@ exports.createPortraitComment = async (req, res) => {
         portraitId,
         userId,
         content: content.trim(),
-        parentId: parentId || null
+        parentId: parentId || null,
       },
       include: {
         user: {
@@ -531,30 +693,30 @@ exports.createPortraitComment = async (req, res) => {
             id: true,
             firstName: true,
             lastName: true,
-            avatar: true
-          }
-        }
-      }
+            avatar: true,
+          },
+        },
+      },
     });
 
     // Notifier via WebSocket si disponible
     if (req.io) {
-      req.io.to(`portrait:${portraitId}`).emit('new-comment', {
+      req.io.to(`portrait:${portraitId}`).emit("new-comment", {
         comment,
-        portraitId
+        portraitId,
       });
     }
 
     res.status(201).json({
       success: true,
       data: comment,
-      message: 'Commentaire ajouté avec succès'
+      message: "Commentaire ajouté avec succès",
     });
   } catch (error) {
-    console.error('Error creating comment:', error);
+    console.error("Error creating comment:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la création du commentaire'
+      error: "Erreur lors de la création du commentaire",
     });
   }
 };
@@ -566,20 +728,20 @@ exports.likePortraitComment = async (req, res) => {
     const comment = await prisma.portraitComment.update({
       where: { id: commentId },
       data: {
-        likes: { increment: 1 }
-      }
+        likes: { increment: 1 },
+      },
     });
 
     res.json({
       success: true,
       data: comment,
-      message: 'Commentaire aimé avec succès'
+      message: "Commentaire aimé avec succès",
     });
   } catch (error) {
-    console.error('Error liking comment:', error);
+    console.error("Error liking comment:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors du like du commentaire'
+      error: "Erreur lors du like du commentaire",
     });
   }
 };
@@ -593,13 +755,13 @@ exports.recordPortraitShare = async (req, res) => {
 
     // Vérifier si le portrait existe
     const portrait = await prisma.portraitLocal.findUnique({
-      where: { id: portraitId }
+      where: { id: portraitId },
     });
 
     if (!portrait) {
       return res.status(404).json({
         success: false,
-        error: 'Portrait non trouvé'
+        error: "Portrait non trouvé",
       });
     }
 
@@ -610,28 +772,28 @@ exports.recordPortraitShare = async (req, res) => {
         userId,
         platform,
         ipAddress: req.ip,
-        userAgent: req.headers['user-agent']
-      }
+        userAgent: req.headers["user-agent"],
+      },
     });
 
     // Incrémenter le compteur de partages du portrait
     await prisma.portraitLocal.update({
       where: { id: portraitId },
       data: {
-        shares: { increment: 1 }
-      }
+        shares: { increment: 1 },
+      },
     });
 
     res.status(201).json({
       success: true,
       data: share,
-      message: 'Partage enregistré avec succès'
+      message: "Partage enregistré avec succès",
     });
   } catch (error) {
-    console.error('Error recording share:', error);
+    console.error("Error recording share:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de l\'enregistrement du partage'
+      error: "Erreur lors de l'enregistrement du partage",
     });
   }
 };
@@ -645,13 +807,13 @@ exports.recordPortraitListen = async (req, res) => {
 
     // Vérifier si le portrait existe
     const portrait = await prisma.portraitLocal.findUnique({
-      where: { id: portraitId }
+      where: { id: portraitId },
     });
 
     if (!portrait) {
       return res.status(404).json({
         success: false,
-        error: 'Portrait non trouvé'
+        error: "Portrait non trouvé",
       });
     }
 
@@ -661,10 +823,10 @@ exports.recordPortraitListen = async (req, res) => {
         portraitId,
         userId,
         duration: parseInt(duration) || 0,
-        completed: completed === true || completed === 'true',
+        completed: completed === true || completed === "true",
         ipAddress: req.ip,
-        userAgent: req.headers['user-agent']
-      }
+        userAgent: req.headers["user-agent"],
+      },
     });
 
     // Incrémenter le compteur d'écoutes si c'est une écoute complète
@@ -672,21 +834,21 @@ exports.recordPortraitListen = async (req, res) => {
       await prisma.portraitLocal.update({
         where: { id: portraitId },
         data: {
-          listens: { increment: 1 }
-        }
+          listens: { increment: 1 },
+        },
       });
     }
 
     res.status(201).json({
       success: true,
       data: listen,
-      message: 'Écoute enregistrée avec succès'
+      message: "Écoute enregistrée avec succès",
     });
   } catch (error) {
-    console.error('Error recording listen:', error);
+    console.error("Error recording listen:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de l\'enregistrement de l\'écoute'
+      error: "Erreur lors de l'enregistrement de l'écoute",
     });
   }
 };

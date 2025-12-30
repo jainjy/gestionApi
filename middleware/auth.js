@@ -1,70 +1,37 @@
 const { prisma } = require('../lib/db');
+const jwt = require("jsonwebtoken");
+
 
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = authHeader && authHeader.split(" ")[1];
 
   if (!token) {
-    return res.status(401).json({ 
-      success: false,
-      error: 'Token d\'authentification requis' 
-    });
+    return res.status(401).json({ success: false, error: "Token requis" });
   }
 
   try {
-    let userId;
-    
-    console.log('🔐 Token reçu:', token);
-    
-    // Accepter plusieurs formats de token
-    if (token.startsWith('real-jwt-token-')) {
-      userId = token.replace('real-jwt-token-', '');
-    } else {
-      // Si le token est directement l'ID utilisateur
-      userId = token;
-    }
-    
-    console.log('👤 User ID extrait:', userId);
-    
-    // Validation de l'ID utilisateur
-    if (!userId || userId.length < 1) {
-      return res.status(401).json({ 
-        success: false,
-        error: 'Token invalide' 
-      });
-    }
+    // VÉRIFICATION CRYPTOGRAPHIQUE (Corrige CRIT-01)
+    // Le secret doit être dans une variable d'environnement (.env)
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Vérifier si l'utilisateur existe
+    // Vérifier si l'utilisateur existe toujours
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: decoded.userId },
     });
 
     if (!user) {
-      return res.status(401).json({ 
-        success: false,
-        error: 'Utilisateur non trouvé' 
-      });
+      return res
+        .status(401)
+        .json({ success: false, error: "Utilisateur introuvable" });
     }
 
-    // Ajouter l'utilisateur à la requête
-    req.user = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      companyName: user.companyName,
-      kycStatus: user.status
-    };
-
-    console.log('✅ User authentifié:', req.user.email, 'Role:', req.user.role);
+    req.user = user;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    return res.status(401).json({ 
-      success: false,
-      error: 'Token invalide' 
-    });
+    return res
+      .status(403)
+      .json({ success: false, error: "Token invalide ou expiré" });
   }
 }
 

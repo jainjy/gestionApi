@@ -1,3 +1,4 @@
+// middleware/upload.js
 const multer = require("multer");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -13,16 +14,14 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max
+    fileSize: 50 * 1024 * 1024, // 50MB max pour l'audio
   },
   fileFilter: (req, file, cb) => {
-    // Accepter les images et documents
+    // Accepter les images et les fichiers audio
     if (
       file.mimetype.startsWith("image/") ||
-      file.mimetype === "application/pdf" ||
-      file.mimetype === "application/msword" ||
-      file.mimetype ===
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      file.mimetype.startsWith("audio/") ||
+      file.mimetype === "application/octet-stream" // Pour certains fichiers audio
     ) {
       cb(null, true);
     } else {
@@ -37,9 +36,9 @@ const uploadToSupabase = async (file, folder = "blog-images") => {
     const fileExt = file.originalname.split(".").pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `${folder}/${fileName}`;
-
+    let bucket = "blog-images";
     const { data, error } = await supabase.storage
-      .from("blog-images")
+      .from(bucket)
       .upload(filePath, file.buffer, {
         contentType: file.mimetype,
         upsert: false,
@@ -51,13 +50,14 @@ const uploadToSupabase = async (file, folder = "blog-images") => {
 
     const {
       data: { publicUrl },
-    } = supabase.storage.from("blog-images").getPublicUrl(filePath);
+    } = supabase.storage.from(bucket).getPublicUrl(filePath);
 
     return {
       url: publicUrl,
       path: filePath,
       name: file.originalname,
       type: file.mimetype,
+      bucket: bucket,
     };
   } catch (error) {
     console.error("Erreur upload Supabase:", error);

@@ -170,7 +170,7 @@ model User {
   audits                    Audit[]
   notifications             Notification[]
   notificationsProprietaire Notification[]            @relation("UserProprietaireRelation")
-
+  refreshTokens       RefreshToken[] // Relation pour la gestion sécurisée des sessions
   // RELATION POUR PODCAST 
   podcasts             Podcast[] // Podcasts créés par l'utilisateur
   videos               Video[] // Vidéos créées par l'utilisateur
@@ -252,6 +252,21 @@ model PasswordResetRequest {
 
   @@index([emailHash])
   @@index([createdAt])
+}
+//===================
+// SÉCURITÉ - REFRESH TOKENS (Correction MED-04)
+//===================
+model RefreshToken {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  revokedAt   DateTime? // Si présent, le token est invalide
+  createdAt   DateTime  @default(now())
+  replacedBy  String?   // Pour la rotation de token (sécurité avancée)
+
+  @@index([userId])
 }
 
 // ======================
