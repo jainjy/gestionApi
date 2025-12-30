@@ -2745,3 +2745,164 @@ model PortraitComment {
   @@index([createdAt])
   @@map("portrait_comments")
 }
+
+// ======================
+// EVENT & DISCOVERY
+// ======================
+
+model Event {
+  id                  Int       @id @default(autoincrement())
+  title               String    @db.VarChar(255)
+  description         String?   @db.Text
+  date                DateTime
+  startTime           String?   @db.VarChar(10)
+  endTime             String?   @db.VarChar(10)
+  location            String    @db.VarChar(255)
+  address             String?   @db.VarChar(255)
+  city                String?   @db.VarChar(100)
+  postalCode          String?   @db.VarChar(20)
+  category            String    @db.VarChar(100)
+  subCategory         String?   @db.VarChar(100)
+  capacity            Int       @default(0)
+  price               Float     @default(0)
+  discountPrice       Float?    @default(0)
+  currency            String    @default("EUR")
+  image               String?   @db.VarChar(500)
+  images              Json?     @default("[]")
+  featured            Boolean   @default(false)
+  status              EventStatus @default(DRAFT)
+  organizer           String?   @db.VarChar(255)
+  contactEmail        String?   @db.VarChar(255)
+  contactPhone        String?   @db.VarChar(20)
+  website             String?   @db.VarChar(255)
+  tags                Json?     @default("[]")
+  requirements        String?   @db.Text
+  highlights          Json?     @default("[]")
+  duration            String?   @db.VarChar(50)
+  difficulty          Difficulty?
+  targetAudience      Json?     @default("[]")
+  includes            Json?     @default("[]")
+  notIncludes         Json?     @default("[]")
+  cancellationPolicy  String?   @db.Text
+  refundPolicy        String?   @db.Text
+  visibility          Visibility @default(PUBLIC)
+  registrationDeadline DateTime?
+  earlyBirdDeadline   DateTime?
+  earlyBirdPrice      Float?    @default(0)
+  
+  // Stats
+  participants        Int       @default(0)
+  revenue             Float     @default(0)
+  
+  // Timestamps
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([status])
+  @@index([category])
+  @@index([featured])
+  @@index([visibility])
+}
+
+model Discovery {
+  id                  Int        @id @default(autoincrement())
+  title               String     @db.VarChar(255)
+  description         String?    @db.Text
+  type                String     @db.VarChar(100)
+  location            String     @db.VarChar(255)
+  address             String?    @db.VarChar(255)
+  city                String?    @db.VarChar(100)
+  postalCode          String?    @db.VarChar(20)
+  difficulty          Difficulty
+  duration            String?    @db.VarChar(100)
+  rating              Float      @default(0)
+  image               String?    @db.VarChar(500)
+  images              Json?      @default("[]")
+  featured            Boolean    @default(false)
+  status              DiscoveryStatus @default(DRAFT)
+  organizer           String?    @db.VarChar(255)
+  contactEmail        String?    @db.VarChar(255)
+  contactPhone        String?    @db.VarChar(20)
+  website             String?    @db.VarChar(255)
+  tags                Json?      @default("[]")
+  highlights          Json?      @default("[]")
+  recommendations     String?    @db.Text
+  bestSeason          Json?      @default("[]")
+  bestTime            Json?      @default("[]")
+  accessibility       String?    @db.Text
+  equipment           Json?      @default("[]")
+  safety              String?    @db.Text
+  price               Float?     @default(0)
+  currency            String     @default("EUR")
+  includes            Json?      @default("[]")
+  notIncludes         Json?      @default("[]")
+  
+  // Group info
+  groupSizeMin        Int?       @default(1)
+  groupSizeMax        Int?       @default(10)
+  ageRestrictionMin   Int?
+  ageRestrictionMax   Int?
+  languages           Json?      @default("[]")
+  
+  // Services
+  guideIncluded       Boolean   @default(false)
+  transportIncluded   Boolean   @default(false)
+  mealIncluded        Boolean   @default(false)
+  parkingAvailable    Boolean   @default(false)
+  wifiAvailable       Boolean   @default(false)
+  familyFriendly      Boolean   @default(false)
+  petFriendly         Boolean   @default(false)
+  wheelchairAccessible Boolean  @default(false)
+  
+  // Sustainability
+  sustainabilityRating Float?   @default(0)
+  carbonFootprint     String?   @db.VarChar(100)
+  
+  // Additional fields from your interface
+  coordinates         Json?      @default("{}")
+  includedServices    Json?      @default("[]")
+  requirements        Json?      @default("[]")
+  maxVisitors         Int?       @default(0)
+  availableDates      Json?      @default("[]")
+  
+  // Stats
+  visits              Int        @default(0)
+  revenue             Float      @default(0)
+  
+  // Timestamps
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([featured])
+  @@index([difficulty])
+}
+
+enum EventStatus {
+  DRAFT
+  ACTIVE
+  UPCOMING
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum DiscoveryStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  ACTIVE
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+  INVITE_ONLY
+}

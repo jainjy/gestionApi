@@ -401,6 +401,10 @@ app.use("/api/activity-actions", require("./routes/activity-actions"));
 app.use("/api/guide-contact", require("./routes/guide-contact"));
 app.use("/api/activity-availability", require("./routes/activity-availability"));
 
+//Route event & dicovery
+app.use("/api/event", require("./routes/eventRoutes.js"));
+app.use("/api/discoveries", require("./routes/discoveriesRoutes.js"));
+
 // Route pour l'upload de fichiers dans les messages
 app.post(
   "/api/upload/message-file",
