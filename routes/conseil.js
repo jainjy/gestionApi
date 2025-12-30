@@ -1,8 +1,458 @@
-// routes/conseil.js - CODE COMPLET CORRIGÉ (sans le champ bio)
+// routes/conseil.js - CODE COMPLET CORRIGÉ POUR CORB
 const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const { prisma } = require("../lib/db");
+
+// === MIDDLEWARE POUR PRÉVENIR CORB ===
+router.use((req, res, next) => {
+  // S'assurer que toutes les réponses sont en JSON pur
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  next();
+});
+
+/**
+ * @route GET /api/conseil/types
+ * @description Récupérer les types de conseil disponibles
+ * @access Public
+ */
+router.get("/types", async (req, res) => {
+  try {
+    const types = await prisma.conseilType.findMany({
+      where: { isActive: true },
+      orderBy: { ordre: "asc" }
+    });
+
+    res.json({
+      success: true,
+      data: types || []
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération types conseil:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des types de conseil",
+      data: []
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/experts
+ * @description Récupérer la liste des experts conseil
+ * @access Public
+ */
+router.get("/experts", async (req, res) => {
+  try {
+    const experts = await prisma.user.findMany({
+      where: {
+        OR: [
+          { role: "expert" },
+          { userType: "professional" },
+          { metiers: { some: {} } }
+        ]
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        companyName: true,
+        avatar: true,
+        userType: true,
+        role: true,
+        commercialName: true,
+        createdAt: true,
+        metiers: {
+          include: {
+            metier: true
+          }
+        },
+        services: {
+          include: {
+            service: true
+          }
+        },
+        _count: {
+          select: {
+            demandesCrees: true,
+            demandesConseil: true,
+            expertDemandesConseil: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    // Fonction pour calculer le rating d'un expert
+    const calculateExpertRating = (expert) => {
+      let rating = 4.0;
+      
+      const totalDemandes = (expert._count?.demandesCrees || 0) + 
+                           (expert._count?.expertDemandesConseil || 0);
+      
+      if (totalDemandes > 50) rating += 1.0;
+      else if (totalDemandes > 20) rating += 0.7;
+      else if (totalDemandes > 10) rating += 0.5;
+      else if (totalDemandes > 5) rating += 0.3;
+      else if (totalDemandes > 0) rating += 0.1;
+      
+      if (expert.metiers?.length > 3) rating += 0.4;
+      else if (expert.metiers?.length > 1) rating += 0.2;
+      
+      if (expert.services?.length > 10) rating += 0.3;
+      else if (expert.services?.length > 5) rating += 0.2;
+      else if (expert.services?.length > 2) rating += 0.1;
+      
+      if (expert.createdAt) {
+        const now = new Date();
+        const joinDate = new Date(expert.createdAt);
+        const yearsSinceJoin = (now - joinDate) / (1000 * 60 * 60 * 24 * 365);
+        
+        if (yearsSinceJoin > 5) rating += 0.5;
+        else if (yearsSinceJoin > 3) rating += 0.3;
+        else if (yearsSinceJoin > 1) rating += 0.2;
+      }
+      
+      if (expert.role === 'expert') rating += 0.3;
+      
+      rating = Math.max(0, Math.min(rating, 5));
+      return rating.toFixed(1);
+    };
+
+    // Fonction pour calculer l'expérience
+    const calculateExperience = (expert) => {
+      if (expert.createdAt) {
+        const now = new Date();
+        const joinDate = new Date(expert.createdAt);
+        const years = Math.floor((now - joinDate) / (1000 * 60 * 60 * 24 * 365));
+        
+        if (years > 10) return "Plus de 10 ans d'expérience";
+        if (years > 5) return "5-10 ans d'expérience";
+        if (years > 3) return "3-5 ans d'expérience";
+        if (years > 1) return "1-3 ans d'expérience";
+        return "Moins d'un an d'expérience";
+      }
+      return "Expérience variable";
+    };
+
+    // Fonction pour calculer la disponibilité
+    const calculateDisponibilite = (expert) => {
+      const totalDemandes = (expert._count?.expertDemandesConseil || 0);
+      if (totalDemandes < 5) return 'disponible';
+      if (totalDemandes < 15) return 'limitee';
+      return 'complet';
+    };
+
+    // Enrichir les données
+    const expertsEnriched = experts.map(expert => {
+      const title = expert.commercialName || 
+                   (expert.role === 'expert' ? 'Expert Conseil' : 
+                    expert.userType === 'professional' ? 'Professionnel' : 
+                    'Consultant');
+      
+      const rating = calculateExpertRating(expert);
+      const experience = calculateExperience(expert);
+      const disponibilite = calculateDisponibilite(expert);
+      
+      return {
+        ...expert,
+        title,
+        rating: parseFloat(rating),
+        experience,
+        disponibilite,
+        projets: expert._count?.demandesCrees || 0,
+        certifications: []
+      };
+    });
+
+    // Trier par rating
+    expertsEnriched.sort((a, b) => b.rating - a.rating);
+
+    res.json({
+      success: true,
+      data: expertsEnriched
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération experts:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des experts",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      data: []
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/temoignages
+ * @description Récupérer les témoignages pour le conseil - VERSION CORRIGÉE POUR CORB
+ * @access Public
+ */
+router.get("/temoignages", async (req, res) => {
+  try {
+    // Essayez d'abord de récupérer depuis la base de données
+    let temoignagesData = [];
+    
+    try {
+      // Vérifier si la table existe
+      const tableExists = await prisma.$queryRaw`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'Temoignage'
+        );
+      `;
+      
+      if (tableExists && tableExists[0]?.exists) {
+        const dbTemoignages = await prisma.temoignage.findMany({
+          where: { isActive: true },
+          take: 10,
+          orderBy: { createdAt: 'desc' }
+        });
+        
+        if (dbTemoignages.length > 0) {
+          temoignagesData = dbTemoignages.map(t => ({
+            id: t.id,
+            name: t.name || "Client",
+            entreprise: t.company || "",
+            texte: t.content || "",
+            rating: t.rating || 5,
+            date: t.createdAt ? new Date(t.createdAt).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR'),
+            avatarColor: t.avatarColor || "#6B8E23",
+            resultat: t.result || "Résultat positif"
+          }));
+        }
+      }
+    } catch (dbError) {
+      console.log("Pas de table temoignages, utilisation de données vides");
+    }
+    
+    res.json({
+      success: true,
+      data: temoignagesData
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération témoignages:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des témoignages",
+      data: []
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/etapes
+ * @description Récupérer les étapes du processus de conseil - VERSION CORRIGÉE
+ * @access Public
+ */
+router.get("/etapes", async (req, res) => {
+  try {
+    const etapes = [
+      {
+        step: 1,
+        title: "Diagnostic initial",
+        description: "Analyse approfondie de votre situation",
+        icon: "Search",
+        color: "#6B8E23",
+        details: ["Entretien découverte", "Analyse documentaire", "Identification des enjeux"]
+      },
+      {
+        step: 2,
+        title: "Proposition sur mesure",
+        description: "Élaboration d'une approche personnalisée",
+        icon: "Lightbulb",
+        color: "#27AE60",
+        details: ["Recommandations spécifiques", "Planning détaillé", "Budget prévisionnel"]
+      },
+      {
+        step: 3,
+        title: "Mise en œuvre",
+        description: "Accompagnement dans la réalisation",
+        icon: "Rocket",
+        color: "#8B4513",
+        details: ["Suivi régulier", "Ajustements en temps réel", "Coordination des équipes"]
+      },
+      {
+        step: 4,
+        title: "Suivi & Évaluation",
+        description: "Mesure des résultats et capitalisation",
+        icon: "BarChart",
+        color: "#D4AF37",
+        details: ["Tableaux de bord", "Reporting détaillé", "Recommandations finales"]
+      }
+    ];
+
+    res.json({
+      success: true,
+      data: etapes
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération étapes:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des étapes",
+      data: []
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/avantages
+ * @description Récupérer les avantages du conseil - VERSION CORRIGÉE
+ * @access Public
+ */
+router.get("/avantages", async (req, res) => {
+  try {
+    const avantages = [
+      {
+        title: "Expertise certifiée",
+        description: "Nos conseillers sont certifiés et possèdent une expertise avérée",
+        icon: "Shield",
+        color: "#6B8E23"
+      },
+      {
+        title: "Approche sur mesure",
+        description: "Chaque mission est adaptée à vos besoins spécifiques",
+        icon: "Target",
+        color: "#27AE60"
+      },
+      {
+        title: "Confidentialité absolue",
+        description: "Discrétion garantie dans toutes nos interventions",
+        icon: "Shield",
+        color: "#8B4513"
+      },
+      {
+        title: "Résultats mesurables",
+        description: "Des objectifs clairs avec des indicateurs de performance",
+        icon: "TrendingUp",
+        color: "#D4AF37"
+      }
+    ];
+
+    res.json({
+      success: true,
+      data: avantages
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération avantages:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des avantages",
+      data: []
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/stats
+ * @description Récupérer les statistiques des demandes de conseil
+ * @access Public
+ */
+router.get("/stats", async (req, res) => {
+  try {
+    const stats = {
+      totalDemandes: await prisma.demandeConseil.count(),
+      demandesEnAttente: await prisma.demandeConseil.count({
+        where: { statut: "en_attente" }
+      }),
+      demandesTraitees: await prisma.demandeConseil.count({
+        where: { statut: "en_cours" }
+      }),
+      demandesTerminees: await prisma.demandeConseil.count({
+        where: { statut: "terminee" }
+      }),
+      totalExperts: await prisma.user.count({
+        where: {
+          OR: [
+            { role: "expert" },
+            { userType: "professional" }
+          ]
+        }
+      })
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération stats:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des statistiques",
+      data: []
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/user-info
+ * @description Récupérer les informations de l'utilisateur connecté
+ * @access Private
+ */
+router.get("/user-info", authenticateToken, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        companyName: true,
+        address: true,
+        city: true,
+        zipCode: true,
+        commercialName: true,
+        websiteUrl: true,
+        avatar: true,
+        role: true,
+        userType: true,
+        metiers: {
+          include: {
+            metier: true
+          }
+        },
+        services: {
+          include: {
+            service: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "Utilisateur non trouvé"
+      });
+    }
+
+    res.json({
+      success: true,
+      data: user
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération info utilisateur:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des informations"
+    });
+  }
+});
 
 /**
  * @route POST /api/conseil/demande
@@ -224,215 +674,8 @@ router.get("/mes-demandes", authenticateToken, async (req, res) => {
     console.error("❌ Erreur récupération demandes conseil:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la récupération des demandes"
-    });
-  }
-});
-
-/**
- * @route GET /api/conseil/experts
- * @description Récupérer la liste des experts conseil
- * @access Public
- */
-router.get("/experts", async (req, res) => {
-  try {
-    const experts = await prisma.user.findMany({
-      where: {
-        OR: [
-          { role: "expert" },
-          { userType: "professional" },
-          { metiers: { some: {} } }
-        ]
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        companyName: true,
-        // SUPPRIMER: bio: true, // Ce champ n'existe pas
-        avatar: true,
-        userType: true,
-        role: true,
-        commercialName: true,
-        createdAt: true,
-        metiers: {
-          include: {
-            metier: true
-          }
-        },
-        services: {
-          include: {
-            service: true
-          }
-        },
-        _count: {
-          select: {
-            demandesCrees: true,
-            demandesConseil: true,
-            expertDemandesConseil: true
-          }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
-
-    // Fonction pour calculer le rating d'un expert
-    const calculateExpertRating = (expert) => {
-      let rating = 4.0;
-      
-      const totalDemandes = (expert._count?.demandesCrees || 0) + 
-                           (expert._count?.expertDemandesConseil || 0);
-      
-      if (totalDemandes > 50) rating += 1.0;
-      else if (totalDemandes > 20) rating += 0.7;
-      else if (totalDemandes > 10) rating += 0.5;
-      else if (totalDemandes > 5) rating += 0.3;
-      else if (totalDemandes > 0) rating += 0.1;
-      
-      if (expert.metiers?.length > 3) rating += 0.4;
-      else if (expert.metiers?.length > 1) rating += 0.2;
-      
-      if (expert.services?.length > 10) rating += 0.3;
-      else if (expert.services?.length > 5) rating += 0.2;
-      else if (expert.services?.length > 2) rating += 0.1;
-      
-      if (expert.createdAt) {
-        const now = new Date();
-        const joinDate = new Date(expert.createdAt);
-        const yearsSinceJoin = (now - joinDate) / (1000 * 60 * 60 * 24 * 365);
-        
-        if (yearsSinceJoin > 5) rating += 0.5;
-        else if (yearsSinceJoin > 3) rating += 0.3;
-        else if (yearsSinceJoin > 1) rating += 0.2;
-      }
-      
-      if (expert.role === 'expert') rating += 0.3;
-      
-      rating = Math.max(0, Math.min(rating, 5));
-      return rating.toFixed(1);
-    };
-
-    // Fonction pour calculer l'expérience
-    const calculateExperience = (expert) => {
-      if (expert.createdAt) {
-        const now = new Date();
-        const joinDate = new Date(expert.createdAt);
-        const years = Math.floor((now - joinDate) / (1000 * 60 * 60 * 24 * 365));
-        
-        if (years > 10) return "Plus de 10 ans d'expérience";
-        if (years > 5) return "5-10 ans d'expérience";
-        if (years > 3) return "3-5 ans d'expérience";
-        if (years > 1) return "1-3 ans d'expérience";
-        return "Moins d'un an d'expérience";
-      }
-      return "Expérience variable";
-    };
-
-    // Fonction pour calculer la disponibilité
-    const calculateDisponibilite = (expert) => {
-      const totalDemandes = (expert._count?.expertDemandesConseil || 0);
-      if (totalDemandes < 5) return 'disponible';
-      if (totalDemandes < 15) return 'limitee';
-      return 'complet';
-    };
-
-    // Enrichir les données
-    const expertsEnriched = experts.map(expert => {
-      const title = expert.commercialName || 
-                   (expert.role === 'expert' ? 'Expert Conseil' : 
-                    expert.userType === 'professional' ? 'Professionnel' : 
-                    'Consultant');
-      
-      const rating = calculateExpertRating(expert);
-      const experience = calculateExperience(expert);
-      const disponibilite = calculateDisponibilite(expert);
-      
-      return {
-        ...expert,
-        title,
-        rating: parseFloat(rating),
-        experience,
-        disponibilite,
-        projets: expert._count?.demandesCrees || 0,
-        certifications: []
-      };
-    });
-
-    // Trier par rating
-    expertsEnriched.sort((a, b) => b.rating - a.rating);
-
-    res.json({
-      success: true,
-      data: expertsEnriched
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération experts:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des experts",
-      details: error.message
-    });
-  }
-});
-
-/**
- * @route GET /api/conseil/types
- * @description Récupérer les types de conseil disponibles
- * @access Public
- */
-router.get("/types", async (req, res) => {
-  try {
-    const types = await prisma.conseilType.findMany({
-      where: { isActive: true },
-      orderBy: { ordre: "asc" }
-    });
-
-    const defaultTypes = [
-      {
-        id: 1,
-        title: "Audit Stratégique",
-        description: "Analyse approfondie de votre situation et recommandations stratégiques",
-        category: "audit",
-        duration: "2-4 semaines",
-        price: "À partir de 2 500€",
-        icon: "BarChart",
-        color: "#6B8E23"
-      },
-      {
-        id: 2,
-        title: "Médiation & Résolution",
-        description: "Résolution amiable des conflits internes et externes",
-        category: "mediation",
-        duration: "1-3 semaines",
-        price: "À partir de 1 800€",
-        icon: "Handshake",
-        color: "#27AE60"
-      },
-      {
-        id: 3,
-        title: "Conseil en Stratégie",
-        description: "Développement et optimisation de votre stratégie d'entreprise",
-        category: "strategie",
-        duration: "3-6 semaines",
-        price: "À partir de 3 500€",
-        icon: "Target",
-        color: "#8B4513"
-      }
-    ];
-
-    res.json({
-      success: true,
-      data: types.length > 0 ? types : defaultTypes
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération types conseil:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des types de conseil"
+      error: "Erreur lors de la récupération des demandes",
+      data: []
     });
   }
 });
@@ -503,7 +746,164 @@ router.get("/demandes/expert", authenticateToken, async (req, res) => {
     console.error("❌ Erreur récupération demandes expert:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la récupération des demandes"
+      error: "Erreur lors de la récupération des demandes",
+      data: []
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/demande/:id
+ * @description Récupérer une demande de conseil spécifique
+ * @access Private
+ */
+router.get("/demande/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const demande = await prisma.demandeConseil.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            companyName: true
+          }
+        },
+        expert: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            companyName: true,
+            avatar: true
+          }
+        },
+        suivis: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!demande) {
+      return res.status(404).json({
+        success: false,
+        error: "Demande non trouvée"
+      });
+    }
+
+    if (demande.userId !== req.user.id && demande.expertId !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé à voir cette demande"
+      });
+    }
+
+    // Récupérer les infos service et metier
+    let serviceInfo = null;
+    let metierInfo = null;
+
+    if (demande.serviceId) {
+      serviceInfo = await prisma.service.findUnique({
+        where: { id: demande.serviceId }
+      });
+    }
+
+    if (demande.metierId) {
+      metierInfo = await prisma.metier.findUnique({
+        where: { id: demande.metierId }
+      });
+    }
+
+    const demandeComplete = {
+      ...demande,
+      service: serviceInfo,
+      metier: metierInfo
+    };
+
+    res.json({
+      success: true,
+      data: demandeComplete
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération demande:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération de la demande"
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/demande/:id/suivis
+ * @description Récupérer tous les suivis d'une demande de conseil
+ * @access Private
+ */
+router.get("/demande/:id/suivis", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const demande = await prisma.demandeConseil.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!demande) {
+      return res.status(404).json({
+        success: false,
+        error: "Demande non trouvée"
+      });
+    }
+
+    if (demande.userId !== req.user.id && demande.expertId !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé à voir cette demande"
+      });
+    }
+
+    const suivis = await prisma.suiviConseil.findMany({
+      where: { demandeConseilId: parseInt(id) },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    res.json({
+      success: true,
+      data: suivis
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération suivis:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des suivis",
+      data: []
     });
   }
 });
@@ -640,62 +1040,6 @@ router.post("/demande/:id/suivi", authenticateToken, async (req, res) => {
 });
 
 /**
- * @route GET /api/conseil/demande/:id/suivis
- * @description Récupérer tous les suivis d'une demande de conseil
- * @access Private
- */
-router.get("/demande/:id/suivis", authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const demande = await prisma.demandeConseil.findUnique({
-      where: { id: parseInt(id) }
-    });
-
-    if (!demande) {
-      return res.status(404).json({
-        success: false,
-        error: "Demande non trouvée"
-      });
-    }
-
-    if (demande.userId !== req.user.id && demande.expertId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: "Non autorisé à voir cette demande"
-      });
-    }
-
-    const suivis = await prisma.suiviConseil.findMany({
-      where: { demandeConseilId: parseInt(id) },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
-
-    res.json({
-      success: true,
-      data: suivis
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération suivis:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des suivis"
-    });
-  }
-});
-
-/**
  * @route PUT /api/conseil/demande/:id/assign
  * @description Assigner un expert à une demande de conseil
  * @access Private (admin ou expert)
@@ -785,106 +1129,6 @@ router.put("/demande/:id/assign", authenticateToken, async (req, res) => {
 });
 
 /**
- * @route GET /api/conseil/user-info
- * @description Récupérer les informations de l'utilisateur connecté
- * @access Private
- */
-router.get("/user-info", authenticateToken, async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        companyName: true,
-        address: true,
-        city: true,
-        zipCode: true,
-        commercialName: true,
-        websiteUrl: true,
-        avatar: true,
-        role: true,
-        userType: true,
-        metiers: {
-          include: {
-            metier: true
-          }
-        },
-        services: {
-          include: {
-            service: true
-          }
-        }
-      }
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: "Utilisateur non trouvé"
-      });
-    }
-
-    res.json({
-      success: true,
-      data: user
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération info utilisateur:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des informations"
-    });
-  }
-});
-
-/**
- * @route GET /api/conseil/stats
- * @description Récupérer les statistiques des demandes de conseil
- * @access Public
- */
-router.get("/stats", async (req, res) => {
-  try {
-    const stats = {
-      totalDemandes: await prisma.demandeConseil.count(),
-      demandesEnAttente: await prisma.demandeConseil.count({
-        where: { statut: "en_attente" }
-      }),
-      demandesTraitees: await prisma.demandeConseil.count({
-        where: { statut: "en_cours" }
-      }),
-      demandesTerminees: await prisma.demandeConseil.count({
-        where: { statut: "terminee" }
-      }),
-      totalExperts: await prisma.user.count({
-        where: {
-          OR: [
-            { role: "expert" },
-            { userType: "professional" }
-          ]
-        }
-      })
-    };
-
-    res.json({
-      success: true,
-      data: stats
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération stats:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des statistiques"
-    });
-  }
-});
-
-/**
  * @route GET /api/conseil/services
  * @description Récupérer la liste des services
  * @access Public
@@ -918,7 +1162,8 @@ router.get("/services", async (req, res) => {
     console.error("❌ Erreur récupération services:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la récupération des services"
+      error: "Erreur lors de la récupération des services",
+      data: []
     });
   }
 });
@@ -952,7 +1197,47 @@ router.get("/metiers", async (req, res) => {
     console.error("❌ Erreur récupération métiers:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la récupération des métiers"
+      error: "Erreur lors de la récupération des métiers",
+      data: []
+    });
+  }
+});
+
+/**
+ * @route GET /api/conseil/demandes/statistics/user
+ * @description Récupérer les statistiques des demandes pour l'utilisateur
+ * @access Private
+ */
+router.get("/demandes/statistics/user", authenticateToken, async (req, res) => {
+  try {
+    const stats = {
+      total: await prisma.demandeConseil.count({
+        where: { userId: req.user.id }
+      }),
+      en_attente: await prisma.demandeConseil.count({
+        where: { userId: req.user.id, statut: "en_attente" }
+      }),
+      en_cours: await prisma.demandeConseil.count({
+        where: { userId: req.user.id, statut: "en_cours" }
+      }),
+      terminee: await prisma.demandeConseil.count({
+        where: { userId: req.user.id, statut: "terminee" }
+      }),
+      annulee: await prisma.demandeConseil.count({
+        where: { userId: req.user.id, statut: "annulee" }
+      })
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur récupération stats utilisateur:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des statistiques"
     });
   }
 });
@@ -1048,7 +1333,8 @@ router.get("/admin/demandes", authenticateToken, async (req, res) => {
     console.error("❌ Erreur récupération demandes admin:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la récupération des demandes"
+      error: "Erreur lors de la récupération des demandes",
+      data: []
     });
   }
 });
@@ -1349,459 +1635,6 @@ router.get("/admin/stats/detailed", authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Erreur lors de la récupération des statistiques"
-    });
-  }
-});
-/**
- * @route GET /api/conseil/demande/:id
- * @description Récupérer une demande de conseil spécifique
- * @access Private
- */
-router.get("/demande/:id", authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const demande = await prisma.demandeConseil.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            companyName: true
-          }
-        },
-        expert: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            companyName: true,
-            avatar: true
-          }
-        },
-        suivis: {
-          orderBy: { createdAt: "desc" },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true
-              }
-            }
-          }
-        }
-      }
-    });
-
-    if (!demande) {
-      return res.status(404).json({
-        success: false,
-        error: "Demande non trouvée"
-      });
-    }
-
-    if (demande.userId !== req.user.id && demande.expertId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: "Non autorisé à voir cette demande"
-      });
-    }
-
-    // Récupérer les infos service et metier
-    let serviceInfo = null;
-    let metierInfo = null;
-
-    if (demande.serviceId) {
-      serviceInfo = await prisma.service.findUnique({
-        where: { id: demande.serviceId }
-      });
-    }
-
-    if (demande.metierId) {
-      metierInfo = await prisma.metier.findUnique({
-        where: { id: demande.metierId }
-      });
-    }
-
-    const demandeComplete = {
-      ...demande,
-      service: serviceInfo,
-      metier: metierInfo
-    };
-
-    res.json({
-      success: true,
-      data: demandeComplete
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération demande:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération de la demande"
-    });
-  }
-});
-
-/**
- * @route GET /api/conseil/temoignages
- * @description Récupérer les témoignages pour le conseil
- * @access Public
- */
-router.get("/temoignages", async (req, res) => {
-  try {
-    // Données par défaut pour le conseil
-    const defaultTemoignages = [
-      {
-        id: 1,
-        name: "Julie Moreau",
-        entreprise: "TechStart Solutions",
-        texte: "L'audit stratégique réalisé par l'équipe a été déterminant pour notre repositionnement sur le marché. Les recommandations étaient précises et actionnables.",
-        rating: 5,
-        date: "15 Jan 2024",
-        avatarColor: "#6B8E23",
-        resultat: "+150% croissance en 12 mois"
-      },
-      {
-        id: 2,
-        name: "Marc Lefebvre",
-        entreprise: "Manufacturing Corp",
-        texte: "La médiation a permis de résoudre un conflit interne qui durait depuis des mois. Professionnalisme et discrétion remarquables.",
-        rating: 5,
-        date: "22 Nov 2023",
-        avatarColor: "#8B4513",
-        resultat: "Conflit résolu en 3 semaines"
-      },
-      {
-        id: 3,
-        name: "Sarah Chen",
-        entreprise: "Green Innovations",
-        texte: "Le conseil en transformation digitale nous a permis d'optimiser nos processus et d'améliorer notre efficacité opérationnelle de 40%.",
-        rating: 5,
-        date: "5 Oct 2023",
-        avatarColor: "#556B2F",
-        resultat: "40% gain d'efficacité"
-      }
-    ];
-
-    res.json({
-      success: true,
-      data: defaultTemoignages
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération témoignages:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des témoignages"
-    });
-  }
-});
-
-/**
- * @route GET /api/conseil/etapes
- * @description Récupérer les étapes du processus de conseil
- * @access Public
- */
-router.get("/etapes", async (req, res) => {
-  try {
-    const etapes = [
-      {
-        step: 1,
-        title: "Diagnostic initial",
-        description: "Analyse approfondie de votre situation",
-        icon: "Search",
-        color: "#6B8E23",
-        details: "Entretien découverte, analyse documentaire, identification des enjeux"
-      },
-      {
-        step: 2,
-        title: "Proposition sur mesure",
-        description: "Élaboration d'une approche personnalisée",
-        icon: "Lightbulb",
-        color: "#27AE60",
-        details: "Recommandations spécifiques, planning détaillé, budget prévisionnel"
-      },
-      {
-        step: 3,
-        title: "Mise en œuvre",
-        description: "Accompagnement dans la réalisation",
-        icon: "Rocket",
-        color: "#8B4513",
-        details: "Suivi régulier, ajustements en temps réel, coordination des équipes"
-      },
-      {
-        step: 4,
-        title: "Suivi & Évaluation",
-        description: "Mesure des résultats et capitalisation",
-        icon: "BarChart",
-        color: "#D4AF37",
-        details: "Tableaux de bord, reporting détaillé, recommandations finales"
-      }
-    ];
-
-    res.json({
-      success: true,
-      data: etapes
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération étapes:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des étapes"
-    });
-  }
-});
-
-/**
- * @route GET /api/conseil/avantages
- * @description Récupérer les avantages du conseil
- * @access Public
- */
-router.get("/avantages", async (req, res) => {
-  try {
-    const avantages = [
-      {
-        title: "Expertise certifiée",
-        description: "Nos conseillers sont certifiés et possèdent une expertise avérée",
-        icon: "Shield",
-        color: "#6B8E23"
-      },
-      {
-        title: "Approche sur mesure",
-        description: "Chaque mission est adaptée à vos besoins spécifiques",
-        icon: "Target",
-        color: "#27AE60"
-      },
-      {
-        title: "Confidentialité absolue",
-        description: "Discrétion garantie dans toutes nos interventions",
-        icon: "Shield",
-        color: "#8B4513"
-      },
-      {
-        title: "Résultats mesurables",
-        description: "Des objectifs clairs avec des indicateurs de performance",
-        icon: "TrendingUp",
-        color: "#D4AF37"
-      }
-    ];
-
-    res.json({
-      success: true,
-      data: avantages
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération avantages:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des avantages"
-    });
-  }
-});
-
-/**
- * @route GET /api/conseil/demande/:id/suivis
- * @description Récupérer tous les suivis d'une demande de conseil
- * @access Private
- */
-router.get("/demande/:id/suivis", authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const demande = await prisma.demandeConseil.findUnique({
-      where: { id: parseInt(id) }
-    });
-
-    if (!demande) {
-      return res.status(404).json({
-        success: false,
-        error: "Demande non trouvée"
-      });
-    }
-
-    if (demande.userId !== req.user.id && demande.expertId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: "Non autorisé à voir cette demande"
-      });
-    }
-
-    const suivis = await prisma.suiviConseil.findMany({
-      where: { demandeConseilId: parseInt(id) },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
-
-    res.json({
-      success: true,
-      data: suivis
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération suivis:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des suivis"
-    });
-  }
-});
-
-// routes/conseil.js - AJOUTER UNE ROUTE POUR LES STATISTIQUES DE L'UTILISATEUR
-/**
- * @route GET /api/conseil/demandes/statistics/user
- * @description Récupérer les statistiques des demandes pour l'utilisateur
- * @access Private
- */
-router.get("/demandes/statistics/user", authenticateToken, async (req, res) => {
-  try {
-    const stats = {
-      total: await prisma.demandeConseil.count({
-        where: { userId: req.user.id }
-      }),
-      en_attente: await prisma.demandeConseil.count({
-        where: { userId: req.user.id, statut: "en_attente" }
-      }),
-      en_cours: await prisma.demandeConseil.count({
-        where: { userId: req.user.id, statut: "en_cours" }
-      }),
-      terminee: await prisma.demandeConseil.count({
-        where: { userId: req.user.id, statut: "terminee" }
-      }),
-      annulee: await prisma.demandeConseil.count({
-        where: { userId: req.user.id, statut: "annulee" }
-      })
-    };
-
-    res.json({
-      success: true,
-      data: stats
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération stats utilisateur:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération des statistiques"
-    });
-  }
-});
-
-// routes/conseil.js - AJOUTER UNE ROUTE POUR RÉCUPÉRER UNE DEMANDE SPÉCIFIQUE
-/**
- * @route GET /api/conseil/demande/:id
- * @description Récupérer une demande de conseil spécifique
- * @access Private
- */
-router.get("/demande/:id", authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const demande = await prisma.demandeConseil.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            companyName: true
-          }
-        },
-        expert: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            companyName: true,
-            avatar: true
-          }
-        },
-        suivis: {
-          orderBy: { createdAt: "desc" },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true
-              }
-            }
-          }
-        }
-      }
-    });
-
-    if (!demande) {
-      return res.status(404).json({
-        success: false,
-        error: "Demande non trouvée"
-      });
-    }
-
-    if (demande.userId !== req.user.id && demande.expertId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: "Non autorisé à voir cette demande"
-      });
-    }
-
-    // Récupérer les infos service et metier
-    let serviceInfo = null;
-    let metierInfo = null;
-
-    if (demande.serviceId) {
-      serviceInfo = await prisma.service.findUnique({
-        where: { id: demande.serviceId }
-      });
-    }
-
-    if (demande.metierId) {
-      metierInfo = await prisma.metier.findUnique({
-        where: { id: demande.metierId }
-      });
-    }
-
-    const demandeComplete = {
-      ...demande,
-      service: serviceInfo,
-      metier: metierInfo
-    };
-
-    res.json({
-      success: true,
-      data: demandeComplete
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur récupération demande:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de la récupération de la demande"
     });
   }
 });
