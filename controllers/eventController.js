@@ -1,0 +1,700 @@
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+const { parseRequestData } = require('../utils/helpers');
+
+// Fonction pour parser les données d'événement
+const parseEventData = (data) => {
+  const parsedData = parseRequestData(data, 'event');
+  
+  // Convertir les dates
+  if (parsedData.date) {
+    parsedData.date = new Date(parsedData.date);
+  }
+  if (parsedData.registrationDeadline) {
+    parsedData.registrationDeadline = new Date(parsedData.registrationDeadline);
+  }
+  if (parsedData.earlyBirdDeadline) {
+    parsedData.earlyBirdDeadline = new Date(parsedData.earlyBirdDeadline);
+  }
+
+  // Convertir les nombres
+  const numberFields = [
+    'capacity', 'price', 'discountPrice', 'earlyBirdPrice', 
+    'participants', 'revenue'
+  ];
+  numberFields.forEach(field => {
+    if (parsedData[field] !== undefined) {
+      parsedData[field] = parseFloat(parsedData[field]) || 0;
+    }
+  });
+
+  // Assurer que les champs optionnels ont des valeurs par défaut
+  if (!parsedData.currency) parsedData.currency = 'EUR';
+  if (!parsedData.status) parsedData.status = 'draft';
+  if (!parsedData.visibility) parsedData.visibility = 'public';
+  if (parsedData.featured === undefined) parsedData.featured = false;
+
+  // Gérer le champ time pour compatibilité
+  if (parsedData.startTime || parsedData.endTime) {
+    parsedData.time = `${parsedData.startTime || ''}${parsedData.endTime ? ` - ${parsedData.endTime}` : ''}`;
+  }
+
+  return parsedData;
+};
+
+// Formater la réponse pour le frontend
+const formatEventResponse = (event) => {
+  if (!event) return null;
+
+  // Parser le champ time si nécessaire
+  let startTime = event.startTime || '';
+  let endTime = event.endTime || '';
+
+  if (event.time && !startTime) {
+    const timeParts = event.time.split(' - ');
+    startTime = timeParts[0] || '';
+    endTime = timeParts[1] || '';
+  }
+
+  // Formater les dates
+  const formatDate = (date) => {
+    if (!date) return undefined;
+    return date.toISOString().split('T')[0];
+  };
+
+  return {
+    ...event,
+    startTime,
+    endTime,
+    // Assurer que les tableaux sont des tableaux
+    tags: Array.isArray(event.tags) ? event.tags : [],
+    images: Array.isArray(event.images) ? event.images : [],
+    highlights: Array.isArray(event.highlights) ? event.highlights : [],
+    targetAudience: Array.isArray(event.targetAudience) ? event.targetAudience : [],
+    includes: Array.isArray(event.includes) ? event.includes : [],
+    notIncludes: Array.isArray(event.notIncludes) ? event.notIncludes : [],
+    // Formater les dates
+    date: formatDate(event.date),
+    registrationDeadline: formatDate(event.registrationDeadline),
+    earlyBirdDeadline: formatDate(event.earlyBirdDeadline),
+    // Ajouter l'ID si manquant
+    id: event.id || event._id
+  };
+};
+
+// Récupérer tous les événements avec filtres
+exports.getAllEvents = async (req, res, next) => {
+  try {
+    const { 
+      status, 
+      category, 
+      subCategory,
+      featured, 
+      search,
+      dateFrom,
+      dateTo,
+      priceMin,
+      priceMax,
+      page = 1,
+      limit = 10,
+      sortBy = 'date',
+      sortOrder = 'asc'
+    } = req.query;
+
+    const where = {};
+
+    // Filtres de base
+    if (status) where.status = status;
+    if (category) where.category = category;
+    if (subCategory) where.subCategory = subCategory;
+    if (featured !== undefined) where.featured = featured === 'true';
+    
+    // Filtre par date
+    if (dateFrom || dateTo) {
+      where.date = {};
+      if (dateFrom) where.date.gte = new Date(dateFrom);
+      if (dateTo) where.date.lte = new Date(dateTo);
+    }
+    
+    // Filtre par prix
+    if (priceMin !== undefined || priceMax !== undefined) {
+      where.price = {};
+      if (priceMin !== undefined) where.price.gte = parseFloat(priceMin);
+      if (priceMax !== undefined) where.price.lte = parseFloat(priceMax);
+    }
+    
+    // Recherche texte
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { location: { contains: search, mode: 'insensitive' } },
+        { organizer: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    // Pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    // Options de tri
+    const orderBy = {};
+    const validSortFields = ['date', 'createdAt', 'price', 'title', 'participants'];
+    if (validSortFields.includes(sortBy)) {
+      orderBy[sortBy] = sortOrder === 'desc' ? 'desc' : 'asc';
+    } else {
+      orderBy.date = 'asc';
+    }
+
+    // Exécuter les requêtes
+    const [events, total] = await Promise.all([
+      prisma.event.findMany({
+        where,
+        skip,
+        take,
+        orderBy
+      }),
+      prisma.event.count({ where })
+    ]);
+
+    // Formater les événements
+    const formattedEvents = events.map(formatEventResponse);
+
+    res.json({
+      success: true,
+      data: formattedEvents,
+      pagination: {
+        page: parseInt(page),
+        limit: take,
+        total,
+        pages: Math.ceil(total / take)
+      }
+    });
+  } catch (error) {
+    console.error('Erreur getAllEvents:', error);
+    next(error);
+  }
+};
+
+// Récupérer un événement par ID
+exports.getEventById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const event = await prisma.event.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+
+    const formattedEvent = formatEventResponse(event);
+
+    res.json({
+      success: true,
+      data: formattedEvent
+    });
+  } catch (error) {
+    console.error('Erreur getEventById:', error);
+    next(error);
+  }
+};
+
+// Créer un événement
+exports.createEvent = async (req, res, next) => {
+  try {
+    const eventData = parseEventData(req.body);
+
+    // Vérifier si un événement similaire existe
+    const existingEvent = await prisma.event.findFirst({
+      where: {
+        title: eventData.title,
+        date: eventData.date,
+        location: eventData.location
+      }
+    });
+
+    if (existingEvent) {
+      return res.status(409).json({
+        success: false,
+        message: 'Un événement similaire existe déjà'
+      });
+    }
+
+    const event = await prisma.event.create({
+      data: eventData
+    });
+
+    const formattedEvent = formatEventResponse(event);
+
+    res.status(201).json({
+      success: true,
+      data: formattedEvent,
+      message: 'Événement créé avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur création événement:', error);
+    
+    if (error.code === 'P2002') {
+      return res.status(400).json({
+        success: false,
+        message: 'Erreur de contrainte unique'
+      });
+    }
+    
+    next(error);
+  }
+};
+
+// Mettre à jour un événement
+exports.updateEvent = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const eventData = parseEventData(req.body);
+
+    // Vérifier si l'événement existe
+    const existingEvent = await prisma.event.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingEvent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+
+    // Mettre à jour l'événement
+    const event = await prisma.event.update({
+      where: { id: parseInt(id) },
+      data: eventData
+    });
+
+    const formattedEvent = formatEventResponse(event);
+
+    res.json({
+      success: true,
+      data: formattedEvent,
+      message: 'Événement mis à jour avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur mise à jour événement:', error);
+    
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+    
+    next(error);
+  }
+};
+
+// Supprimer un événement
+exports.deleteEvent = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Vérifier si l'événement existe
+    const event = await prisma.event.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+
+    // Supprimer l'événement
+    await prisma.event.delete({
+      where: { id: parseInt(id) }
+    });
+
+    res.json({
+      success: true,
+      message: 'Événement supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur suppression événement:', error);
+    
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+    
+    next(error);
+  }
+};
+
+// Mettre à jour le statut "featured"
+exports.toggleFeatured = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { featured } = req.body;
+
+    // Vérifier si l'événement existe
+    const existingEvent = await prisma.event.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingEvent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+
+    // Mettre à jour le statut featured
+    const event = await prisma.event.update({
+      where: { id: parseInt(id) },
+      data: { featured: !!featured }
+    });
+
+    const formattedEvent = formatEventResponse(event);
+
+    res.json({
+      success: true,
+      data: formattedEvent,
+      message: featured ? 
+        'Événement mis en avant avec succès' : 
+        'Événement retiré des favoris avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur toggleFeatured:', error);
+    
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+    
+    next(error);
+  }
+};
+
+// Mettre à jour le statut d'un événement
+exports.updateEventStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['draft', 'active', 'upcoming', 'completed', 'cancelled', 'archived'];
+    
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Statut invalide'
+      });
+    }
+
+    // Vérifier si l'événement existe
+    const existingEvent = await prisma.event.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingEvent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+
+    // Mettre à jour le statut
+    const event = await prisma.event.update({
+      where: { id: parseInt(id) },
+      data: { status }
+    });
+
+    const formattedEvent = formatEventResponse(event);
+
+    res.json({
+      success: true,
+      data: formattedEvent,
+      message: `Statut de l'événement mis à jour: ${status}`
+    });
+  } catch (error) {
+    console.error('Erreur updateEventStatus:', error);
+    next(error);
+  }
+};
+
+// Augmenter le nombre de participants
+exports.incrementParticipants = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { count = 1 } = req.body;
+
+    const event = await prisma.event.update({
+      where: { id: parseInt(id) },
+      data: {
+        participants: {
+          increment: parseInt(count)
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: formatEventResponse(event),
+      message: `Nombre de participants augmenté de ${count}`
+    });
+  } catch (error) {
+    console.error('Erreur incrementParticipants:', error);
+    next(error);
+  }
+};
+
+// Obtenir les statistiques des événements
+exports.getEventStats = async (req, res, next) => {
+  try {
+    const [
+      total,
+      active,
+      upcoming,
+      completed,
+      draft,
+      archived,
+      cancelled,
+      totalRevenue,
+      totalParticipants,
+      totalCapacity,
+      eventsByCategory,
+      eventsByStatus,
+      featuredEvents,
+      recentEvents
+    ] = await Promise.all([
+      // Totaux
+      prisma.event.count(),
+      prisma.event.count({ where: { status: 'active' } }),
+      prisma.event.count({ where: { status: 'upcoming' } }),
+      prisma.event.count({ where: { status: 'completed' } }),
+      prisma.event.count({ where: { status: 'draft' } }),
+      prisma.event.count({ where: { status: 'archived' } }),
+      prisma.event.count({ where: { status: 'cancelled' } }),
+      
+      // Agréggats financiers
+      prisma.event.aggregate({
+        _sum: { revenue: true },
+        where: { status: { in: ['completed', 'active'] } }
+      }),
+      
+      // Participants
+      prisma.event.aggregate({ _sum: { participants: true } }),
+      prisma.event.aggregate({ _sum: { capacity: true } }),
+      
+      // Groupements
+      prisma.event.groupBy({
+        by: ['category'],
+        _count: true,
+        _sum: { participants: true, revenue: true }
+      }),
+      
+      prisma.event.groupBy({
+        by: ['status'],
+        _count: true
+      }),
+      
+      // Événements en vedette
+      prisma.event.findMany({
+        where: { featured: true, status: { in: ['active', 'upcoming'] } },
+        take: 5,
+        orderBy: { date: 'asc' }
+      }),
+      
+      // Événements récents
+      prisma.event.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+
+    // Calcul du taux d'utilisation
+    const totalCap = totalCapacity._sum.capacity || 0;
+    const totalPart = totalParticipants._sum.participants || 0;
+    const utilizationRate = totalCap > 0 ? (totalPart / totalCap * 100).toFixed(1) : 0;
+
+    // Calcul du revenu moyen
+    const activeCompletedCount = active + completed;
+    const avgRevenue = activeCompletedCount > 0 ? 
+      (totalRevenue._sum.revenue || 0) / activeCompletedCount : 0;
+
+    // Formater les statistiques
+    const stats = {
+      totals: {
+        total,
+        active,
+        upcoming,
+        completed,
+        draft,
+        archived,
+        cancelled,
+        featured: featuredEvents.length
+      },
+      financials: {
+        totalRevenue: totalRevenue._sum.revenue || 0,
+        averageRevenue: parseFloat(avgRevenue.toFixed(2)),
+        utilizationRate: parseFloat(utilizationRate)
+      },
+      participants: {
+        total: totalPart,
+        totalCapacity: totalCap,
+        averageParticipants: total > 0 ? parseFloat((totalPart / total).toFixed(1)) : 0
+      },
+      breakdown: {
+        byCategory: eventsByCategory.reduce((acc, curr) => {
+          acc[curr.category] = {
+            count: curr._count,
+            participants: curr._sum.participants || 0,
+            revenue: curr._sum.revenue || 0
+          };
+          return acc;
+        }, {}),
+        byStatus: eventsByStatus.reduce((acc, curr) => {
+          acc[curr.status] = curr._count;
+          return acc;
+        }, {})
+      },
+      featuredEvents: featuredEvents.map(formatEventResponse),
+      recentEvents: recentEvents.map(formatEventResponse)
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Erreur getEventStats:', error);
+    next(error);
+  }
+};
+
+// Recherche avancée d'événements
+exports.searchEvents = async (req, res, next) => {
+  try {
+    const { 
+      query,
+      categories = [],
+      dateRange = {},
+      priceRange = {},
+      status = [],
+      featured,
+      limit = 20,
+      offset = 0
+    } = req.body;
+
+    const where = {};
+
+    // Recherche texte
+    if (query) {
+      where.OR = [
+        { title: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } },
+        { location: { contains: query, mode: 'insensitive' } },
+        { organizer: { contains: query, mode: 'insensitive' } },
+        { tags: { has: query } }
+      ];
+    }
+
+    // Filtres
+    if (categories && categories.length > 0) {
+      where.OR = categories.map(cat => ({ category: cat }));
+    }
+
+    if (status && status.length > 0) {
+      where.status = { in: status };
+    }
+
+    if (featured !== undefined) {
+      where.featured = featured;
+    }
+
+    // Filtre par date
+    if (dateRange.start || dateRange.end) {
+      where.date = {};
+      if (dateRange.start) where.date.gte = new Date(dateRange.start);
+      if (dateRange.end) where.date.lte = new Date(dateRange.end);
+    }
+
+    // Filtre par prix
+    if (priceRange.min !== undefined || priceRange.max !== undefined) {
+      where.price = {};
+      if (priceRange.min !== undefined) where.price.gte = parseFloat(priceRange.min);
+      if (priceRange.max !== undefined) where.price.lte = parseFloat(priceRange.max);
+    }
+
+    const [events, total] = await Promise.all([
+      prisma.event.findMany({
+        where,
+        skip: parseInt(offset),
+        take: parseInt(limit),
+        orderBy: { date: 'asc' }
+      }),
+      prisma.event.count({ where })
+    ]);
+
+    res.json({
+      success: true,
+      data: events.map(formatEventResponse),
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('Erreur searchEvents:', error);
+    next(error);
+  }
+};
+
+// Exporter les événements
+exports.exportEvents = async (req, res, next) => {
+  try {
+    const { format = 'json', filters = {} } = req.query;
+    
+    const where = {};
+    
+    // Appliquer les filtres
+    if (filters.status) where.status = filters.status;
+    if (filters.category) where.category = filters.category;
+    if (filters.dateFrom || filters.dateTo) {
+      where.date = {};
+      if (filters.dateFrom) where.date.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.date.lte = new Date(filters.dateTo);
+    }
+
+    const events = await prisma.event.findMany({
+      where,
+      orderBy: { date: 'asc' }
+    });
+
+    const formattedEvents = events.map(formatEventResponse);
+
+    if (format === 'csv') {
+      // Implémenter l'export CSV ici
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=events.csv');
+      // ... logique CSV
+      res.send('CSV export à implémenter');
+    } else {
+      res.json({
+        success: true,
+        data: formattedEvents,
+        count: formattedEvents.length,
+        exportedAt: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Erreur exportEvents:', error);
+    next(error);
+  }
+};
