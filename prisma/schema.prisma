@@ -153,7 +153,7 @@ model User {
   ordersClient      Order[]               @relation("OrderClient") // Commandes passées en tant que client
   ordersPrestataire Order[]               @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
   locationsClient   LocationSaisonniere[] @relation("clientLocations")
-
+ patrimoines   Patrimoine[]
   messagesEnvoyes           Message[]                 @relation("MessageExpediteur")
   messagesRecus             Message[]                 @relation("MessageReceiver")
   conversationsCrees        Conversation[]            @relation("ConversationCreateur")
@@ -3083,3 +3083,31 @@ model ExperienceFavorite {
   @@index([experienceId])
   @@index([createdAt])
 }
+
+model Patrimoine {
+  id             String   @id @default(uuid())
+  idUnique       String   @unique
+  title          String
+  category       String
+  city           String
+  description    String
+  lat            Float
+  lng            Float
+  images         String[]
+
+  // Relation utilisateur (prestataire / créateur)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+
+  // Options
+  rating         Float    @default(4.5)
+  reviewCount    Int      @default(0)
+  featured       Boolean  @default(false)
+  year           Int?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+}
+
