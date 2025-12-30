@@ -165,11 +165,11 @@ router.post("/login",loginLimiter, async (req, res) => {
       subscriptionStatus: subscriptionStatus, // AJOUT: Status de l'abonnement
     };
 
-    // 1. Générer l'Access Token (Court : 15min à 1h)
+    // 1. Générer l'Access Token (Court : 24hin à 1h)
     const accessToken = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "24h" }
     );
 
     // 2. Générer le Refresh Token (Long : 7 jours)
@@ -277,11 +277,11 @@ router.post("/signup", async (req, res) => {
       },
     });
 
-    // 1. Générer l'Access Token (Court : 15min à 1h)
+    // 1. Générer l'Access Token (Court : 24hin à 1h)
     const accessToken = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "24h" }
     );
 
     // 2. Générer le Refresh Token (Long : 7 jours)
@@ -420,11 +420,11 @@ router.post("/signup-pro", async (req, res) => {
     });
 
     // Générer le token
-    // 1. Générer l'Access Token (Court : 15min à 1h)
+    // 1. Générer l'Access Token (Court : 24hin à 1h)
     const accessToken = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "24h" }
     );
 
     // 2. Générer le Refresh Token (Long : 7 jours)
@@ -531,11 +531,11 @@ router.post("/confirm-payment", async (req, res) => {
         });
         
         // Générer le token
-        // 1. Générer l'Access Token (Court : 15min à 1h)
+        // 1. Générer l'Access Token (Court : 24hin à 1h)
         const accessToken = jwt.sign(
           { userId: user.id, role: user.role },
           process.env.JWT_SECRET,
-          { expiresIn: "15m" }
+          { expiresIn: "24h" }
         );
 
         // 2. Générer le Refresh Token (Long : 7 jours)
@@ -820,7 +820,7 @@ router.post("/refresh", async (req, res) => {
     const newAccessToken = jwt.sign(
       { userId: storedToken.user.id, role: storedToken.user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "24h" }
     );
 
     res.json({ token: newAccessToken });
