@@ -365,7 +365,7 @@ app.post(
   }
 );
 
-app.use("/api/art-creation", require("./routes/art-creation"));
+app.use("/api/art-creation", artCreationRoutes);
 
 app.use("/api", require("./routes/rendez_vous"));
 //route pour le demande conseil
