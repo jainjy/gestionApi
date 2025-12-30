@@ -238,6 +238,7 @@ app.use(
   require("./routes/subscription-payments")
 );
 app.use('/api/suggestions', require('./routes/Recherchesuggestions'));
+app.use('/test',require('./routes/user'))
 
 
 // AJOUTEZ ICI les nouvelles routes ↓

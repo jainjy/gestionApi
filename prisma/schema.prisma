@@ -170,17 +170,17 @@ model User {
   audits                    Audit[]
   notifications             Notification[]
   notificationsProprietaire Notification[]            @relation("UserProprietaireRelation")
-  refreshTokens       RefreshToken[] // Relation pour la gestion sécurisée des sessions
+  refreshTokens             RefreshToken[] // Relation pour la gestion sécurisée des sessions
   // RELATION POUR PODCAST 
-  podcasts             Podcast[] // Podcasts créés par l'utilisateur
-  videos               Video[] // Vidéos créées par l'utilisateur
-  mediaFavorites       UserMediaFavorite[] // Favoris médias de l'utilisateur
-  wellBeingStats       WellBeingStats? // Statistiques bien-être
-  ProfessionalSettings ProfessionalSettings?
-  Document             Document[]
-  ContratType          ContratType[]
-  DocumentArchive      DocumentArchive[]
-  reservationsCours    ReservationCours[]
+  podcasts                  Podcast[] // Podcasts créés par l'utilisateur
+  videos                    Video[] // Vidéos créées par l'utilisateur
+  mediaFavorites            UserMediaFavorite[] // Favoris médias de l'utilisateur
+  wellBeingStats            WellBeingStats? // Statistiques bien-être
+  ProfessionalSettings      ProfessionalSettings?
+  Document                  Document[]
+  ContratType               ContratType[]
+  DocumentArchive           DocumentArchive[]
+  reservationsCours         ReservationCours[]
 
   // relation pour coursdomicil
   courses            Course[]            @relation("UserCourses")
@@ -234,6 +234,11 @@ model User {
   reservationsVehiculesClient      ReservationVehicule[] @relation("ReservationVehiculeClient")
   reservationsVehiculesPrestataire ReservationVehicule[] @relation("ReservationVehiculePrestataire")
   avisVehicules                    AvisVehicule[] // Avis laissés sur les véhicules
+  experiencesCreated               Experience[]          @relation("ExperienceCreatedBy")
+  experiencesGuided                Experience[]          @relation("ExperienceGuide")
+  experienceBookings               ExperienceBooking[]
+  experienceReviews                ExperienceReview[]
+  experienceFavorites              ExperienceFavorite[]
 
   @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
@@ -253,18 +258,19 @@ model PasswordResetRequest {
   @@index([emailHash])
   @@index([createdAt])
 }
+
 //===================
 // SÉCURITÉ - REFRESH TOKENS (Correction MED-04)
 //===================
 model RefreshToken {
-  id          String    @id @default(uuid())
-  token       String    @unique
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt   DateTime
-  revokedAt   DateTime? // Si présent, le token est invalide
-  createdAt   DateTime  @default(now())
-  replacedBy  String?   // Pour la rotation de token (sécurité avancée)
+  id         String    @id @default(uuid())
+  token      String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  revokedAt  DateTime? // Si présent, le token est invalide
+  createdAt  DateTime  @default(now())
+  replacedBy String? // Pour la rotation de token (sécurité avancée)
 
   @@index([userId])
 }
@@ -2751,52 +2757,52 @@ model PortraitComment {
 // ======================
 
 model Event {
-  id                  Int       @id @default(autoincrement())
-  title               String    @db.VarChar(255)
-  description         String?   @db.Text
-  date                DateTime
-  startTime           String?   @db.VarChar(10)
-  endTime             String?   @db.VarChar(10)
-  location            String    @db.VarChar(255)
-  address             String?   @db.VarChar(255)
-  city                String?   @db.VarChar(100)
-  postalCode          String?   @db.VarChar(20)
-  category            String    @db.VarChar(100)
-  subCategory         String?   @db.VarChar(100)
-  capacity            Int       @default(0)
-  price               Float     @default(0)
-  discountPrice       Float?    @default(0)
-  currency            String    @default("EUR")
-  image               String?   @db.VarChar(500)
-  images              Json?     @default("[]")
-  featured            Boolean   @default(false)
-  status              EventStatus @default(DRAFT)
-  organizer           String?   @db.VarChar(255)
-  contactEmail        String?   @db.VarChar(255)
-  contactPhone        String?   @db.VarChar(20)
-  website             String?   @db.VarChar(255)
-  tags                Json?     @default("[]")
-  requirements        String?   @db.Text
-  highlights          Json?     @default("[]")
-  duration            String?   @db.VarChar(50)
-  difficulty          Difficulty?
-  targetAudience      Json?     @default("[]")
-  includes            Json?     @default("[]")
-  notIncludes         Json?     @default("[]")
-  cancellationPolicy  String?   @db.Text
-  refundPolicy        String?   @db.Text
-  visibility          Visibility @default(PUBLIC)
+  id                   Int         @id @default(autoincrement())
+  title                String      @db.VarChar(255)
+  description          String?     @db.Text
+  date                 DateTime
+  startTime            String?     @db.VarChar(10)
+  endTime              String?     @db.VarChar(10)
+  location             String      @db.VarChar(255)
+  address              String?     @db.VarChar(255)
+  city                 String?     @db.VarChar(100)
+  postalCode           String?     @db.VarChar(20)
+  category             String      @db.VarChar(100)
+  subCategory          String?     @db.VarChar(100)
+  capacity             Int         @default(0)
+  price                Float       @default(0)
+  discountPrice        Float?      @default(0)
+  currency             String      @default("EUR")
+  image                String?     @db.VarChar(500)
+  images               Json?       @default("[]")
+  featured             Boolean     @default(false)
+  status               EventStatus @default(DRAFT)
+  organizer            String?     @db.VarChar(255)
+  contactEmail         String?     @db.VarChar(255)
+  contactPhone         String?     @db.VarChar(20)
+  website              String?     @db.VarChar(255)
+  tags                 Json?       @default("[]")
+  requirements         String?     @db.Text
+  highlights           Json?       @default("[]")
+  duration             String?     @db.VarChar(50)
+  difficulty           Difficulty?
+  targetAudience       Json?       @default("[]")
+  includes             Json?       @default("[]")
+  notIncludes          Json?       @default("[]")
+  cancellationPolicy   String?     @db.Text
+  refundPolicy         String?     @db.Text
+  visibility           Visibility  @default(PUBLIC)
   registrationDeadline DateTime?
-  earlyBirdDeadline   DateTime?
-  earlyBirdPrice      Float?    @default(0)
-  
+  earlyBirdDeadline    DateTime?
+  earlyBirdPrice       Float?      @default(0)
+
   // Stats
-  participants        Int       @default(0)
-  revenue             Float     @default(0)
-  
+  participants Int   @default(0)
+  revenue      Float @default(0)
+
   // Timestamps
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([category])
@@ -2805,73 +2811,73 @@ model Event {
 }
 
 model Discovery {
-  id                  Int        @id @default(autoincrement())
-  title               String     @db.VarChar(255)
-  description         String?    @db.Text
-  type                String     @db.VarChar(100)
-  location            String     @db.VarChar(255)
-  address             String?    @db.VarChar(255)
-  city                String?    @db.VarChar(100)
-  postalCode          String?    @db.VarChar(20)
-  difficulty          Difficulty
-  duration            String?    @db.VarChar(100)
-  rating              Float      @default(0)
-  image               String?    @db.VarChar(500)
-  images              Json?      @default("[]")
-  featured            Boolean    @default(false)
-  status              DiscoveryStatus @default(DRAFT)
-  organizer           String?    @db.VarChar(255)
-  contactEmail        String?    @db.VarChar(255)
-  contactPhone        String?    @db.VarChar(20)
-  website             String?    @db.VarChar(255)
-  tags                Json?      @default("[]")
-  highlights          Json?      @default("[]")
-  recommendations     String?    @db.Text
-  bestSeason          Json?      @default("[]")
-  bestTime            Json?      @default("[]")
-  accessibility       String?    @db.Text
-  equipment           Json?      @default("[]")
-  safety              String?    @db.Text
-  price               Float?     @default(0)
-  currency            String     @default("EUR")
-  includes            Json?      @default("[]")
-  notIncludes         Json?      @default("[]")
-  
+  id              Int             @id @default(autoincrement())
+  title           String          @db.VarChar(255)
+  description     String?         @db.Text
+  type            String          @db.VarChar(100)
+  location        String          @db.VarChar(255)
+  address         String?         @db.VarChar(255)
+  city            String?         @db.VarChar(100)
+  postalCode      String?         @db.VarChar(20)
+  difficulty      Difficulty
+  duration        String?         @db.VarChar(100)
+  rating          Float           @default(0)
+  image           String?         @db.VarChar(500)
+  images          Json?           @default("[]")
+  featured        Boolean         @default(false)
+  status          DiscoveryStatus @default(DRAFT)
+  organizer       String?         @db.VarChar(255)
+  contactEmail    String?         @db.VarChar(255)
+  contactPhone    String?         @db.VarChar(20)
+  website         String?         @db.VarChar(255)
+  tags            Json?           @default("[]")
+  highlights      Json?           @default("[]")
+  recommendations String?         @db.Text
+  bestSeason      Json?           @default("[]")
+  bestTime        Json?           @default("[]")
+  accessibility   String?         @db.Text
+  equipment       Json?           @default("[]")
+  safety          String?         @db.Text
+  price           Float?          @default(0)
+  currency        String          @default("EUR")
+  includes        Json?           @default("[]")
+  notIncludes     Json?           @default("[]")
+
   // Group info
-  groupSizeMin        Int?       @default(1)
-  groupSizeMax        Int?       @default(10)
-  ageRestrictionMin   Int?
-  ageRestrictionMax   Int?
-  languages           Json?      @default("[]")
-  
+  groupSizeMin      Int?  @default(1)
+  groupSizeMax      Int?  @default(10)
+  ageRestrictionMin Int?
+  ageRestrictionMax Int?
+  languages         Json? @default("[]")
+
   // Services
-  guideIncluded       Boolean   @default(false)
-  transportIncluded   Boolean   @default(false)
-  mealIncluded        Boolean   @default(false)
-  parkingAvailable    Boolean   @default(false)
-  wifiAvailable       Boolean   @default(false)
-  familyFriendly      Boolean   @default(false)
-  petFriendly         Boolean   @default(false)
-  wheelchairAccessible Boolean  @default(false)
-  
+  guideIncluded        Boolean @default(false)
+  transportIncluded    Boolean @default(false)
+  mealIncluded         Boolean @default(false)
+  parkingAvailable     Boolean @default(false)
+  wifiAvailable        Boolean @default(false)
+  familyFriendly       Boolean @default(false)
+  petFriendly          Boolean @default(false)
+  wheelchairAccessible Boolean @default(false)
+
   // Sustainability
-  sustainabilityRating Float?   @default(0)
-  carbonFootprint     String?   @db.VarChar(100)
-  
+  sustainabilityRating Float?  @default(0)
+  carbonFootprint      String? @db.VarChar(100)
+
   // Additional fields from your interface
-  coordinates         Json?      @default("{}")
-  includedServices    Json?      @default("[]")
-  requirements        Json?      @default("[]")
-  maxVisitors         Int?       @default(0)
-  availableDates      Json?      @default("[]")
-  
+  coordinates      Json? @default("{}")
+  includedServices Json? @default("[]")
+  requirements     Json? @default("[]")
+  maxVisitors      Int?  @default(0)
+  availableDates   Json? @default("[]")
+
   // Stats
-  visits              Int        @default(0)
-  revenue             Float      @default(0)
-  
+  visits  Int   @default(0)
+  revenue Float @default(0)
+
   // Timestamps
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([type])
@@ -2905,4 +2911,161 @@ enum Visibility {
   PUBLIC
   PRIVATE
   INVITE_ONLY
+}
+
+// ======================
+// MODÈLE POUR LES SÉJOURS & EXPÉRIENCES (VERSION SIMPLIFIÉE)
+// ======================
+
+model Experience {
+  id           String   @id @default(uuid())
+  title        String
+  slug         String   @unique
+  category     String // aventure, bienetre, marine, culture, luxe
+  description  String
+  duration     String
+  location     String
+  price        Float
+  highlights   String[]
+  images       String[]
+  difficulty   String // Facile, Intermédiaire, Intense, Extrême
+  groupSize    String
+  season       String
+  included     String[] // Ce qui est inclus
+  requirements String[] // Prérequis
+  rating       Float    @default(0)
+  reviewCount  Int      @default(0)
+  viewCount    Int      @default(0)
+  isActive     Boolean  @default(true)
+  isFeatured   Boolean  @default(false)
+
+  // Relations directes avec User (au lieu de ActivityGuide)
+  createdById String // ID de l'utilisateur qui a créé l'expérience
+  guideId     String? // Optionnel: ID du guide si l'utilisateur est un guide
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  createdBy User                 @relation("ExperienceCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  guide     User?                @relation("ExperienceGuide", fields: [guideId], references: [id], onDelete: SetNull)
+  bookings  ExperienceBooking[]
+  reviews   ExperienceReview[]
+  faqs      ExperienceFAQ[]
+  media     ExperienceMedia[]
+  favorites ExperienceFavorite[]
+
+  @@index([category])
+  @@index([createdById])
+  @@index([guideId])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([createdAt])
+  @@index([price])
+  @@index([difficulty])
+}
+
+model ExperienceBooking {
+  id                 String    @id @default(uuid())
+  experienceId       String
+  userId             String
+  checkIn            DateTime
+  checkOut           DateTime
+  guests             Int
+  totalAmount        Float
+  specialRequests    String?
+  status             String    @default("pending") // pending, confirmed, cancelled, completed, expired
+  confirmationNumber String    @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  cancelledAt        DateTime?
+  confirmedAt        DateTime?
+  completedAt        DateTime?
+
+  // Relations
+  experience Experience        @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review     ExperienceReview?
+
+  @@index([experienceId])
+  @@index([userId])
+  @@index([status])
+  @@index([confirmationNumber])
+  @@index([createdAt])
+  @@index([checkIn])
+  @@index([checkOut])
+}
+
+model ExperienceReview {
+  id           String   @id @default(uuid())
+  experienceId String
+  userId       String
+  bookingId    String?  @unique // Lié à une réservation spécifique
+  rating       Int // 1-5
+  comment      String?
+  images       String[]
+  verified     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  experience Experience         @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking    ExperienceBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@unique([experienceId, userId])
+  @@index([experienceId])
+  @@index([userId])
+  @@index([rating])
+  @@index([createdAt])
+  @@index([verified])
+}
+
+model ExperienceFAQ {
+  id           String   @id @default(uuid())
+  experienceId String
+  question     String
+  answer       String
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@index([experienceId])
+  @@index([order])
+  @@index([isActive])
+}
+
+model ExperienceMedia {
+  id           String   @id @default(uuid())
+  experienceId String
+  url          String
+  type         String // image, video
+  caption      String?
+  sortOrder    Int      @default(0)
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@index([experienceId])
+  @@index([sortOrder])
+  @@index([isPrimary])
+}
+
+model ExperienceFavorite {
+  id           String   @id @default(uuid())
+  experienceId String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, experienceId])
+  @@index([userId])
+  @@index([experienceId])
+  @@index([createdAt])
 }

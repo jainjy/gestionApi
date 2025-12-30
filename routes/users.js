@@ -318,92 +318,253 @@ router.delete("/delete-account", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/users - Récupérer tous les utilisateurs
+// GET /api/users - Récupérer les utilisateurs avec pagination et contrôle d'accès
 router.get("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      include: {
-        metiers: {
-          include: {
-            metier: true,
+    const { 
+      page = 1, 
+      limit = 20, 
+      role, 
+      status, 
+      search,
+      sortBy = "createdAt",
+      sortOrder = "desc"
+    } = req.query;
+
+    // Validation des paramètres
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit))); // Limite à 100 max
+    const skip = (pageNum - 1) * limitNum;
+
+    // Construire les filtres de base
+    const where = {};
+
+    // Filtre par rôle
+    if (role && ['admin', 'user', 'professional'].includes(role)) {
+      where.role = role;
+    }
+
+    // Filtre par statut
+    if (status && ['active', 'inactive', 'pending'].includes(status)) {
+      where.status = status;
+    }
+
+    // Filtre de recherche
+    if (search && typeof search === 'string') {
+      where.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { companyName: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Requête principale avec sélection de champs spécifiques
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          // Données de base nécessaires pour l'admin
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          role: true,
+          avatar: true,
+          status: true,
+          companyName: true,
+          demandType: true,
+          address: true,
+          zipCode: true,
+          city: true,
+          addressComplement: true,
+          commercialName: true,
+          siret: true,
+          latitude: true,
+          longitude: true,
+          userType: true,
+          createdAt: true,
+          updatedAt: true,
+          
+          // Relations avec sélection limitée
+          metiers: {
+            select: {
+              metier: {
+                select: {
+                  id: true,
+                  libelle: true
+                }
+              }
+            }
           },
-        },
-        services: {
-          include: {
-            service: true,
+          services: {
+            select: {
+              service: {
+                select: {
+                  id: true,
+                  libelle: true
+                }
+              }
+            }
           },
+          Product: {
+            select: { id: true }
+          },
+          properties: {
+            select: { id: true }
+          },
+          blogArticles: {
+            select: { id: true }
+          }
         },
-        Product: true,
-        properties: true,
-        blogArticles: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+        skip,
+        take: limitNum,
+        orderBy: {
+          [sortBy]: sortOrder
+        }
+      }),
+      prisma.user.count({ where })
+    ]);
+
+    // Formater les données avec masquage des informations sensibles
+    const formattedUsers = users.map((user) => {
+      const baseData = {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        companyName: user.companyName,
+        demandType: user.demandType,
+        userType: user.userType,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        
+        // Statistiques
+        productsCount: user.Product.length,
+        propertiesCount: user.properties.length,
+        articlesCount: user.blogArticles.length,
+        
+        // Métiers et services
+        metiers: user.metiers.map((m) => m.metier),
+        services: user.services.map((s) => s.service),
+      };
+
+      // Déclaration de userReq (l'utilisateur connecté qui fait la requête)
+      const currentUser = req.user;
+      
+      // Seuls les administrateurs "full" voient toutes les données
+      if (currentUser && currentUser.role === 'admin' && currentUser.permissions?.includes('view_sensitive_data')) {
+        return {
+          ...baseData,
+          // Données sensibles complètes pour admin autorisé
+          phone: user.phone,
+          avatar: user.avatar,
+          address: user.address,
+          zipCode: user.zipCode,
+          city: user.city,
+          addressComplement: user.addressComplement,
+          commercialName: user.commercialName,
+          siret: user.siret,
+          latitude: user.latitude,
+          longitude: user.longitude
+        };
+      } else {
+        // Admin standard - données masquées ou partielles
+        return {
+          ...baseData,
+          // Données sensibles masquées ou anonymisées
+          phone: user.phone ? maskPhoneNumber(user.phone) : null,
+          avatar: user.avatar,
+          // Adresse partielle seulement
+          city: user.city,
+          // Autres données sensibles non incluses
+        };
+      }
     });
 
-    // Formater les données pour le frontend
-    const formattedUsers = users.map((user) => ({
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      avatar: user.avatar,
-      status: user.status,
-      companyName: user.companyName,
-      demandType: user.demandType,
-      address: user.address,
-      zipCode: user.zipCode,
-      city: user.city,
-      addressComplement: user.addressComplement,
-      commercialName: user.commercialName,
-      siret: user.siret,
-      latitude: user.latitude,
-      longitude: user.longitude,
-      metiers: user.metiers.map((m) => m.metier),
-      services: user.services.map((s) => s.service),
-      productsCount: user.Product.length,
-      propertiesCount: user.properties.length,
-      articlesCount: user.blogArticles.length,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    }));
-
-    res.json(formattedUsers);
+    // Réponse avec pagination
+    const sensitiveDataMasked = !(req.user && req.user.role === 'admin' && req.user.permissions?.includes('view_sensitive_data'));
+    
+    res.json({
+      users: formattedUsers,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+        hasNextPage: pageNum * limitNum < total,
+        hasPreviousPage: pageNum > 1
+      },
+      // Informations de sécurité
+      dataProtection: {
+        sensitiveDataMasked: sensitiveDataMasked,
+        maskedFields: ['phone', 'address', 'siret', 'coordinates'],
+        timestamp: new Date().toISOString()
+      }
+    });
   } catch (error) {
     console.error("Erreur lors de la récupération des utilisateurs:", error);
+    res.status(500).json({ 
+      error: "Erreur serveur",
+      code: "INTERNAL_SERVER_ERROR"
+    });
+  }
+});
+
+// Fonction utilitaire pour masquer les numéros de téléphone
+function maskPhoneNumber(phone) {
+  if (!phone) return null;
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length <= 4) return '****';
+  return `${cleaned.slice(0, 2)}**${cleaned.slice(-2)}`;
+}
+
+// Nouvelle route pour les statistiques sécurisées
+router.get("/stats", authenticateToken, requireRole(["admin"]), async (req, res) => {
+  try {
+    const stats = await prisma.user.groupBy({
+      by: ['status', 'role'],
+      _count: true
+    });
+
+    // Formater les statistiques sans données sensibles
+    const result = {
+      total: 0,
+      active: 0,
+      inactive: 0,
+      pending: 0,
+      pro: 0,
+      admin: 0,
+      user: 0,
+      byStatus: {},
+      byRole: {}
+    };
+
+    stats.forEach(stat => {
+      result.total += stat._count;
+      if (stat.status === 'active') result.active += stat._count;
+      if (stat.status === 'inactive') result.inactive += stat._count;
+      if (stat.status === 'pending') result.pending += stat._count;
+      if (stat.role === 'professional') result.pro += stat._count;
+      if (stat.role === 'admin') result.admin += stat._count;
+      if (stat.role === 'user') result.user += stat._count;
+      
+      result.byStatus[stat.status] = (result.byStatus[stat.status] || 0) + stat._count;
+      result.byRole[stat.role] = (result.byRole[stat.role] || 0) + stat._count;
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error("Erreur lors de la récupération des statistiques:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
-// GET /api/users/stats - Statistiques des utilisateurs
-router.get(
-  "/stats",
-  authenticateToken,
-  requireRole(["admin"]),
-  async (req, res) => {
-    try {
-      const total = await prisma.user.count();
-      const active = await prisma.user.count({ where: { status: "active" } });
-      const inactive = await prisma.user.count({
-        where: { status: "inactive" },
-      });
-      const pro = await prisma.user.count({ where: { role: "professional" } });
 
-      res.json({
-        total,
-        active,
-        inactive,
-        pro,
-      });
-    } catch (error) {
-      console.error("Erreur lors de la récupération des statistiques:", error);
-      res.status(500).json({ error: "Erreur serveur" });
-    }
-  }
-);
 
 // GET /api/users/metiers/all - Récupérer tous les métiers
 router.get(
