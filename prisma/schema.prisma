@@ -896,7 +896,7 @@ model Order {
   items       Json
   totalAmount Float
   status      String @default("pending")
-
+  shippingAddress Json?
   // Livraison
   deliveryAddress String?
   latitude        Float?
