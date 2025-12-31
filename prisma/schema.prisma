@@ -234,6 +234,13 @@ model User {
 
   projets Projet[]
 
+  //relatio pour bon plan et conseil
+  conseilsCrees    Conseil[]         @relation("UserConseils") // Conseils créés par l'utilisateur
+  conseilSaves     ConseilSave[]     @relation("UserSaves") // Conseils sauvegardés par l'utilisateur
+  conseilViews     ConseilView[]     @relation("UserViews") // Conseils vus par l'utilisateur
+  conseilBookmarks ConseilBookmark[] @relation("UserBookmarks") // Conseils bookmarkés par l'utilisateur
+
+  //vehicules
   vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
   reservationsVehiculesClient      ReservationVehicule[] @relation("ReservationVehiculeClient")
   reservationsVehiculesPrestataire ReservationVehicule[] @relation("ReservationVehiculePrestataire")
@@ -881,22 +888,33 @@ model Order {
   id          String @id @default(uuid())
   orderNumber String @unique
 
+  // Relations utilisateurs
   userId        String // client qui commande
   idPrestataire String // propriétaire du produit/service
 
-  items           Json
-  totalAmount     Float
-  status          String   @default("pending")
-  shippingAddress Json?
-  paymentMethod   String
-  paymentStatus   String   @default("pending")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  // Données commande
+  items       Json
+  totalAmount Float
+  status      String @default("pending")
 
-  // Relations CORRIGÉES - doivent correspondre aux noms dans User
+  // Livraison
+  deliveryAddress String?
+  latitude        Float?
+  longitude       Float?
+
+  // Paiement
+  paymentMethod String
+  paymentStatus String @default("pending")
+
+  // Audit
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
   user        User @relation("OrderClient", fields: [userId], references: [id], onDelete: Cascade)
   prestataire User @relation("OrderPrestataire", fields: [idPrestataire], references: [id], onDelete: Cascade)
 
+  // Index
   @@index([userId])
   @@index([idPrestataire])
   @@index([orderNumber])
@@ -3108,5 +3126,114 @@ model Patrimoine {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([userId])
+}
+
+// ======================
+// BONS PLANS & CONSEILS -
+// ======================
+
+model Conseil {
+  id          Int      @id @default(autoincrement())
+  title       String
+  category    String // nature, shopping, maison, cuisine, transport, jardin, santé, culture
+  difficulty  String // Débutant, Facile, Moyen
+  duration    String // "5 min", "3 min", etc.
+  description String
+  content     String[] // Array pour les points/étapes
+  icon        String // Chemin de l'icône SVG (ex: "M9 12l2 2 4-4m5.618-4.016A11.955...")
+  color       String // emerald, amber, blue, green, cyan, lime, rose, purple
+  urgency     String // Important, Utile, Économique, Écologique, Pratique, Durable, Santé, Social
+  views       Int      @default(0)
+  saves       Int      @default(0)
+  expert      String // Nom de l'expert
+  location    String // Lieu d'application
+  isFeatured  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  authorId String? // Optionnel : ID de l'utilisateur qui a créé le conseil
+  author   User?   @relation("UserConseils", fields: [authorId], references: [id], onDelete: SetNull)
+
+  // Stats et interactions
+  conseilSaves     ConseilSave[]     @relation("ConseilSaves")
+  conseilViews     ConseilView[]     @relation("ConseilViews")
+  conseilBookmarks ConseilBookmark[] @relation("ConseilBookmarks")
+
+  @@index([category])
+  @@index([difficulty])
+  @@index([isFeatured])
+  @@index([isActive])
+  @@index([sortOrder])
+  @@index([createdAt])
+}
+
+model ConseilSave {
+  id        Int      @id @default(autoincrement())
+  conseilId Int
+  userId    String
+  createdAt DateTime @default(now())
+
+  conseil Conseil @relation("ConseilSaves", fields: [conseilId], references: [id], onDelete: Cascade)
+  user    User    @relation("UserSaves", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conseilId, userId])
+  @@index([conseilId])
+  @@index([userId])
+}
+
+model ConseilView {
+  id        Int      @id @default(autoincrement())
+  conseilId Int
+  userId    String?
+  ipAddress String?
+  userAgent String?
+  viewedAt  DateTime @default(now())
+
+  conseil Conseil @relation("ConseilViews", fields: [conseilId], references: [id], onDelete: Cascade)
+  user    User?   @relation("UserViews", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([conseilId])
+  @@index([userId])
+  @@index([viewedAt])
+}
+
+// ======================
+// CATÉGORIES DE CONSEILS (table séparée SANS relation avec Conseil)
+// ======================
+
+model ConseilCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  icon        String?
+  color       String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([name])
+  @@index([sortOrder])
+  @@index([isActive])
+}
+
+// ======================
+// BOOKMARKS/Favoris
+// ======================
+
+model ConseilBookmark {
+  id        Int      @id @default(autoincrement())
+  conseilId Int
+  userId    String
+  createdAt DateTime @default(now())
+
+  conseil Conseil @relation("ConseilBookmarks", fields: [conseilId], references: [id], onDelete: Cascade)
+  user    User    @relation("UserBookmarks", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conseilId, userId])
+  @@index([conseilId])
   @@index([userId])
 }
