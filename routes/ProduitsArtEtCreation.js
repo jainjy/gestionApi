@@ -640,4 +640,117 @@ router.delete('/delete/:filename', authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ ROUTE PUBLIQUE : Œuvres d'un professionnel spécifique
+router.get('/professional/:professionalId', async (req, res) => {
+  try {
+    const { professionalId } = req.params;
+    
+    console.log('🔍 Route publique appelée pour professionalId:', professionalId);
+    
+    const { 
+      limit = 20, 
+      page = 1
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    // Chercher uniquement les œuvres PUBLIÉES de ce professionnel
+    const where = {
+      userId: professionalId,
+      productType: 'artwork',
+      status: 'published',  // Important : seulement les œuvres publiées
+    };
+
+    console.log('📊 Requête Prisma WHERE:', where);
+
+    const [products, total, professional] = await Promise.all([
+      // 1. Récupérer les œuvres
+      prisma.product.findMany({
+        where,
+        skip,
+        take,
+        orderBy: {
+          createdAt: 'desc'
+        },
+        include: {
+          User: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              companyName: true,
+              commercialName: true,
+              city: true
+            }
+          }
+        }
+      }),
+      
+      // 2. Compter le total
+      prisma.product.count({ where }),
+      
+      // 3. Récupérer les infos du professionnel
+      prisma.user.findUnique({
+        where: { id: professionalId },
+        select: {
+          firstName: true,
+          lastName: true,
+          companyName: true,
+          commercialName: true,
+          avatar: true,
+          city: true
+        }
+      })
+    ]);
+
+    console.log('📦 Résultats:', {
+      productsCount: products.length,
+      totalCount: total,
+      professional: professional
+    });
+
+    // Formater les œuvres pour votre frontend OeuvrePages
+    const formattedOeuvres = products.map(product => ({
+      id: product.id,
+      title: product.name,
+      description: product.description,
+      image: product.images && product.images.length > 0 ? product.images[0] : '',
+      images: product.images,
+      price: product.price,
+      createdAt: product.createdAt,
+      publishedAt: product.publishedAt,
+      // Vous pouvez ajouter d'autres champs si besoin
+      artist: product.User?.companyName || 
+              `${product.User?.firstName} ${product.User?.lastName}`.trim(),
+      userId: product.userId,
+      category: product.category,
+      type: product.subcategory
+    }));
+
+    res.json({
+      success: true,
+      count: products.length,
+      total,
+      data: formattedOeuvres,
+      professional: professional,
+      pagination: {
+        page: parseInt(page),
+        limit: take,
+        totalPages: Math.ceil(total / take) || 1
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération œuvres publiques:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des œuvres'
+    });
+  }
+});
+
+
+
 module.exports = router;
