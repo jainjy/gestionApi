@@ -392,13 +392,21 @@ exports.updatePortrait = async (req, res) => {
       });
     }
 
+    // ✅ EXTRACTION des champs spéciaux AVANT de les utiliser
+    const existingImages = updateData.existingImages || [];
+    const existingAudioUrl = updateData.existingAudioUrl || null;
+
+    // Supprimer ces champs de updateData pour ne pas les envoyer à Prisma
+    delete updateData.existingImages;
+    delete updateData.existingAudioUrl;
+
     // Gérer les fichiers uploadés
-    let finalImages = Array.isArray(updateData.existingImages)
-      ? updateData.existingImages
+    let finalImages = Array.isArray(existingImages)
+      ? existingImages
       : existingPortrait.images;
 
     let finalAudioUrl =
-      updateData.existingAudioUrl || existingPortrait.interviewAudioUrl;
+      existingAudioUrl || existingPortrait.interviewAudioUrl;
 
     if (req.files) {
       try {
@@ -440,7 +448,7 @@ exports.updatePortrait = async (req, res) => {
         ? JSON.parse(updateData.wisdom)
         : existingPortrait.wisdom;
 
-    // Préparer les données de mise à jour
+    // Préparer les données de mise à jour (SANS existingImages ni existingAudioUrl)
     const dataToUpdate = {
       ...updateData,
       images: finalImages,
@@ -487,6 +495,7 @@ exports.updatePortrait = async (req, res) => {
     });
   }
 };
+
 
 // Supprimer un portrait (admin)
 exports.deletePortrait = async (req, res) => {

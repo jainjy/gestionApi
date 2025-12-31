@@ -6,6 +6,7 @@ const express = require("express");
 const cors = require("./middleware/cors");
 const helmet = require("helmet");
 const bodyParser = require("body-parser");
+const sanitizeHtml = require("sanitize-html");
 const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const fs = require("fs");
@@ -152,19 +153,25 @@ const limiter = rateLimit({
 app.use(cors);
 app.use(
   helmet({
+    // Protection Clickjacking (MED-05)
+    frameguard: {
+      action: "deny",
+    },
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: false,
+    // Protection CSP (MED-06)
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"], // 'unsafe-inline' est souvent nécessaire pour React/Tailwind
         scriptSrc: ["'self'"],
         imgSrc: ["'self'", "data:", "https:"],
         mediaSrc: ["'self'", "data:", "blob:", "https:"],
-        connectSrc: ["'self'", "https:", "ws:", "wss:"],
+        connectSrc: ["'self'", "https:", "ws:", "wss:"], // Autorise WebSocket et API
         fontSrc: ["'self'", "https:"],
         objectSrc: ["'none'"],
         frameSrc: ["'self'"],
+        frameAncestors: ["'none'"], // Double sécurité Clickjacking
       },
     },
   })
@@ -173,13 +180,44 @@ app.use("/api", limiter);
 app.use(cookieParser());
 app.use(express.json({ limit: "50mb" })); // Augmenter à 50MB pour être large
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+/**
+ * 🔥 CORRECTION [MED-03]: Middleware Global de Sanitization XSS
+ * Ce middleware parcourt tout le corps de la requête (req.body) 
+ * et supprime les balises HTML malveillantes avant le traitement par les routes.
+ */
+const xssSanitizer = (req, res, next) => {
+  const sanitizeOptions = {
+    allowedTags: [], // On refuse toutes les balises HTML par défaut
+    allowedAttributes: {},
+    disallowedTagsMode: 'discard',
+  };
+
+  const sanitizeObject = (obj) => {
+    for (let key in obj) {
+      if (typeof obj[key] === 'string') {
+        // Nettoyage de la chaîne de caractères
+        obj[key] = sanitizeHtml(obj[key], sanitizeOptions);
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        // Récursion pour les objets imbriqués
+        sanitizeObject(obj[key]);
+      }
+    }
+  };
+
+  if (req.body) sanitizeObject(req.body);
+  if (req.query) sanitizeObject(req.query);
+  if (req.params) sanitizeObject(req.params);
+
+  next();
+};
 
 // 🔥 AJOUT: Middleware pour injecter io dans les requêtes
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
-
+// 🆕 APPLICATION DU MIDDLEWARE SUR TOUTES LES ROUTES /api
+app.use("/api", xssSanitizer);
 // ======================
 // ROUTES API EXISTANTES
 // ======================
