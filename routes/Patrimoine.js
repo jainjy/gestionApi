@@ -533,142 +533,97 @@ router.delete(
 );
 
 /**
- * 📌 GET /api/patrimoine
- * Récupère tous les patrimoines (pour l'admin ou public)
+ * GET : récupérer tous les patrimoines
  */
-router.get(
-  '/user-patrimoines',
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const userId = req.user.id;
-      const userRole = req.user.role;
-      
-      console.log(`🔍 Récupération patrimoines pour: user=${userId}, role=${userRole}`);
-      
-      // Construire la condition WHERE selon le rôle
-      let whereCondition = {};
-      
-      // Professionnels et admins voient tout, les autres ne voient que leurs propres patrimoines
-      if (userRole !== 'professional' && userRole !== 'admin') {
-        whereCondition.userId = userId;
-      }
-      
-      // Récupérer tous les patrimoines avec pagination et filtres optionnels
-      const { 
-        page = 1, 
-        limit = 20, 
-        search = '',
-        type,
-        category,
-        featured,
-        available
-      } = req.query;
-      
-      const pageNumber = parseInt(page);
-      const limitNumber = parseInt(limit);
-      const skip = (pageNumber - 1) * limitNumber;
-      
-      // Ajouter les filtres optionnels
-      if (search) {
-        whereCondition.OR = [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-          { location: { contains: search, mode: 'insensitive' } }
-        ];
-      }
-      
-      if (type) {
-        whereCondition.type = type;
-      }
-      
-      if (category) {
-        whereCondition.category = category;
-      }
-      
-      if (featured !== undefined) {
-        whereCondition.featured = featured === 'true';
-      }
-      
-      if (available !== undefined) {
-        whereCondition.available = available === 'true';
-      }
-      
-      // Exécuter la requête
-      const [patrimoines, totalCount] = await Promise.all([
-        prisma.Patrimoine.findMany({
-          where: whereCondition,
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                companyName: true,
-                phone: true,
-                role: true
-              }
-            }
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          skip: skip,
-          take: limitNumber
-        }),
-        prisma.Patrimoine.count({
-          where: whereCondition
-        })
-      ]);
-      
-      console.log(`✅ ${patrimoines.length} patrimoines trouvés sur ${totalCount}`);
-      
-      // Transformer les données pour le frontend
-      const transformedPatrimoines = patrimoines.map(patrimoine => ({
-        id: patrimoine.id,
-        title: patrimoine.title,
-        type: patrimoine.type || 'nature',
-        category: patrimoine.category || 'site_naturel',
-        location: patrimoine.location,
-        description: patrimoine.description,
-        images: patrimoine.images || [],
-        altitude: patrimoine.altitude,
-        year: patrimoine.year,
-        rating: patrimoine.rating || 0,
-        reviewCount: patrimoine.reviewCount || 0,
-        featured: patrimoine.featured || false,
-        available: patrimoine.available !== false,
-        userId: patrimoine.userId,
-        user: patrimoine.user,
-        createdAt: patrimoine.createdAt,
-        updatedAt: patrimoine.updatedAt,
-        // Champs additionnels
-        price: patrimoine.price || 0,
-        city: patrimoine.city || patrimoine.location,
-        isTouristicPlace: true
-      }));
-      
-      return res.status(200).json({
-        success: true,
-        data: transformedPatrimoines,
-        pagination: {
-          page: pageNumber,
-          limit: limitNumber,
-          total: totalCount,
-          totalPages: Math.ceil(totalCount / limitNumber)
+router.get('/all', async (req, res) => {
+  try {
+    const patrimoines = await prisma.patrimoine.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true, // Remplace 'name'
+            lastName: true,  // Ajouté
+            email: true,
+            role: true
+          }
         }
-      });
-      
-    } catch (error) {
-      console.error('❌ Erreur récupération patrimoines:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Erreur lors de la récupération des patrimoines',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      }
+    });
+
+    res.status(200).json(patrimoines);
+  } catch (error) {
+    console.error('❌ Erreur récupération patrimoines:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * GET : récupérer tous les patrimoines
+ * 🔐 Token requis
+ * 👤 Rôle requis : user
+ */
+router.get('/test', authenticateToken, async (req, res) => {
+  try {
+    // Le middleware authenticateToken met l'utilisateur dans req.user
+    const { role } = req.user;
+
+    // Vérification du rôle
+    if (role !== 'user') {
+      return res.status(403).json({
+        message: 'Accès refusé : rôle user requis'
       });
     }
+
+    const patrimoines = await prisma.patrimoine.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true, // ← CORRIGÉ : 'name' → 'firstName'
+            lastName: true,  // ← AJOUTÉ pour avoir le nom complet
+            email: true
+          }
+        }
+      }
+    });
+
+    // Formatage des données pour inclure le nom complet
+    const formattedPatrimoines = patrimoines.map(patrimoine => ({
+      ...patrimoine,
+      user: {
+        ...patrimoine.user,
+        // Créer un champ name à partir de firstName et lastName
+        name: patrimoine.user.firstName && patrimoine.user.lastName 
+          ? `${patrimoine.user.firstName} ${patrimoine.user.lastName}`
+          : patrimoine.user.firstName || patrimoine.user.email.split('@')[0]
+      }
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formattedPatrimoines,
+      pagination: {
+        page: 1,
+        limit: patrimoines.length,
+        total: patrimoines.length,
+        totalPages: 1
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération patrimoines:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Erreur serveur' 
+    });
   }
-);
+});
+
 
 module.exports = router;
