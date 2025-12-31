@@ -239,6 +239,8 @@ app.use("/api/pro/formations", require("./routes/formations")); // <-- AJOUTEZ C
 // 🆕 AJOUTEZ CETTE LIGNE POUR LES FORMATIONS PUBLIQUES
 app.use("/api/formations", require("./routes/formations-public"));
 
+const formationsPublicRoutes = require('./routes/formations-public');
+
 // Dans server.js, ajoutez cette ligne avec les autres routes :
 app.use("/api/emploi", require("./routes/emploi"));
 
@@ -259,6 +261,13 @@ app.get('/api/candidatures', (req, res) => {
     ] 
   });
 });
+
+
+const alternancePublicRoutes = require('./routes/alternance');
+
+// Ajouter les routes publiques
+app.use('/api/alternance', alternancePublicRoutes);
+
 // 🔥 AJOUTEZ CE MIDDLEWARE POUR LE DÉBOGAGE
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
