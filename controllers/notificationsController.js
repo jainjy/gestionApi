@@ -3,118 +3,126 @@ const { sendNotification, updateNotificationCount } = require('../lib/socket');
 
 const getNotificationsForUser = async (req, res) => {
     try {
-        const { userId } = req.params;
-        
-        console.log(`📨 Récupération des notifications pour l'utilisateur: ${userId}`);
-        
-        // Récupérer les demandes avec statut validé ou refusé
-        const demandes = await prisma.demande.findMany({
-            where: {
-                createdById: userId,
-                statut: {
-                    in: ['validée', 'refusée', 'validee']
-                },
-                propertyId: {
-                    not: null
-                }
+      const { userId } = req.params;
+
+      // VÉRIFICATION : est-ce que je demande MES notifications ?
+      if (req.user.id !== userId && req.user.role !== "admin") {
+        return res.status(403).json({
+          error: "Vous ne pouvez accéder qu'à vos propres notifications",
+        });
+      }
+
+      // Récupérer les demandes avec statut validé ou refusé
+      const demandes = await prisma.demande.findMany({
+        where: {
+          createdById: userId,
+          statut: {
+            in: ["validée", "refusée", "validee"],
+          },
+          propertyId: {
+            not: null,
+          },
+        },
+        include: {
+          property: {
+            select: {
+              id: true,
+              title: true,
+              price: true,
             },
-            include: {
-                property: {
-                    select: {
-                        id: true,
-                        title: true,
-                        price: true
-                    }
-                }
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      // Récupérer les notifications de la table Notification
+      const notificationsFromTable = await prisma.notification.findMany({
+        where: {
+          OR: [{ userProprietaireId: userId }, { userId: userId }],
+        },
+        include: {
+          userProprietaire: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
             },
-            orderBy: {
-                createdAt: 'desc'
-            }
-        });
+          },
+          // 🔥 SUPPRIMER: La relation property n'existe pas dans le modèle Notification
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
-        // Récupérer les notifications de la table Notification
-        const notificationsFromTable = await prisma.notification.findMany({
-            where: {
-                OR: [
-                    { userProprietaireId: userId },
-                    { userId: userId }
-                ]
-            },
-            include: {
-                userProprietaire: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        email: true
-                    }
-                }
-                // 🔥 SUPPRIMER: La relation property n'existe pas dans le modèle Notification
-            },
-            orderBy: {
-                createdAt: 'desc'
-            }
-        });
+      console.log(
+        `📊 Demandes trouvées: ${demandes.length}, Notifications table: ${notificationsFromTable.length}`
+      );
 
-        console.log(`📊 Demandes trouvées: ${demandes.length}, Notifications table: ${notificationsFromTable.length}`);
+      // Transformer les demandes en notifications
+      const demandeNotifications = demandes.map((demande) => {
+        const statusText = demande.statut === "refusée" ? "refusée" : "validée";
+        const propertyTitle = demande.property?.title || "Bien immobilier";
 
-        // Transformer les demandes en notifications
-        const demandeNotifications = demandes.map(demande => {
-            const statusText = demande.statut === 'refusée' ? 'refusée' : 'validée';
-            const propertyTitle = demande.property?.title || 'Bien immobilier';
-            
-            return {
-                id: `demande_${demande.id}`,
-                titre: `Demande ${statusText}`,
-                message: `Votre demande pour "${propertyTitle}" a été ${statusText}`,
-                statut: demande.statut,
-                propertyId: demande.propertyId,
-                createdAt: demande.createdAt,
-                updatedAt: demande.updatedAt,
-                isRead: demande.isRead || false,
-                type: 'demande_immobilier',
-                source: 'demande',
-                property: demande.property
-            };
-        });
+        return {
+          id: `demande_${demande.id}`,
+          titre: `Demande ${statusText}`,
+          message: `Votre demande pour "${propertyTitle}" a été ${statusText}`,
+          statut: demande.statut,
+          propertyId: demande.propertyId,
+          createdAt: demande.createdAt,
+          updatedAt: demande.updatedAt,
+          isRead: demande.isRead || false,
+          type: "demande_immobilier",
+          source: "demande",
+          property: demande.property,
+        };
+      });
 
-        // Transformer les notifications de la table Notification
-        const tableNotifications = notificationsFromTable.map(notif => {
-            return {
-                id: `notification_${notif.id}`,
-                titre: notif.titre || 'Nouvelle notification',
-                message: notif.message,
-                statut: notif.statut,
-                propertyId: notif.propertyId, // Garder propertyId si le champ existe
-                createdAt: notif.createdAt,
-                updatedAt: notif.updatedAt,
-                isRead: notif.isRead,
-                type: notif.type || 'general',
-                source: 'system',
-                userProprietaire: notif.userProprietaire
-                // 🔥 SUPPRIMER: property n'est pas disponible
-            };
-        });
+      // Transformer les notifications de la table Notification
+      const tableNotifications = notificationsFromTable.map((notif) => {
+        return {
+          id: `notification_${notif.id}`,
+          titre: notif.titre || "Nouvelle notification",
+          message: notif.message,
+          statut: notif.statut,
+          propertyId: notif.propertyId, // Garder propertyId si le champ existe
+          createdAt: notif.createdAt,
+          updatedAt: notif.updatedAt,
+          isRead: notif.isRead,
+          type: notif.type || "general",
+          source: "system",
+          userProprietaire: notif.userProprietaire,
+          // 🔥 SUPPRIMER: property n'est pas disponible
+        };
+      });
 
-        // Fusionner et trier toutes les notifications
-        const allNotifications = [...tableNotifications, ...demandeNotifications]
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // Fusionner et trier toutes les notifications
+      const allNotifications = [
+        ...tableNotifications,
+        ...demandeNotifications,
+      ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        const unreadCount = allNotifications.filter(n => !n.isRead).length;
+      const unreadCount = allNotifications.filter((n) => !n.isRead).length;
 
-        console.log(`✅ Notifications totales: ${allNotifications.length}, Non lues: ${unreadCount}`);
+      console.log(
+        `✅ Notifications totales: ${allNotifications.length}, Non lues: ${unreadCount}`
+      );
 
-        res.json({ 
-            success: true,
-            notifications: allNotifications, 
-            unreadCount,
-            metadata: {
-                total: allNotifications.length,
-                unread: unreadCount,
-                fromDemandes: demandeNotifications.length,
-                fromSystem: tableNotifications.length
-            }
-        });
+      res.json({
+        success: true,
+        notifications: allNotifications,
+        unreadCount,
+        metadata: {
+          total: allNotifications.length,
+          unread: unreadCount,
+          fromDemandes: demandeNotifications.length,
+          fromSystem: tableNotifications.length,
+        },
+      });
     } catch (error) {
         console.error('❌ Erreur lors de la récupération des notifications:', error);
         res.status(500).json({ 
@@ -127,28 +135,27 @@ const getNotificationsForUser = async (req, res) => {
 
 const markAsRead = async (req, res) => {
     try {
-        const { userId, notificationId } = req.params;
-
-        console.log(`📩 Mark read: ${notificationId} for user ${userId}`);
-
-        const notifId = parseInt(notificationId.replace("notification_", ""));
-
-        await prisma.notification.updateMany({
-            where: {
-                id: notifId,
-                OR: [
-                    { userId },
-                    { userProprietaireId: userId }
-                ]
-            },
-            data: { read: true }
+      const { userId, notificationId } = req.params;
+      // VÉRIFICATION : est-ce que je demande MES notifications ?
+      if (req.user.id !== userId && req.user.role !== "admin") {
+        return res.status(403).json({
+          error: "Vous ne pouvez accéder qu'à vos propres notifications",
         });
+      }
+      const notifId = parseInt(notificationId.replace("notification_", ""));
 
-        const unreadCount = await getUnreadCount(userId);
-        await updateNotificationCount(userId, unreadCount);
+      await prisma.notification.updateMany({
+        where: {
+          id: notifId,
+          OR: [{ userId }, { userProprietaireId: userId }],
+        },
+        data: { read: true },
+      });
 
-        res.json({ success: true, message: "Notification marquée comme lue" });
+      const unreadCount = await getUnreadCount(userId);
+      await updateNotificationCount(userId, unreadCount);
 
+      res.json({ success: true, message: "Notification marquée comme lue" });
     } catch (error) {
         console.error("❌ markAsRead:", error);
         res.status(500).json({ success: false, error: "Erreur serveur" });
@@ -158,28 +165,32 @@ const markAsRead = async (req, res) => {
 
 const markAsUnread = async (req, res) => {
     try {
-        const { userId, notificationId } = req.params;
+      const { userId, notificationId } = req.params;
 
-        console.log(`📩 Mark unread: ${notificationId} for user ${userId}`);
-
-        const notifId = parseInt(notificationId.replace("notification_", ""));
-
-        await prisma.notification.updateMany({
-            where: {
-                id: notifId,
-                OR: [
-                    { userId },
-                    { userProprietaireId: userId }
-                ]
-            },
-            data: { read: false }
+      // VÉRIFICATION : est-ce que je demande MES notifications ?
+      if (req.user.id !== userId && req.user.role !== "admin") {
+        return res.status(403).json({
+          error: "Vous ne pouvez accéder qu'à vos propres notifications",
         });
+      }
 
-        const unreadCount = await getUnreadCount(userId);
-        await updateNotificationCount(userId, unreadCount);
+      const notifId = parseInt(notificationId.replace("notification_", ""));
 
-        res.json({ success: true, message: "Notification marquée comme non lue" });
+      await prisma.notification.updateMany({
+        where: {
+          id: notifId,
+          OR: [{ userId }, { userProprietaireId: userId }],
+        },
+        data: { read: false },
+      });
 
+      const unreadCount = await getUnreadCount(userId);
+      await updateNotificationCount(userId, unreadCount);
+
+      res.json({
+        success: true,
+        message: "Notification marquée comme non lue",
+      });
     } catch (error) {
         console.error("❌ markAsUnread:", error);
         res.status(500).json({ success: false, error: "Erreur serveur" });
@@ -189,25 +200,29 @@ const markAsUnread = async (req, res) => {
 
 const markAllAsRead = async (req, res) => {
     try {
-        const { userId } = req.params;
+      const { userId } = req.params;
 
-        console.log(`📩 Mark ALL as read for user ${userId}`);
-
-        await prisma.notification.updateMany({
-            where: {
-                read: false,
-                OR: [
-                    { userId },
-                    { userProprietaireId: userId }
-                ]
-            },
-            data: { read: true }
+      // VÉRIFICATION : est-ce que je demande MES notifications ?
+      if (req.user.id !== userId && req.user.role !== "admin") {
+        return res.status(403).json({
+          error: "Vous ne pouvez accéder qu'à vos propres notifications",
         });
+      }
 
-        await updateNotificationCount(userId, 0);
+      await prisma.notification.updateMany({
+        where: {
+          read: false,
+          OR: [{ userId }, { userProprietaireId: userId }],
+        },
+        data: { read: true },
+      });
 
-        res.json({ success: true, message: "Toutes les notifications sont lues" });
+      await updateNotificationCount(userId, 0);
 
+      res.json({
+        success: true,
+        message: "Toutes les notifications sont lues",
+      });
     } catch (error) {
         console.error("❌ markAllAsRead:", error);
         res.status(500).json({ success: false, error: "Erreur serveur" });
@@ -216,46 +231,48 @@ const markAllAsRead = async (req, res) => {
 
 const deleteNotification = async (req, res) => {
     try {
-        const { userId, notificationId } = req.params;
-        
-        console.log(`🗑️ Supprimer notification: ${notificationId} pour user: ${userId}`);
+      const { userId, notificationId } = req.params;
 
-        if (notificationId.startsWith('demande_')) {
-            // Pour les demandes, on ne supprime pas, on marque juste comme archivée
-            const demandeId = parseInt(notificationId.replace('demande_', ''));
-            await prisma.demande.update({
-                where: { 
-                    id: demandeId, 
-                    createdById: userId 
-                },
-                data: { statut: 'archivee' }
-            });
-        } else if (notificationId.startsWith('notification_')) {
-            const notifId = parseInt(notificationId.replace('notification_', ''));
-            await prisma.notification.delete({
-                where: { 
-                    id: notifId,
-                    OR: [
-                        { userProprietaireId: userId },
-                        { userId: userId }
-                    ]
-                }
-            });
-        } else {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Format ID de notification invalide' 
-            });
-        }
-
-        // Recharger le compteur
-        const unreadCount = await getUnreadCount(userId);
-        await updateNotificationCount(userId, unreadCount);
-
-        res.json({ 
-            success: true,
-            message: 'Notification supprimée'
+      // VÉRIFICATION : est-ce que je demande MES notifications ?
+      if (req.user.id !== userId && req.user.role !== "admin") {
+        return res.status(403).json({
+          error: "Vous ne pouvez accéder qu'à vos propres notifications",
         });
+      }
+
+      if (notificationId.startsWith("demande_")) {
+        // Pour les demandes, on ne supprime pas, on marque juste comme archivée
+        const demandeId = parseInt(notificationId.replace("demande_", ""));
+        await prisma.demande.update({
+          where: {
+            id: demandeId,
+            createdById: userId,
+          },
+          data: { statut: "archivee" },
+        });
+      } else if (notificationId.startsWith("notification_")) {
+        const notifId = parseInt(notificationId.replace("notification_", ""));
+        await prisma.notification.delete({
+          where: {
+            id: notifId,
+            OR: [{ userProprietaireId: userId }, { userId: userId }],
+          },
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: "Format ID de notification invalide",
+        });
+      }
+
+      // Recharger le compteur
+      const unreadCount = await getUnreadCount(userId);
+      await updateNotificationCount(userId, unreadCount);
+
+      res.json({
+        success: true,
+        message: "Notification supprimée",
+      });
     } catch (error) {
         console.error('❌ Erreur suppression notification:', error);
         res.status(500).json({ 
@@ -267,42 +284,46 @@ const deleteNotification = async (req, res) => {
 
 const clearAllNotifications = async (req, res) => {
     try {
-        const { userId } = req.params;
+      const { userId } = req.params;
 
-        console.log(`🗑️ Supprimer toutes les notifications pour user: ${userId}`);
-
-        // Supprimer toutes les notifications de la table
-        await prisma.notification.deleteMany({
-            where: {
-                OR: [
-                    { userProprietaireId: userId },
-                    { userId: userId }
-                ]
-            }
+      // VÉRIFICATION : est-ce que je demande MES notifications ?
+      if (req.user.id !== userId && req.user.role !== "admin") {
+        return res.status(403).json({
+          error: "Vous ne pouvez accéder qu'à vos propres notifications",
         });
+      }
 
-        // Marquer toutes les demandes comme archivées
-        await prisma.demande.updateMany({
-            where: {
-                createdById: userId,
-                statut: {
-                    in: ['validée', 'refusée', 'validee']
-                }
-            },
-            data: { 
-                statut: 'archivee'
-            }
-        });
+      // Supprimer toutes les notifications de la table
+      await prisma.notification.deleteMany({
+        where: {
+          OR: [{ userProprietaireId: userId }, { userId: userId }],
+        },
+      });
 
-        // Mettre à jour le compteur via WebSocket
-        await updateNotificationCount(userId, 0);
+      // Marquer toutes les demandes comme archivées
+      await prisma.demande.updateMany({
+        where: {
+          createdById: userId,
+          statut: {
+            in: ["validée", "refusée", "validee"],
+          },
+        },
+        data: {
+          statut: "archivee",
+        },
+      });
 
-        console.log(`✅ Toutes les notifications supprimées pour user: ${userId}`);
+      // Mettre à jour le compteur via WebSocket
+      await updateNotificationCount(userId, 0);
 
-        res.json({ 
-            success: true,
-            message: 'Toutes les notifications ont été supprimées'
-        });
+      console.log(
+        `✅ Toutes les notifications supprimées pour user: ${userId}`
+      );
+
+      res.json({
+        success: true,
+        message: "Toutes les notifications ont été supprimées",
+      });
     } catch (error) {
         console.error('❌ Erreur suppression totale:', error);
         res.status(500).json({ 
@@ -343,6 +364,7 @@ const clearAllNotifications = async (req, res) => {
 
 const getUnreadCount = async (userId) => {
     try {
+        
         const demandesCount = await prisma.demande.count({
             where: {
                 createdById: userId,

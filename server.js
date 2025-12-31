@@ -1,6 +1,7 @@
 // server.js - VERSION MISE À JOUR AVEC EXPÉRIENCES TOURISTIQUES
 require("dotenv").config();
 const path = require("path");
+const jwt = require("jsonwebtoken"); // Assurez-vous d'avoir l'import JWT en haut
 const express = require("express");
 const cors = require("./middleware/cors");
 const helmet = require("helmet");
@@ -35,52 +36,58 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+/**
+ * 🔥 CORRECTION [HIGH-07]: Middleware d'authentification WebSocket
+ * Vérifie le JWT présent dans socket.handshake.auth.token
+ */
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token || socket.handshake.query.token;
 
-app.set("io", io);
-
-// 🔥 CORRECTION: Gestion des connexions Socket.io avec logs détaillés
-io.on("connection", (socket) => {
-  console.log("🔌 Nouvelle connexion Socket.io:", socket.id);
-
-  const userId = socket.handshake.query.userId;
-
-  if (userId) {
-    socket.join(`user:${userId}`);
-    console.log(`👤 User ${userId} a rejoint sa room`);
-    
-    // Événement pour rejoindre les rooms de notifications
-    socket.on('join-user-room', (userRoomId) => {
-      socket.join(`user:${userRoomId}`);
-      console.log(`📨 User ${userRoomId} a rejoint sa room de notifications`);
-    });
+  if (!token) {
+    console.error("❌ Connexion WebSocket refusée : Token manquant");
+    return next(new Error("Authentication error: Token required"));
   }
 
-  // 🔥 AJOUT: Gestion des notifications en temps réel
-  socket.on('new-notification', (data) => {
-    if (data.userId) {
-      socket.to(`user:${data.userId}`).emit('notification-received', data);
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // On attache l'utilisateur décodé au socket pour l'utiliser plus tard
+    socket.user = decoded; 
+    next();
+  } catch (err) {
+    console.error("❌ Connexion WebSocket refusée : Token invalide");
+    return next(new Error("Authentication error: Invalid token"));
+  }
+});
+app.set("io", io);
+
+/**
+ * 🔥 GESTION DES CONNEXIONS (SÉCURISÉE)
+ */
+io.on("connection", (socket) => {
+  // Désormais, socket.user est disponible grâce au middleware ci-dessus
+  const userId = socket.user.userId; 
+  
+  console.log(`🔌 Nouvelle connexion sécurisée: ${socket.id} (User: ${userId})`);
+
+  // Rejoindre automatiquement sa room personnelle
+  socket.join(`user:${userId}`);
+
+  // Événement pour rejoindre les rooms de notifications
+  socket.on('join-user-room', (userRoomId) => {
+    // Sécurité supplémentaire : vérifier que l'utilisateur ne rejoint que SA propre room
+    if (userRoomId === userId) {
+      socket.join(`user:${userRoomId}`);
+      console.log(`📨 User ${userRoomId} a rejoint sa room de notifications`);
     }
   });
 
-  // Événement pour envoyer une notification spécifique
+  // Gestion des notifications en temps réel
   socket.on('send-notification', (notificationData) => {
-    const { userId, titre, message } = notificationData;
-    if (userId) {
-      socket.to(`user:${userId}`).emit('new-notification', {
+    const { userId: targetUserId, titre, message } = notificationData;
+    if (targetUserId) {
+      io.to(`user:${targetUserId}`).emit('new-notification', {
         titre,
         message,
-        timestamp: new Date().toISOString()
-      });
-      console.log(`📨 Notification envoyée à l'utilisateur ${userId}`);
-    }
-  });
-
-  // Événement pour mettre à jour le compteur de notifications
-  socket.on('update-notification-count', (data) => {
-    const { userId, count } = data;
-    if (userId) {
-      socket.to(`user:${userId}`).emit('notification-count-update', {
-        count,
         timestamp: new Date().toISOString()
       });
     }
@@ -89,36 +96,22 @@ io.on("connection", (socket) => {
   // Rejoindre une conversation
   socket.on("join_conversation", (conversationId) => {
     socket.join(`conversation:${conversationId}`);
-    console.log(`💬 User ${userId} a rejoint la conversation ${conversationId}`);
-  });
-
-  // Quitter une conversation
-  socket.on("leave_conversation", (conversationId) => {
-    socket.leave(`conversation:${conversationId}`);
+    console.log(`💬 User ${userId} est dans la conversation ${conversationId}`);
   });
 
   // Envoyer un message
   socket.on("send_message", (message) => {
+    // On force l'expéditeur à être l'utilisateur authentifié (évite l'usurpation)
+    const secureMessage = { ...message, expediteurId: userId };
+    
     socket
       .to(`conversation:${message.conversationId}`)
-      .emit("new_message", message);
-    // Notifier les participants
-    if (message.expediteurId) {
-      socket.to(`user:${message.expediteurId}`).emit("message_sent", message);
-    }
+      .emit("new_message", secureMessage);
+    
+    // Notifier l'expéditeur sur ses autres appareils
+    socket.emit("message_sent", secureMessage);
   });
 
-  // Marquer les messages comme lus
-  socket.on("mark_messages_read", (data) => {
-    socket.to(`conversation:${data.conversationId}`).emit("message_read", data);
-  });
-
-  // Gestion des erreurs
-  socket.on("error", (error) => {
-    console.error("❌ Erreur Socket:", error);
-  });
-
-  // Déconnexion
   socket.on("disconnect", (reason) => {
     console.log("❌ User déconnecté:", socket.id, "Raison:", reason);
   });
@@ -513,25 +506,8 @@ app.use("/api/user/enterprise-services", require("./routes/userService"));
 app.use("*", (req, res) => {
   res.status(404).json({
     success: false,
-    error: "Route non trouvée",
-    availableRoutes: [
-      "/health",
-      "/websocket-test",
-      "/api/notifications/user/:userId",
-      "/api/auth/*",
-      "/api/users/*",
-      "/api/investissement/*",
-      // 🆕 AJOUT DES ROUTES ACTIVITÉS
-      "/api/activities/*",
-      "/api/activity-bookings/*",
-      "/api/activity-actions/*",
-      "/api/guide-contact/*",
-      "/api/activity-availability/*",
-      // 🆕 AJOUT DES ROUTES EXPÉRIENCES
-      "/api/experiences/*",
-      "/api/experience-bookings/*",
-      "/api/experience-reviews/*"
-    ]
+    error: "Ressources  non trouvée",
+   
   });
 });
 

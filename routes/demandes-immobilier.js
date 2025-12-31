@@ -217,7 +217,11 @@ router.get("/user/:userId", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     const { status } = req.query;
-
+    if (userId !== req.user.id && req.user.role !== "admin") {
+      return res.status(403).json({
+        error: "Unauthorized. Only the owner or admin can get this property.",
+      });
+    }
     let whereClause = {
       createdById: userId,
       NOT: {
@@ -386,7 +390,7 @@ router.get("/owner/:userId", authenticateToken, async (req, res) => {
 });
 
 // PATCH /api/demandes/immobilier/:id/statut - CORRIGÉ
-router.patch('/:id/statut', authenticateToken, async (req, res) => {
+router.patch("/:id/statut", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { statut } = req.body;
@@ -399,15 +403,15 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
       include: {
         property: {
           include: {
-            owner: true
-          }
+            owner: true,
+          },
         },
-        createdBy: true  // CORRIGÉ
-      }
+        createdBy: true, // CORRIGÉ
+      },
     });
 
     if (!demande) {
-      return res.status(404).json({ error: 'Demande non trouvée' });
+      return res.status(404).json({ error: "Demande non trouvée" });
     }
 
     // Mettre à jour le statut
@@ -416,8 +420,8 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
       data: { statut },
       include: {
         property: true,
-        createdBy: true  // CORRIGÉ
-      }
+        createdBy: true, // CORRIGÉ
+      },
     });
 
     console.log(`✅ [BACKEND] Demande ${id} mise à jour: ${statut}`);
@@ -427,15 +431,14 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
     // Cette route gère seulement la validation/refus de la demande
 
     res.json({
-      message: 'Statut mis à jour avec succès',
-      demande: updatedDemande
+      message: "Statut mis à jour avec succès",
+      demande: updatedDemande,
     });
-
   } catch (error) {
-    console.error('❌ [BACKEND] Erreur mise à jour statut:', error);
-    res.status(500).json({ 
-      error: 'Erreur lors de la mise à jour du statut',
-      details: error.message 
+    console.error("❌ [BACKEND] Erreur mise à jour statut:", error);
+    res.status(500).json({
+      error: "Erreur lors de la mise à jour du statut",
+      details: error.message,
     });
   }
 });
@@ -444,14 +447,16 @@ router.patch('/:id/statut', authenticateToken, async (req, res) => {
 router.get("/property/:propertyId", authenticateToken, async (req, res) => {
   try {
     const { propertyId } = req.params;
-    
-    console.log(`🔍 [BACKEND] Recherche demandes pour propriété: ${propertyId}`);
-    
+
+    console.log(
+      `🔍 [BACKEND] Recherche demandes pour propriété: ${propertyId}`
+    );
+
     // NE PAS utiliser parseInt() car propertyId est un UUID (string)
     const demandes = await prisma.demande.findMany({
       where: {
-        propertyId: propertyId,  // ✅ Utiliser directement le string
-        statut: { in: ['validée', 'en attente'] }
+        propertyId: propertyId, // ✅ Utiliser directement le string
+        statut: { in: ["validée", "en attente"] },
       },
       include: {
         createdBy: {
@@ -460,25 +465,25 @@ router.get("/property/:propertyId", authenticateToken, async (req, res) => {
             firstName: true,
             lastName: true,
             email: true,
-            phone: true
-          }
+            phone: true,
+          },
         },
         property: {
           select: {
             id: true,
             title: true,
-            rentType: true  // ✅ CORRIGÉ: utiliser rentType au lieu de locationType
-          }
-        }
+            rentType: true, // ✅ CORRIGÉ: utiliser rentType au lieu de locationType
+          },
+        },
       },
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: "desc",
+      },
     });
-    
+
     console.log(`✅ [BACKEND] ${demandes.length} demandes trouvées`);
-    
-    const formattedDemandes = demandes.map(demande => ({
+
+    const formattedDemandes = demandes.map((demande) => ({
       id: demande.id,
       statut: demande.statut,
       clientId: demande.createdById,
@@ -488,13 +493,12 @@ router.get("/property/:propertyId", authenticateToken, async (req, res) => {
       contactTel: demande.contactTel,
       dateSouhaitee: demande.dateSouhaitee,
       createdAt: demande.createdAt,
-      property: demande.property
+      property: demande.property,
     }));
-    
+
     res.json(formattedDemandes);
-    
   } catch (error) {
-    console.error('❌ [BACKEND] Erreur récupération demandes:', error);
+    console.error("❌ [BACKEND] Erreur récupération demandes:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -574,7 +578,11 @@ router.get("/:id/history", authenticateToken, async (req, res) => {
 router.get("/user/:userId/history", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
-
+    if (userId !== req.user.id && req.user.role !== "admin") {
+      return res.status(403).json({
+        error: "Unauthorized. Only the owner or admin can get this property.",
+      });
+    }
     const demandes = await prisma.demande.findMany({
       where: {
         createdById: userId,
