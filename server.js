@@ -490,19 +490,6 @@ app.use("/api/client/documents", require("./routes/documents-client"));
 app.use("/api/contrats-types", require("./routes/contratsTypes"));
 
 
-// 🔥 AJOUT: Route de test WebSocket
-app.get("/websocket-test", (req, res) => {
-  res.json({
-    status: "WebSocket Server Running",
-    port: PORT,
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      websocket: `ws://localhost:${PORT}`,
-      health: `http://localhost:${PORT}/health`
-    }
-  });
-});
-
 // Route de santé - MISE À JOUR
 app.get("/health", (req, res) => {
   res.json({
