@@ -1032,6 +1032,144 @@ router.get('/artisanat/products', async (req, res) => {
     });
   }
 });
+
+// Dans routes/art-creation.js, après les autres routes et avant le module.exports
+router.get('/marketplace/all', async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 12,
+      search = '',
+      location = '',
+      type = '',
+      category = ''
+    } = req.query;
+
+    console.log('📊 Route marketplace/all appelée avec params:', {
+      page, limit, search, location, type, category
+    });
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    const where = {
+      productType: 'artwork',
+      status: 'published'
+    };
+
+    // Filtre par recherche
+    if (search && search.trim() !== '') {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { category: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    // Filtre par type
+    if (type && type !== 'all') {
+      where.subcategory = type;
+    }
+
+    // Filtre par catégorie
+    if (category && category !== 'all') {
+      where.category = category;
+    }
+
+    // Filtre par localisation
+    if (location && location.trim() !== '') {
+      where.User = {
+        city: {
+          contains: location.trim(),
+          mode: 'insensitive'
+        }
+      };
+    }
+
+    console.log('🔍 Requête Prisma WHERE:', JSON.stringify(where, null, 2));
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        skip,
+        take,
+        orderBy: {
+          createdAt: 'desc'
+        },
+        include: {
+          User: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              companyName: true,
+              commercialName: true,
+              city: true
+            }
+          }
+        }
+      }),
+      prisma.product.count({ where })
+    ]);
+
+    console.log('📦 Résultats de la requête:', {
+      productsCount: products.length,
+      totalCount: total
+    });
+
+    // Formater les œuvres pour le marketplace
+    const formattedOeuvres = products.map(product => ({
+      id: product.id,
+      title: product.name,
+      description: product.description,
+      image: product.images && product.images.length > 0 ? product.images[0] : '',
+      images: product.images,
+      price: product.price,
+      createdAt: product.createdAt,
+      publishedAt: product.publishedAt,
+      type: product.subcategory,
+      category: product.category,
+      userId: product.userId,
+      artist: product.User?.companyName || 
+             `${product.User?.firstName} ${product.User?.lastName}`.trim(),
+      professional: {
+        id: product.userId,
+        name: product.User?.companyName || 
+              `${product.User?.firstName} ${product.User?.lastName}`.trim(),
+        avatar: product.User?.avatar,
+        city: product.User?.city
+      },
+      dimensions: product.dimensions,
+      views: product.viewCount || 0,
+      likes: 0,
+      status: product.status
+    }));
+
+    res.json({
+      success: true,
+      count: products.length,
+      total,
+      data: formattedOeuvres,
+      pagination: {
+        page: parseInt(page),
+        limit: take,
+        totalPages: Math.ceil(total / take) || 1
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur marketplace:', error);
+    console.error('❌ Stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des œuvres du marketplace',
+      message: error.message
+    });
+  }
+});
+
 const ProduitsArtEtCreation = require('./ProduitsArtEtCreation');
 
 router.use('/products', ProduitsArtEtCreation);
