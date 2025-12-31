@@ -7,7 +7,8 @@ const { authenticateToken } = require('../middleware/auth');
 
 // Routes GET (publiques ou semi-publiques)
 router.get('/', eventsController.getAllEvents);
-router.get('/stats', eventsController.getEventStats);
+// eventRoutes.js - MODIFIEZ CETTE LIGNE
+router.get('/stats', authenticateToken, eventsController.getEventStats);
 router.get('/export', eventsController.exportEvents);
 router.get('/:id', eventsController.getEventById);
 

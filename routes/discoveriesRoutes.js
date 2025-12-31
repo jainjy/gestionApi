@@ -8,7 +8,8 @@ const { authenticateToken } = require('../middleware/auth');
 
 // Routes GET (publiques)
 router.get('/', discoveriesController.getAllDiscoveries);
-router.get('/stats', discoveriesController.getDiscoveryStats);
+// discoveriesRoutes.js - MODIFIEZ CETTE LIGNE
+router.get('/stats', authenticateToken, discoveriesController.getDiscoveryStats);
 router.get('/search/tags', discoveriesController.searchByTags);
 router.get('/nearby', discoveriesController.getNearbyDiscoveries);
 router.get('/export', discoveriesController.exportDiscoveries);

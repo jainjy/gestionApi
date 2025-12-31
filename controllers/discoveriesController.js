@@ -731,188 +731,203 @@ exports.updateDiscoveryRating = async (req, res, next) => {
   }
 };
 
-// Obtenir les statistiques des découvertes
+// CORRECTION DE getDiscoveryStats
 exports.getDiscoveryStats = async (req, res, next) => {
   try {
+    console.log('📊 getDiscoveryStats - Début');
+    
+    // Vérification de l'authentification
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Utilisateur non authentifié'
+      });
+    }
+    
     const userId = req.user.id;
     const userRole = req.user.role;
-
-    // Si professional, voir toutes les stats, sinon seulement les découvertes de l'utilisateur
-    const where = userRole === "professional" ? {} : { userId };
-
-    const [
-      total,
-      published,
-      active,
-      draft,
-      archived,
-      totalRevenue,
-      totalVisits,
-      averageRating,
-      discoveriesByType,
-      discoveriesByDifficulty,
-      discoveriesByStatus,
-      featuredDiscoveries,
-      recentDiscoveries,
-      topRatedDiscoveries,
-    ] = await Promise.all([
-      // Totaux
-      prisma.discovery.count({ where }),
-      prisma.discovery.count({ where: { ...where, status: "PUBLISHED" } }),
-      prisma.discovery.count({ where: { ...where, status: "ACTIVE" } }),
-      prisma.discovery.count({ where: { ...where, status: "DRAFT" } }),
-      prisma.discovery.count({ where: { ...where, status: "ARCHIVED" } }),
-
-      // Agréggats financiers
-      prisma.discovery.aggregate({
-        _sum: { revenue: true },
-        where: { ...where, status: { in: ["PUBLISHED", "ACTIVE"] } },
-      }),
-
-      // Visites
-      prisma.discovery.aggregate({
-        _sum: { visits: true },
-        where,
-      }),
-      prisma.discovery.aggregate({
-        _avg: { rating: true },
-        where,
-      }),
-
-      // Groupements
-      prisma.discovery.groupBy({
-        by: ["type"],
-        _count: true,
-        _sum: { visits: true, revenue: true },
-        _avg: { rating: true },
-        where,
-      }),
-
-      prisma.discovery.groupBy({
-        by: ["difficulty"],
-        _count: true,
-        _avg: { rating: true },
-        where,
-      }),
-
-      prisma.discovery.groupBy({
-        by: ["status"],
-        _count: true,
-        where,
-      }),
-
-      // Découvertes en vedette
-      prisma.discovery.findMany({
-        where: {
-          ...where,
-          featured: true,
-          status: { in: ["PUBLISHED", "ACTIVE"] },
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-        },
-        take: 5,
-        orderBy: { rating: "desc" },
-      }),
-
-      // Découvertes récentes
-      prisma.discovery.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-        },
-        take: 5,
-        orderBy: { createdAt: "desc" },
-      }),
-
-      // Meilleures notes
-      prisma.discovery.findMany({
-        where: { ...where, rating: { gt: 0 } },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-        },
-        take: 5,
-        orderBy: { rating: "desc" },
-      }),
-    ]);
-
-    // Formater les statistiques
-    const stats = {
-      totals: {
-        total,
-        published,
-        active,
-        draft,
-        archived,
-        featured: featuredDiscoveries.length,
-      },
-      financials: {
-        totalRevenue: totalRevenue._sum.revenue || 0,
-        averageRevenue:
-          total > 0
-            ? parseFloat((totalRevenue._sum.revenue || 0) / total).toFixed(2)
-            : 0,
-        totalVisits: totalVisits._sum.visits || 0,
-      },
-      ratings: {
-        averageRating: parseFloat((averageRating._avg.rating || 0).toFixed(1)),
-        topRatedCount: topRatedDiscoveries.length,
-      },
-      breakdown: {
-        byType: discoveriesByType.reduce((acc, curr) => {
-          acc[curr.type] = {
-            count: curr._count,
-            visits: curr._sum.visits || 0,
-            revenue: curr._sum.revenue || 0,
-            averageRating: parseFloat((curr._avg.rating || 0).toFixed(1)),
-          };
-          return acc;
-        }, {}),
-        byDifficulty: discoveriesByDifficulty.reduce((acc, curr) => {
-          acc[curr.difficulty] = {
-            count: curr._count,
-            averageRating: parseFloat((curr._avg.rating || 0).toFixed(1)),
-          };
-          return acc;
-        }, {}),
-        byStatus: discoveriesByStatus.reduce((acc, curr) => {
-          acc[curr.status] = curr._count;
-          return acc;
-        }, {}),
-      },
-      featuredDiscoveries: featuredDiscoveries.map(formatDiscoveryResponse),
-      recentDiscoveries: recentDiscoveries.map(formatDiscoveryResponse),
-      topRatedDiscoveries: topRatedDiscoveries.map(formatDiscoveryResponse),
+    
+    // Clause WHERE
+    const where = userRole === 'professional' ? {} : { userId };
+    
+    console.log('WHERE clause:', where);
+    
+    // 1. Statistiques de base (corrigées)
+    const totals = {
+      total: await prisma.discovery.count({ where }),
+      published: await prisma.discovery.count({ where: { ...where, status: 'PUBLISHED' } }),
+      active: await prisma.discovery.count({ where: { ...where, status: 'ACTIVE' } }),
+      draft: await prisma.discovery.count({ where: { ...where, status: 'DRAFT' } }),
+      archived: await prisma.discovery.count({ where: { ...where, status: 'ARCHIVED' } }),
+      featured: await prisma.discovery.count({ where: { ...where, featured: true } })
     };
-
+    
+    // 2. Agrégations financières
+    const financialAgg = await prisma.discovery.aggregate({
+      where: { 
+        ...where,
+        status: { in: ['PUBLISHED', 'ACTIVE'] }
+      },
+      _sum: {
+        revenue: true,
+        price: true
+      },
+      _avg: {
+        price: true,
+        rating: true
+      }
+    });
+    
+    // 3. Agrégations visites
+    const visitsAgg = await prisma.discovery.aggregate({
+      where,
+      _sum: {
+        visits: true
+      }
+    });
+    
+    // 4. Récupérer toutes les découvertes pour grouper manuellement (solution temporaire)
+    const allDiscoveries = await prisma.discovery.findMany({
+      where,
+      select: {
+        type: true,
+        difficulty: true,
+        status: true,
+        rating: true,
+        visits: true,
+        revenue: true
+      }
+    });
+    
+    // 5. Grouper manuellement
+    const breakdown = {
+      byType: {},
+      byDifficulty: {},
+      byStatus: {}
+    };
+    
+    allDiscoveries.forEach(discovery => {
+      // Par type
+      const type = discovery.type || 'Non spécifié';
+      if (!breakdown.byType[type]) {
+        breakdown.byType[type] = {
+          count: 0,
+          visits: 0,
+          revenue: 0,
+          totalRating: 0,
+          countWithRating: 0
+        };
+      }
+      breakdown.byType[type].count++;
+      breakdown.byType[type].visits += discovery.visits || 0;
+      breakdown.byType[type].revenue += discovery.revenue || 0;
+      if (discovery.rating > 0) {
+        breakdown.byType[type].totalRating += discovery.rating;
+        breakdown.byType[type].countWithRating++;
+      }
+      
+      // Par difficulté
+      const difficulty = discovery.difficulty || 'Non spécifié';
+      if (!breakdown.byDifficulty[difficulty]) {
+        breakdown.byDifficulty[difficulty] = {
+          count: 0,
+          totalRating: 0,
+          countWithRating: 0
+        };
+      }
+      breakdown.byDifficulty[difficulty].count++;
+      if (discovery.rating > 0) {
+        breakdown.byDifficulty[difficulty].totalRating += discovery.rating;
+        breakdown.byDifficulty[difficulty].countWithRating++;
+      }
+      
+      // Par statut
+      const status = discovery.status || 'Non spécifié';
+      if (!breakdown.byStatus[status]) {
+        breakdown.byStatus[status] = 0;
+      }
+      breakdown.byStatus[status]++;
+    });
+    
+    // 6. Calculer les moyennes
+    Object.keys(breakdown.byType).forEach(type => {
+      const data = breakdown.byType[type];
+      data.averageRating = data.countWithRating > 0 
+        ? parseFloat((data.totalRating / data.countWithRating).toFixed(1))
+        : 0;
+      delete data.totalRating;
+      delete data.countWithRating;
+    });
+    
+    Object.keys(breakdown.byDifficulty).forEach(difficulty => {
+      const data = breakdown.byDifficulty[difficulty];
+      data.averageRating = data.countWithRating > 0 
+        ? parseFloat((data.totalRating / data.countWithRating).toFixed(1))
+        : 0;
+      delete data.totalRating;
+      delete data.countWithRating;
+    });
+    
+    // 7. Découvertes en vedette (simplifié)
+    const featuredDiscoveries = await prisma.discovery.findMany({
+      where: {
+        ...where,
+        featured: true,
+        status: { in: ['PUBLISHED', 'ACTIVE'] }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true
+          }
+        }
+      },
+      take: 5,
+      orderBy: { rating: 'desc' }
+    });
+    
+    // 8. Formater les résultats
+    const stats = {
+      totals,
+      financials: {
+        totalRevenue: financialAgg._sum.revenue || 0,
+        averagePrice: financialAgg._avg.price || 0,
+        averageRating: parseFloat((financialAgg._avg.rating || 0).toFixed(1))
+      },
+      visits: {
+        total: visitsAgg._sum.visits || 0,
+        averagePerDiscovery: totals.total > 0 
+          ? parseFloat((visitsAgg._sum.visits || 0) / totals.total).toFixed(1)
+          : 0
+      },
+      breakdown,
+      featuredDiscoveries: featuredDiscoveries.map(formatDiscoveryResponse)
+    };
+    
+    console.log('📊 getDiscoveryStats - Succès');
+    
     res.json({
       success: true,
       data: stats,
+      timestamp: new Date().toISOString()
     });
+    
   } catch (error) {
-    console.error("Erreur getDiscoveryStats:", error);
-    next(error);
+    console.error('❌ Erreur dans getDiscoveryStats:', error);
+    console.error('Stack trace:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors du calcul des statistiques',
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? {
+        code: error.code,
+        meta: error.meta
+      } : undefined
+    });
   }
 };
 
