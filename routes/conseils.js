@@ -30,16 +30,30 @@ router.get("/categories", async (req, res) => {
         name: true,
         description: true,
         icon: true,
-        color: true,
-        _count: {
-          select: { conseils: { where: { isActive: true } } }
-        }
+        color: true
       }
     });
 
+    // Ajouter le comptage manuellement
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (category) => {
+        const count = await prisma.conseil.count({
+          where: {
+            category: category.name,
+            isActive: true
+          }
+        });
+        
+        return {
+          ...category,
+          conseilsCount: count
+        };
+      })
+    );
+
     res.json({
       success: true,
-      data: categories
+      data: categoriesWithCount
     });
 
   } catch (error) {
@@ -121,6 +135,11 @@ router.get("/", async (req, res) => {
     // Récupérer le total pour la pagination
     const total = await prisma.conseil.count({ where });
 
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
     // Formatage des données pour le frontend
     const formattedConseils = conseils.map(conseil => ({
       id: conseil.id,
@@ -133,8 +152,8 @@ router.get("/", async (req, res) => {
       icon: conseil.icon,
       color: conseil.color,
       urgency: conseil.urgency,
-      views: conseil.views.toLocaleString('fr-FR'),
-      saves: conseil.saves.toLocaleString('fr-FR'),
+      views: convertBigInt(conseil.views).toLocaleString('fr-FR'),
+      saves: convertBigInt(conseil.saves).toLocaleString('fr-FR'),
       expert: conseil.expert,
       location: conseil.location,
       isFeatured: conseil.isFeatured,
@@ -193,6 +212,11 @@ router.get("/featured", async (req, res) => {
       }
     });
 
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
     const formattedConseils = conseils.map(conseil => ({
       id: conseil.id,
       title: conseil.title,
@@ -203,8 +227,8 @@ router.get("/featured", async (req, res) => {
       icon: conseil.icon,
       color: conseil.color,
       urgency: conseil.urgency,
-      views: conseil.views.toLocaleString('fr-FR'),
-      saves: conseil.saves.toLocaleString('fr-FR'),
+      views: convertBigInt(conseil.views).toLocaleString('fr-FR'),
+      saves: convertBigInt(conseil.saves).toLocaleString('fr-FR'),
       expert: conseil.expert,
       location: conseil.location
     }));
@@ -279,6 +303,11 @@ router.get("/:id", async (req, res) => {
       }
     }
 
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
     // Formater la réponse
     const formattedConseil = {
       id: conseil.id,
@@ -291,8 +320,8 @@ router.get("/:id", async (req, res) => {
       icon: conseil.icon,
       color: conseil.color,
       urgency: conseil.urgency,
-      views: conseil.views.toLocaleString('fr-FR'),
-      saves: conseil.saves.toLocaleString('fr-FR'),
+      views: convertBigInt(conseil.views).toLocaleString('fr-FR'),
+      saves: convertBigInt(conseil.saves).toLocaleString('fr-FR'),
       expert: conseil.expert,
       location: conseil.location,
       isFeatured: conseil.isFeatured,
@@ -328,18 +357,41 @@ router.get("/:id", async (req, res) => {
  */
 router.get("/stats/global", async (req, res) => {
   try {
-    const stats = {
-      totalConseils: await prisma.conseil.count({ where: { isActive: true } }),
-      totalCategories: await prisma.conseilCategory.count({ where: { isActive: true } }),
-      totalViews: await prisma.conseil.aggregate({
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
+    // Fonction pour convertir les résultats SQL raw
+    const convertRawResults = (results) => {
+      if (!Array.isArray(results)) return results;
+      return results.map(item => {
+        const newItem = {};
+        for (const key in item) {
+          newItem[key] = convertBigInt(item[key]);
+        }
+        return newItem;
+      });
+    };
+
+    const [
+      totalConseils,
+      totalCategories,
+      totalViewsAgg,
+      totalSavesAgg,
+      topCategoriesRaw
+    ] = await Promise.all([
+      prisma.conseil.count({ where: { isActive: true } }),
+      prisma.conseilCategory.count({ where: { isActive: true } }),
+      prisma.conseil.aggregate({
         where: { isActive: true },
         _sum: { views: true }
       }),
-      totalSaves: await prisma.conseil.aggregate({
+      prisma.conseil.aggregate({
         where: { isActive: true },
         _sum: { saves: true }
       }),
-      topCategories: await prisma.$queryRaw`
+      prisma.$queryRaw`
         SELECT category, COUNT(*) as count
         FROM "Conseil"
         WHERE "isActive" = true
@@ -347,6 +399,17 @@ router.get("/stats/global", async (req, res) => {
         ORDER BY count DESC
         LIMIT 5
       `
+    ]);
+
+    // Convertir topCategoriesRaw
+    const topCategories = convertRawResults(topCategoriesRaw);
+
+    const stats = {
+      totalConseils,
+      totalCategories,
+      totalViews: convertBigInt(totalViewsAgg._sum.views) || 0,
+      totalSaves: convertBigInt(totalSavesAgg._sum.saves) || 0,
+      topCategories: topCategories || []
     };
 
     res.json({
@@ -354,8 +417,8 @@ router.get("/stats/global", async (req, res) => {
       data: {
         totalConseils: stats.totalConseils,
         totalCategories: stats.totalCategories,
-        totalViews: stats.totalViews._sum.views || 0,
-        totalSaves: stats.totalSaves._sum.saves || 0,
+        totalViews: stats.totalViews,
+        totalSaves: stats.totalSaves,
         topCategories: stats.topCategories
       }
     });
@@ -375,7 +438,6 @@ router.get("/stats/global", async (req, res) => {
     });
   }
 });
-
 /**
  * @route GET /api/conseils/search/suggestions
  * @description Récupérer des suggestions de recherche
@@ -503,12 +565,17 @@ router.post("/:id/save", authenticateToken, async (req, res) => {
       select: { saves: true }
     });
 
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
     res.json({
       success: true,
       message,
       data: {
         saved,
-        saves: updatedConseil.saves
+        saves: convertBigInt(updatedConseil.saves)
       }
     });
 
@@ -607,6 +674,11 @@ router.get("/user/saved", authenticateToken, async (req, res) => {
       orderBy: { createdAt: "desc" }
     });
 
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
     const conseils = savedConseils
       .filter(item => item.conseil && item.conseil.isActive)
       .map(item => ({
@@ -619,8 +691,8 @@ router.get("/user/saved", authenticateToken, async (req, res) => {
         icon: item.conseil.icon,
         color: item.conseil.color,
         urgency: item.conseil.urgency,
-        views: item.conseil.views.toLocaleString('fr-FR'),
-        saves: item.conseil.saves.toLocaleString('fr-FR'),
+        views: convertBigInt(item.conseil.views).toLocaleString('fr-FR'),
+        saves: convertBigInt(item.conseil.saves).toLocaleString('fr-FR'),
         expert: item.conseil.expert,
         location: item.conseil.location,
         savedAt: item.createdAt,
@@ -674,6 +746,11 @@ router.get("/user/bookmarked", authenticateToken, async (req, res) => {
       orderBy: { createdAt: "desc" }
     });
 
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
     const conseils = bookmarkedConseils
       .filter(item => item.conseil && item.conseil.isActive)
       .map(item => ({
@@ -686,8 +763,8 @@ router.get("/user/bookmarked", authenticateToken, async (req, res) => {
         icon: item.conseil.icon,
         color: item.conseil.color,
         urgency: item.conseil.urgency,
-        views: item.conseil.views.toLocaleString('fr-FR'),
-        saves: item.conseil.saves.toLocaleString('fr-FR'),
+        views: convertBigInt(item.conseil.views).toLocaleString('fr-FR'),
+        saves: convertBigInt(item.conseil.saves).toLocaleString('fr-FR'),
         expert: item.conseil.expert,
         location: item.conseil.location,
         bookmarkedAt: item.createdAt,
@@ -730,7 +807,7 @@ router.get("/user/stats", authenticateToken, async (req, res) => {
 
     // Catégories préférées
     const favoriteCategories = await prisma.$queryRaw`
-      SELECT c.category, COUNT(*) as count
+      SELECT c.category as name, COUNT(*) as count
       FROM "ConseilSave" cs
       JOIN "Conseil" c ON cs."conseilId" = c.id
       WHERE cs."userId" = ${userId}
@@ -854,6 +931,11 @@ router.get("/admin/all", authenticateToken, async (req, res) => {
       prisma.conseil.count({ where })
     ]);
 
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
     // Formater la réponse
     const formattedConseils = conseils.map(conseil => ({
       id: conseil.id,
@@ -866,8 +948,8 @@ router.get("/admin/all", authenticateToken, async (req, res) => {
       icon: conseil.icon,
       color: conseil.color,
       urgency: conseil.urgency,
-      views: conseil.views,
-      saves: conseil.saves,
+      views: convertBigInt(conseil.views),
+      saves: convertBigInt(conseil.saves),
       expert: conseil.expert,
       location: conseil.location,
       isFeatured: conseil.isFeatured,
@@ -1264,39 +1346,52 @@ router.get("/admin/stats", authenticateToken, async (req, res) => {
       });
     }
 
+    // Fonction pour convertir BigInt en Number
+    const convertBigInt = (value) => {
+      return typeof value === 'bigint' ? Number(value) : value;
+    };
+
+    // Récupérer toutes les statistiques en parallèle
     const [
       totalConseils,
       activeConseils,
       featuredConseils,
-      totalSaves,
-      totalViews,
-      topConseils,
+      totalSavesAgg,
+      totalViewsAgg,
       recentActivity
     ] = await Promise.all([
+      // Total des conseils
       prisma.conseil.count(),
+      
+      // Conseils actifs
       prisma.conseil.count({ where: { isActive: true } }),
+      
+      // Conseils en vedette
       prisma.conseil.count({ where: { isFeatured: true, isActive: true } }),
-      prisma.conseil.aggregate({ _sum: { saves: true } }),
-      prisma.conseil.aggregate({ _sum: { views: true } }),
-      prisma.conseil.findMany({
-        where: { isActive: true },
-        orderBy: { views: "desc" },
-        take: 5,
-        select: {
-          id: true,
-          title: true,
-          views: true,
-          saves: true
-        }
+      
+      // Total des sauvegardes
+      prisma.conseil.aggregate({
+        _sum: { saves: true }
       }),
+      
+      // Total des vues
+      prisma.conseil.aggregate({
+        _sum: { views: true }
+      }),
+      
+      // Activité récente (derniers 30 jours)
       prisma.conseil.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 10,
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          }
+        },
         select: {
           id: true,
           title: true,
-          isActive: true,
-          isFeatured: true,
+          category: true,
+          views: true,
+          saves: true,
           createdAt: true,
           author: {
             select: {
@@ -1304,22 +1399,92 @@ router.get("/admin/stats", authenticateToken, async (req, res) => {
               lastName: true
             }
           }
-        }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10
       })
     ]);
 
-    // Statistiques par catégorie
-    const categoryStats = await prisma.$queryRaw`
-      SELECT category, 
-             COUNT(*) as total,
-             SUM(views) as total_views,
-             SUM(saves) as total_saves,
-             AVG(views) as avg_views
-      FROM "Conseil"
-      WHERE "isActive" = true
-      GROUP BY category
+    // Conseils les plus populaires
+    const topConseils = await prisma.conseil.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        views: true,
+        saves: true,
+        author: {
+          select: {
+            firstName: true,
+            lastName: true
+          }
+        }
+      },
+      orderBy: { views: 'desc' },
+      take: 5
+    });
+
+    // Statistiques par catégorie - utiliser raw query
+    const categoryStatsRaw = await prisma.$queryRaw`
+      SELECT 
+        c.category as name,
+        COUNT(*) as total,
+        COALESCE(SUM(c.views), 0) as total_views,
+        COALESCE(SUM(c.saves), 0) as total_saves,
+        COALESCE(AVG(c.views), 0) as avg_views
+      FROM "Conseil" c
+      WHERE c."isActive" = true
+      GROUP BY c.category
       ORDER BY total DESC
     `;
+
+    // Convertir les BigInt dans categoryStats
+    const categoryStats = Array.isArray(categoryStatsRaw) ? categoryStatsRaw.map(stat => ({
+      name: stat.name,
+      total: Number(stat.total),
+      total_views: convertBigInt(stat.total_views),
+      total_saves: convertBigInt(stat.total_saves),
+      avg_views: Number(stat.avg_views)
+    })) : [];
+
+    // Statistiques par mois (pour graphique)
+    const monthlyStatsRaw = await prisma.$queryRaw`
+      SELECT 
+        DATE_TRUNC('month', "createdAt") as month,
+        COUNT(*) as count,
+        COALESCE(SUM(views), 0) as views
+      FROM "Conseil"
+      WHERE "createdAt" >= NOW() - INTERVAL '6 months'
+      GROUP BY DATE_TRUNC('month', "createdAt")
+      ORDER BY month DESC
+    `;
+
+    // Convertir les BigInt dans monthlyStats
+    const monthlyStats = Array.isArray(monthlyStatsRaw) ? monthlyStatsRaw.map(stat => ({
+      month: stat.month,
+      count: Number(stat.count),
+      views: convertBigInt(stat.views)
+    })) : [];
+
+    // Convertir les BigInt dans topConseils et recentActivity
+    const formattedTopConseils = topConseils.map(conseil => ({
+      ...conseil,
+      views: convertBigInt(conseil.views),
+      saves: convertBigInt(conseil.saves),
+      authorName: conseil.author ? 
+        `${conseil.author.firstName} ${conseil.author.lastName}` : 
+        'Anonyme'
+    }));
+
+    const formattedRecentActivity = recentActivity.map(activity => ({
+      ...activity,
+      views: convertBigInt(activity.views),
+      saves: convertBigInt(activity.saves),
+      authorName: activity.author ? 
+        `${activity.author.firstName} ${activity.author.lastName}` : 
+        'Anonyme'
+    }));
 
     res.json({
       success: true,
@@ -1328,18 +1493,13 @@ router.get("/admin/stats", authenticateToken, async (req, res) => {
           conseils: totalConseils,
           active: activeConseils,
           featured: featuredConseils,
-          saves: totalSaves._sum.saves || 0,
-          views: totalViews._sum.views || 0
+          saves: convertBigInt(totalSavesAgg._sum.saves) || 0,
+          views: convertBigInt(totalViewsAgg._sum.views) || 0
         },
-        topConseils,
-        categoryStats: categoryStats || [],
-        recentActivity,
-        // Statistiques de performance
-        performance: {
-          avgViewsPerConseil: totalViews._sum.views ? Math.round(totalViews._sum.views / activeConseils) : 0,
-          avgSavesPerConseil: totalSaves._sum.saves ? Math.round(totalSaves._sum.saves / activeConseils) : 0,
-          engagementRate: totalViews._sum.views ? ((totalSaves._sum.saves || 0) / totalViews._sum.views * 100).toFixed(2) : 0
-        }
+        topConseils: formattedTopConseils,
+        categoryStats: categoryStats,
+        monthlyStats: monthlyStats,
+        recentActivity: formattedRecentActivity
       }
     });
 
@@ -1348,7 +1508,19 @@ router.get("/admin/stats", authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Erreur lors de la récupération des statistiques",
-      data: {}
+      data: {
+        totals: {
+          conseils: 0,
+          active: 0,
+          featured: 0,
+          saves: 0,
+          views: 0
+        },
+        topConseils: [],
+        categoryStats: [],
+        monthlyStats: [],
+        recentActivity: []
+      }
     });
   }
 });
@@ -1441,17 +1613,26 @@ router.get("/admin/categories/all", authenticateToken, async (req, res) => {
     }
 
     const categories = await prisma.conseilCategory.findMany({
-      orderBy: { sortOrder: "asc" },
-      include: {
-        _count: {
-          select: { conseils: true }
-        }
-      }
+      orderBy: { sortOrder: "asc" }
     });
+
+    // Ajouter le comptage manuellement si besoin
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (category) => {
+        const count = await prisma.conseil.count({
+          where: { category: category.name }
+        });
+        
+        return {
+          ...category,
+          conseilsCount: count
+        };
+      })
+    );
 
     res.json({
       success: true,
-      data: categories
+      data: categoriesWithCount
     });
 
   } catch (error) {
