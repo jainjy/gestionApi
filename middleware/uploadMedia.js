@@ -367,6 +367,34 @@ const uploadVideoOrImage = (req, res, next) => {
   });
 };
 
+// Middleware pour upload d'images multiples
+const uploadMultipleImages = (req, res, next) => {
+  const uploadMiddleware = createMulterConfig([
+    { name: 'image', maxCount: 10 }, // Jusqu'à 10 images
+  ]);
+
+  uploadMiddleware(req, res, (err) => {
+    if (err) {
+      console.error('❌ Erreur upload images multiples:', err.message);
+      
+      if (req.files) {
+        manualCleanup(req.files);
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: err.message
+      });
+    }
+
+    console.log('✅ Images multiples reçues:', 
+      req.files?.image?.length || 0, 'fichier(s)');
+    
+    next();
+  });
+};
+
+
 module.exports = {
   upload: multer({
     storage,
@@ -380,6 +408,7 @@ module.exports = {
   uploadVideoOrImage, // ✅ AJOUTÉ ICI
   cleanupTempFiles,
   manualCleanup,
+   uploadMultipleImages,
   validateFiles,
   logUpload,
   getFileSizeLimit,
