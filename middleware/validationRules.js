@@ -90,12 +90,16 @@ const eventValidationRules = [
     .isIn(['EUR', 'USD', 'MGA', 'GBP', 'JPY', 'CNY'])
     .withMessage('Devise invalide'),
   
-  // Email
-  body('contactEmail')
-    .optional()
-    .isEmail()
-    .withMessage('Email invalide')
-    .normalizeEmail(),
+ body('contactEmail')
+  .optional()
+  .custom((value) => {
+    if (value && value.trim() !== '') {
+      return validator.isEmail(value);
+    }
+    return true;
+  })
+  .withMessage('Email invalide')
+  .normalizeEmail(),
   
   // URL
   body('website')

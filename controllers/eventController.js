@@ -627,162 +627,152 @@ exports.incrementParticipants = async (req, res, next) => {
   }
 };
 
-// Obtenir les statistiques des événements
 exports.getEventStats = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    console.log('📊 getEventStats - Début');
+    
+    // Vérification de l'authentification
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Utilisateur non authentifié'
+      });
+    }
+    
+    const userId = req.user.id; // Déjà un String
     const userRole = req.user.role;
     
-    // Si professional, voir toutes les stats, sinon seulement les événements de l'utilisateur
-    const where = userRole === 'professional' ? {} : { userId };
-
-    const [
-      total,
-      active,
-      upcoming,
-      completed,
-      draft,
-      archived,
-      cancelled,
-      totalRevenue,
-      totalParticipants,
-      totalCapacity,
-      eventsByCategory,
-      eventsByStatus,
-      featuredEvents,
-      recentEvents
-    ] = await Promise.all([
-      // Totaux
-      prisma.event.count({ where }),
-      prisma.event.count({ where: { ...where, status: 'ACTIVE' } }),
-      prisma.event.count({ where: { ...where, status: 'UPCOMING' } }),
-      prisma.event.count({ where: { ...where, status: 'COMPLETED' } }),
-      prisma.event.count({ where: { ...where, status: 'DRAFT' } }),
-      prisma.event.count({ where: { ...where, status: 'ARCHIVED' } }),
-      prisma.event.count({ where: { ...where, status: 'CANCELLED' } }),
-      
-      // Agréggats financiers
-      prisma.event.aggregate({
-        _sum: { revenue: true },
-        where: { ...where, status: { in: ['COMPLETED', 'ACTIVE'] } }
-      }),
-      
-      // Participants
-      prisma.event.aggregate({ 
-        _sum: { participants: true },
-        where
-      }),
-      prisma.event.aggregate({ 
-        _sum: { capacity: true },
-        where 
-      }),
-      
-      // Groupements
-      prisma.event.groupBy({
-        by: ['category'],
-        _count: true,
-        _sum: { participants: true, revenue: true },
-        where
-      }),
-      
-      prisma.event.groupBy({
-        by: ['status'],
-        _count: true,
-        where
-      }),
-      
-      // Événements en vedette
-      prisma.event.findMany({
-        where: { ...where, featured: true, status: { in: ['ACTIVE', 'UPCOMING'] } },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatar: true
-            }
-          }
-        },
-        take: 5,
-        orderBy: { date: 'asc' }
-      }),
-      
-      // Événements récents
-      prisma.event.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatar: true
-            }
-          }
-        },
-        take: 5,
-        orderBy: { createdAt: 'desc' }
-      })
-    ]);
-
-    // Calcul du taux d'utilisation
-    const totalCap = totalCapacity._sum.capacity || 0;
-    const totalPart = totalParticipants._sum.participants || 0;
-    const utilizationRate = totalCap > 0 ? (totalPart / totalCap * 100).toFixed(1) : 0;
-
-    // Calcul du revenu moyen
-    const activeCompletedCount = active + completed;
-    const avgRevenue = activeCompletedCount > 0 ? 
-      (totalRevenue._sum.revenue || 0) / activeCompletedCount : 0;
-
-    // Formater les statistiques
-    const stats = {
-      totals: {
-        total,
-        active,
-        upcoming,
-        completed,
-        draft,
-        archived,
-        cancelled,
-        featured: featuredEvents.length
+    // Construire la clause WHERE
+    let where = {};
+    
+    if (userRole !== 'professional') {
+      // Pour les non-professionals, seulement leurs événements
+      where = { userId: userId };
+    } else {
+      // Pour les professionals, tous les événements
+      where = {};
+    }
+    
+    console.log('WHERE clause for stats:', JSON.stringify(where));
+    
+    // 1. Statistiques de base
+    const totals = {
+      total: await prisma.event.count({ where }),
+      active: await prisma.event.count({ where: { ...where, status: 'ACTIVE' } }),
+      upcoming: await prisma.event.count({ where: { ...where, status: 'UPCOMING' } }),
+      completed: await prisma.event.count({ where: { ...where, status: 'COMPLETED' } }),
+      draft: await prisma.event.count({ where: { ...where, status: 'DRAFT' } }),
+      archived: await prisma.event.count({ where: { ...where, status: 'ARCHIVED' } }),
+      cancelled: await prisma.event.count({ where: { ...where, status: 'CANCELLED' } }),
+      featured: await prisma.event.count({ where: { ...where, featured: true } })
+    };
+    
+    // 2. Agrégations financières
+    const financialAgg = await prisma.event.aggregate({
+      where: { 
+        ...where,
+        status: { in: ['ACTIVE', 'COMPLETED'] }
       },
+      _sum: {
+        revenue: true,
+        price: true
+      },
+      _avg: {
+        price: true,
+        participants: true
+      }
+    });
+    
+    // 3. Agrégations participants
+    const participantAgg = await prisma.event.aggregate({
+      where,
+      _sum: {
+        participants: true,
+        capacity: true
+      }
+    });
+    
+    // 4. Statistiques par catégorie
+    const eventsByCategory = await prisma.event.groupBy({
+      by: ['category'],
+      where,
+      _count: {
+        _all: true
+      },
+      _sum: {
+        participants: true,
+        revenue: true
+      }
+    });
+    
+    // 5. Statistiques par statut
+    const eventsByStatus = await prisma.event.groupBy({
+      by: ['status'],
+      where,
+      _count: {
+        _all: true
+      }
+    });
+    
+    // 6. Formater les résultats
+    const stats = {
+      totals,
       financials: {
-        totalRevenue: totalRevenue._sum.revenue || 0,
-        averageRevenue: parseFloat(avgRevenue.toFixed(2)),
-        utilizationRate: parseFloat(utilizationRate)
+        totalRevenue: financialAgg._sum.revenue || 0,
+        averagePrice: financialAgg._avg.price || 0,
+        averageParticipants: financialAgg._avg.participants || 0
       },
       participants: {
-        total: totalPart,
-        totalCapacity: totalCap,
-        averageParticipants: total > 0 ? parseFloat((totalPart / total).toFixed(1)) : 0
+        total: participantAgg._sum.participants || 0,
+        totalCapacity: participantAgg._sum.capacity || 0,
+        utilizationRate: participantAgg._sum.capacity > 0 
+          ? ((participantAgg._sum.participants || 0) / participantAgg._sum.capacity * 100).toFixed(1)
+          : 0
       },
       breakdown: {
-        byCategory: eventsByCategory.reduce((acc, curr) => {
-          acc[curr.category] = {
-            count: curr._count,
-            participants: curr._sum.participants || 0,
-            revenue: curr._sum.revenue || 0
+        byCategory: eventsByCategory.reduce((acc, item) => {
+          acc[item.category || 'Non catégorisé'] = {
+            count: item._count._all,
+            participants: item._sum.participants || 0,
+            revenue: item._sum.revenue || 0
           };
           return acc;
         }, {}),
-        byStatus: eventsByStatus.reduce((acc, curr) => {
-          acc[curr.status] = curr._count;
+        byStatus: eventsByStatus.reduce((acc, item) => {
+          acc[item.status] = item._count._all;
           return acc;
         }, {})
-      },
-      featuredEvents: featuredEvents.map(formatEventResponse),
-      recentEvents: recentEvents.map(formatEventResponse)
+      }
     };
-
+    
+    console.log('📊 getEventStats - Succès');
+    
     res.json({
       success: true,
-      data: stats
+      data: stats,
+      timestamp: new Date().toISOString()
     });
+    
   } catch (error) {
-    console.error('Erreur getEventStats:', error);
-    next(error);
+    console.error('❌ Erreur dans getEventStats:', error);
+    
+    // Envoyer une erreur détaillée
+    const errorResponse = {
+      success: false,
+      error: 'Erreur lors du calcul des statistiques',
+      message: error.message
+    };
+    
+    // Ajouter des détails en développement
+    if (process.env.NODE_ENV === 'development') {
+      errorResponse.details = {
+        code: error.code,
+        meta: error.meta,
+        stack: error.stack
+      };
+    }
+    
+    res.status(500).json(errorResponse);
   }
 };
 
