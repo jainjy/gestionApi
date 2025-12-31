@@ -560,6 +560,4 @@ app.use((error, req, res, next) => {
 server.listen(PORT, async () => {
   console.log(`🚀 Serveur démarré sur le port: ${PORT}`);
   console.log(`🔌 WebSocket disponible sur: ws://localhost:${PORT}`);
-  console.log(`🏥 Route santé: http://localhost:${PORT}/health`);
-  console.log(`🎯 Routes expériences activées: /api/experiences/*`);
 });
