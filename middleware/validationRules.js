@@ -1,7 +1,7 @@
-// middleware/validationRules.js
+// En haut du fichier, ajouter :
 const { body } = require('express-validator');
+const validator = require('validator'); // Ajouter cette ligne
 
-// Règles de validation pour les événements
 const eventValidationRules = [
   // Champs requis
   body('title')
@@ -45,6 +45,27 @@ const eventValidationRules = [
     .withMessage('La catégorie est requise')
     .isLength({ max: 100 })
     .withMessage('La catégorie ne doit pas dépasser 100 caractères'),
+  
+  // Champs optionnels supplémentaires
+  body('address')
+    .optional()
+    .isLength({ max: 255 })
+    .withMessage('L\'adresse ne doit pas dépasser 255 caractères'),
+  
+  body('city')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('La ville ne doit pas dépasser 100 caractères'),
+  
+  body('postalCode')
+    .optional()
+    .isLength({ max: 20 })
+    .withMessage('Le code postal ne doit pas dépasser 20 caractères'),
+  
+  body('subCategory')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('La sous-catégorie ne doit pas dépasser 100 caractères'),
   
   // Champs numériques
   body('capacity')
@@ -90,16 +111,28 @@ const eventValidationRules = [
     .isIn(['EUR', 'USD', 'MGA', 'GBP', 'JPY', 'CNY'])
     .withMessage('Devise invalide'),
   
- body('contactEmail')
-  .optional()
-  .custom((value) => {
-    if (value && value.trim() !== '') {
-      return validator.isEmail(value);
-    }
-    return true;
-  })
-  .withMessage('Email invalide')
-  .normalizeEmail(),
+  // CORRIGÉ : Validation email avec validator
+  body('contactEmail')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '') {
+        if (!validator.isEmail(value)) {
+          throw new Error('Email invalide');
+        }
+      }
+      return true;
+    })
+    .normalizeEmail(),
+  
+  body('contactPhone')
+    .optional()
+    .isLength({ max: 20 })
+    .withMessage('Le téléphone ne doit pas dépasser 20 caractères'),
+  
+  body('organizer')
+    .optional()
+    .isLength({ max: 255 })
+    .withMessage('L\'organisateur ne doit pas dépasser 255 caractères'),
   
   // URL
   body('website')
@@ -112,96 +145,165 @@ const eventValidationRules = [
     .isURL()
     .withMessage('URL d\'image invalide'),
   
-  // Tableaux
+  // Tableaux - VERSION CORRIGÉE
   body('tags')
     .optional()
     .custom((value) => {
+      if (!value) return true; // Champ vide est accepté
+      
       if (typeof value === 'string') {
         try {
           const parsed = JSON.parse(value);
-          return Array.isArray(parsed);
-        } catch {
-          return true; // Laisser passer, sera parsé dans le controller
+          if (!Array.isArray(parsed)) {
+            throw new Error('Les tags doivent être un tableau JSON');
+          }
+          return true;
+        } catch (error) {
+          throw new Error('Format JSON invalide pour les tags');
         }
       }
-      return Array.isArray(value);
-    })
-    .withMessage('Les tags doivent être un tableau'),
+      
+      if (!Array.isArray(value)) {
+        throw new Error('Les tags doivent être un tableau');
+      }
+      return true;
+    }),
   
   body('images')
     .optional()
     .custom((value) => {
+      if (!value) return true;
+      
       if (typeof value === 'string') {
         try {
           const parsed = JSON.parse(value);
-          return Array.isArray(parsed);
-        } catch {
+          if (!Array.isArray(parsed)) {
+            throw new Error('Les images doivent être un tableau JSON');
+          }
           return true;
+        } catch (error) {
+          throw new Error('Format JSON invalide pour les images');
         }
       }
-      return Array.isArray(value);
-    })
-    .withMessage('Les images doivent être un tableau'),
+      
+      if (!Array.isArray(value)) {
+        throw new Error('Les images doivent être un tableau');
+      }
+      return true;
+    }),
   
   body('highlights')
     .optional()
     .custom((value) => {
+      if (!value) return true;
+      
       if (typeof value === 'string') {
         try {
           const parsed = JSON.parse(value);
-          return Array.isArray(parsed);
-        } catch {
+          if (!Array.isArray(parsed)) {
+            throw new Error('Les highlights doivent être un tableau JSON');
+          }
           return true;
+        } catch (error) {
+          throw new Error('Format JSON invalide pour les highlights');
         }
       }
-      return Array.isArray(value);
-    })
-    .withMessage('Les highlights doivent être un tableau'),
+      
+      if (!Array.isArray(value)) {
+        throw new Error('Les highlights doivent être un tableau');
+      }
+      return true;
+    }),
   
   body('targetAudience')
     .optional()
     .custom((value) => {
+      if (!value) return true;
+      
       if (typeof value === 'string') {
         try {
           const parsed = JSON.parse(value);
-          return Array.isArray(parsed);
-        } catch {
+          if (!Array.isArray(parsed)) {
+            throw new Error('Le public cible doit être un tableau JSON');
+          }
           return true;
+        } catch (error) {
+          throw new Error('Format JSON invalide pour le public cible');
         }
       }
-      return Array.isArray(value);
-    })
-    .withMessage('Le public cible doit être un tableau'),
+      
+      if (!Array.isArray(value)) {
+        throw new Error('Le public cible doit être un tableau');
+      }
+      return true;
+    }),
   
   body('includes')
     .optional()
     .custom((value) => {
+      if (!value) return true;
+      
       if (typeof value === 'string') {
         try {
           const parsed = JSON.parse(value);
-          return Array.isArray(parsed);
-        } catch {
+          if (!Array.isArray(parsed)) {
+            throw new Error('Les inclusions doivent être un tableau JSON');
+          }
           return true;
+        } catch (error) {
+          throw new Error('Format JSON invalide pour les inclusions');
         }
       }
-      return Array.isArray(value);
-    })
-    .withMessage('Les inclusions doivent être un tableau'),
+      
+      if (!Array.isArray(value)) {
+        throw new Error('Les inclusions doivent être un tableau');
+      }
+      return true;
+    }),
   
   body('notIncludes')
     .optional()
     .custom((value) => {
+      if (!value) return true;
+      
       if (typeof value === 'string') {
         try {
           const parsed = JSON.parse(value);
-          return Array.isArray(parsed);
-        } catch {
+          if (!Array.isArray(parsed)) {
+            throw new Error('Les exclusions doivent être un tableau JSON');
+          }
           return true;
+        } catch (error) {
+          throw new Error('Format JSON invalide pour les exclusions');
         }
       }
-      return Array.isArray(value);
-    })
-    .withMessage('Les exclusions doivent être un tableau'),
+      
+      if (!Array.isArray(value)) {
+        throw new Error('Les exclusions doivent être un tableau');
+      }
+      return true;
+    }),
+  
+  // Champs texte supplémentaires
+  body('duration')
+    .optional()
+    .isLength({ max: 50 })
+    .withMessage('La durée ne doit pas dépasser 50 caractères'),
+  
+  body('cancellationPolicy')
+    .optional()
+    .isLength({ max: 500 })
+    .withMessage('La politique d\'annulation ne doit pas dépasser 500 caractères'),
+  
+  body('refundPolicy')
+    .optional()
+    .isLength({ max: 500 })
+    .withMessage('La politique de remboursement ne doit pas dépasser 500 caractères'),
+  
+  body('requirements')
+    .optional()
+    .isLength({ max: 1000 })
+    .withMessage('Les prérequis ne doivent pas dépasser 1000 caractères'),
   
   // Dates optionnelles
   body('registrationDeadline')
@@ -212,7 +314,13 @@ const eventValidationRules = [
   body('earlyBirdDeadline')
     .optional()
     .isISO8601()
-    .withMessage('Format de date early bird invalide')
+    .withMessage('Format de date early bird invalide'),
+  
+  // Validation booléenne
+  body('featured')
+    .optional()
+    .isBoolean()
+    .withMessage('Le champ featured doit être un booléen')
 ];
 
 // Règles de validation pour les découvertes

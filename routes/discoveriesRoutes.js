@@ -2,28 +2,50 @@
 const express = require('express');
 const router = express.Router();
 const discoveriesController = require('../controllers/discoveriesController');
-const { discoveryValidationRules, toggleFeaturedRules } = require('../middleware/validationRules');
-const validationMiddleware = require('../middleware/validation');
 const { authenticateToken } = require('../middleware/auth');
+const validationMiddleware = require('../middleware/validation');
+
+// Importer vos règles de validation existantes
+const { 
+  discoveryValidationRules, 
+  toggleFeaturedRules 
+} = require('../middleware/validationRules');
 
 // Routes GET (publiques)
 router.get('/', discoveriesController.getAllDiscoveries);
-// discoveriesRoutes.js - MODIFIEZ CETTE LIGNE
-router.get('/stats', authenticateToken, discoveriesController.getDiscoveryStats);
 router.get('/search/tags', discoveriesController.searchByTags);
 router.get('/nearby', discoveriesController.getNearbyDiscoveries);
-router.get('/export', discoveriesController.exportDiscoveries);
 router.get('/:id', discoveriesController.getDiscoveryById);
+
+// Routes GET avec authentification
+router.get('/my/discoveries', 
+  authenticateToken, 
+  discoveriesController.getMyDiscoveries
+);
+
+router.get('/user/:userId/stats', 
+  authenticateToken, 
+  discoveriesController.getUserDiscoveryStats
+);
+
+router.get('/stats/global',
+  authenticateToken,
+  discoveriesController.getDiscoveryStats
+);
+
+router.get('/export/csv',
+  authenticateToken,
+  discoveriesController.exportDiscoveries
+);
 
 // Routes POST avec authentification et validation
 router.post('/',
   authenticateToken,
-  discoveryValidationRules,  // Règles de validation
-  validationMiddleware,      // Middleware qui vérifie les erreurs
+  discoveryValidationRules,  // Vos règles existantes
+  validationMiddleware,      // Middleware de validation
   discoveriesController.createDiscovery
 );
 
-// Routes POST pour recherche
 router.post('/search',
   authenticateToken,
   discoveriesController.searchDiscoveries
@@ -32,8 +54,8 @@ router.post('/search',
 // Routes PUT avec authentification et validation
 router.put('/:id',
   authenticateToken,
-  discoveryValidationRules,  // Règles de validation
-  validationMiddleware,      // Middleware qui vérifie les erreurs
+  discoveryValidationRules,  // Vos règles existantes
+  validationMiddleware,      // Middleware de validation
   discoveriesController.updateDiscovery
 );
 
@@ -43,22 +65,23 @@ router.delete('/:id',
   discoveriesController.deleteDiscovery
 );
 
-// Routes PATCH pour featured avec validation
+// Routes PATCH avec authentification et validation
 router.patch('/:id/featured',
   authenticateToken,
-  toggleFeaturedRules,       // Règles de validation
-  validationMiddleware,      // Middleware qui vérifie les erreurs
+  toggleFeaturedRules,       // Vos règles existantes
+  validationMiddleware,      // Middleware de validation
   discoveriesController.toggleFeatured
 );
 
-// Routes PATCH pour status
+// Routes PATCH avec authentification (sans validation spécifique)
 router.patch('/:id/status',
   authenticateToken,
   discoveriesController.updateDiscoveryStatus
 );
 
-// Routes PATCH pour rating (publique)
+// Routes PATCH pour rating (avec ou sans auth selon vos besoins)
 router.patch('/:id/rating',
+  authenticateToken,  // À commenter si vous voulez que ce soit public
   discoveriesController.updateDiscoveryRating
 );
 
