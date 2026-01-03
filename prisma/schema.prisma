@@ -784,27 +784,33 @@ model Demande {
 //DEMANDE DES ARTISAN
 //===================
 model DemandeArtisan {
-  userId           String
-  demandeId        Int
-  accepte          Boolean?
-  devis            String?
-  devisFileUrl     String?
-  devisFileName    String?
-  devisFileType    String?
-  rdv              DateTime?
-  rdvNotes         String?
-  factureFileUrl   String?
-  factureFileName  String?
-  factureFileType  String?
-  factureMontant   Float?
-  factureStatus    String?   @default("en_attente")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime? @updatedAt
-  travauxTermines  Boolean?  @default(false)
-  factureConfirmee Boolean?  @default(false)
-  recruited        Boolean?
-  user             User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
-  demande          Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
+  userId                   String
+  demandeId                Int
+  accepte                  Boolean?
+  devis                    String?
+  devisFileUrl             String?
+  devisFileName            String?
+  devisFileType            String?
+  rdv                      DateTime?
+  rdvNotes                 String?
+  factureFileUrl           String?
+  factureFileName          String?
+  factureFileType          String?
+  factureMontant           Float?
+  factureStatus            String?   @default("en_attente")
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime? @updatedAt
+  // AJOUTER: Pour paiement direct
+  paiementMontant          Float?
+  paiementMode             String? // espèces, virement, lydia, etc.
+  clientConfirmePaiement   Boolean?  @default(false) // Client marque "J'ai payé"
+  artisanConfirmeReception Boolean?  @default(false) // Artisan confirme "J'ai reçu"
+  clientConfirmeTravaux    Boolean?  @default(false) // Client confirme travaux terminés
+  travauxTermines          Boolean?  @default(false)
+  factureConfirmee         Boolean?  @default(false)
+  recruited                Boolean?
+  user                     User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
+  demande                  Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
   @@id([userId, demandeId])
   @@index([userId])
@@ -893,9 +899,9 @@ model Order {
   idPrestataire String // propriétaire du produit/service
 
   // Données commande
-  items       Json
-  totalAmount Float
-  status      String @default("pending")
+  items           Json
+  totalAmount     Float
+  status          String  @default("pending")
   shippingAddress Json?
   // Livraison
   deliveryAddress String?

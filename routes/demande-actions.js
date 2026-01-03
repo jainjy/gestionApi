@@ -869,5 +869,336 @@ router.post("/:demandeId/confirmer-travaux-termines", authenticateToken, async (
     });
   }
 });
+// POST /api/demande-actions/:demandeId/confirmer-paiement-client
+router.post("/:demandeId/confirmer-paiement-client", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+    const { montant, modePaiement } = req.body; // "espèces", "virement", "lydia", etc.
 
+    // Vérifier que l'utilisateur est le client de cette demande
+    const demande = await prisma.demande.findUnique({
+      where: { id: parseInt(demandeId) },
+      include: {
+        artisans: {
+          where: { recruited: true }
+        }
+      }
+    });
+
+    if (!demande || demande.createdById !== userId) {
+      return res.status(403).json({
+        error: "Vous n'êtes pas autorisé à confirmer ce paiement",
+      });
+    }
+
+    // Vérifier qu'un artisan est sélectionné
+    const artisanRecrute = demande.artisans[0];
+    if (!artisanRecrute) {
+      return res.status(400).json({
+        error: "Aucun artisan sélectionné pour cette demande",
+      });
+    }
+
+    // Mettre à jour la confirmation du paiement client
+    const updatedDemandeArtisan = await prisma.demandeArtisan.update({
+      where: {
+        userId_demandeId: {
+          userId: artisanRecrute.userId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+      data: {
+        clientConfirmePaiement: true,
+        paiementMontant: parseFloat(montant),
+        paiementMode: modePaiement,
+      },
+    });
+
+    // Créer un message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      const message = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: `Paiement confirmé par le client - ${montant}€ (${modePaiement})`,
+          type: "SYSTEM",
+          evenementType: "PAIEMENT_CONFIRME_CLIENT",
+        },
+      });
+      emitNewMessage(req, message);
+    }
+
+    res.json({
+      success: true,
+      message: "Paiement confirmé avec succès",
+      paiement: {
+        montant: parseFloat(montant),
+        mode: modePaiement,
+        confirmeParClient: true,
+      },
+    });
+  } catch (error) {
+    console.error("Erreur confirmation paiement client:", error);
+    res.status(500).json({
+      error: "Erreur lors de la confirmation du paiement",
+    });
+  }
+});
+// POST /api/demande-actions/:demandeId/confirmer-reception-paiement
+router.post("/:demandeId/confirmer-reception-paiement", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+    const { montantRecu } = req.body;
+
+    // Vérifier que l'utilisateur est artisan sur cette demande
+    const demandeArtisan = await prisma.demandeArtisan.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+        userId: userId,
+        recruited: true,
+      },
+    });
+
+    if (!demandeArtisan) {
+      return res.status(403).json({
+        error: "Vous n'êtes pas artisan sélectionné sur cette demande",
+      });
+    }
+
+    // Vérifier que le client a confirmé le paiement
+    if (!demandeArtisan.clientConfirmePaiement) {
+      return res.status(400).json({
+        error: "Le client n'a pas encore confirmé le paiement",
+      });
+    }
+
+    // Mettre à jour la confirmation de réception
+    const updatedDemandeArtisan = await prisma.demandeArtisan.update({
+      where: {
+        userId_demandeId: {
+          userId: userId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+      data: {
+        artisanConfirmeReception: true,
+        // Optionnel: enregistrer le montant effectivement reçu
+        paiementMontant: montantRecu ? parseFloat(montantRecu) : demandeArtisan.paiementMontant,
+      },
+    });
+
+    // Créer un message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      const message = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: "Paiement reçu et confirmé par l'artisan",
+          type: "SYSTEM",
+          evenementType: "PAIEMENT_RECU_ARTISAN",
+        },
+      });
+      emitNewMessage(req, message);
+    }
+
+    res.json({
+      success: true,
+      message: "Réception du paiement confirmée avec succès",
+      paiement: {
+        confirmeParArtisan: true,
+        montant: updatedDemandeArtisan.paiementMontant,
+      },
+    });
+  } catch (error) {
+    console.error("Erreur confirmation réception paiement:", error);
+    res.status(500).json({
+      error: "Erreur lors de la confirmation de la réception",
+    });
+  }
+});
+// POST /api/demande-actions/:demandeId/terminer-travaux
+router.post("/:demandeId/terminer-travaux", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+
+    // Vérifier que l'utilisateur est artisan sur cette demande
+    const demandeArtisan = await prisma.demandeArtisan.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+        userId: userId,
+        recruited: true,
+      },
+    });
+
+    if (!demandeArtisan) {
+      return res.status(403).json({
+        error: "Vous n'êtes pas artisan sélectionné sur cette demande",
+      });
+    }
+
+    // Vérifier que le paiement a été confirmé par les deux parties
+    if (!demandeArtisan.clientConfirmePaiement || !demandeArtisan.artisanConfirmeReception) {
+      return res.status(400).json({
+        error: "Le paiement doit être confirmé par les deux parties avant de terminer les travaux",
+      });
+    }
+
+    // Marquer les travaux comme terminés
+    const updatedDemandeArtisan = await prisma.demandeArtisan.update({
+      where: {
+        userId_demandeId: {
+          userId: userId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+      data: {
+        travauxTermines: true,
+      },
+    });
+
+    // Créer un message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      const message = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: "Travaux marqués comme terminés par l'artisan",
+          type: "SYSTEM",
+          evenementType: "TRAVAUX_TERMINES",
+        },
+      });
+      emitNewMessage(req, message);
+    }
+
+    res.json({
+      success: true,
+      message: "Travaux marqués comme terminés avec succès",
+      travauxTermines: true,
+    });
+  } catch (error) {
+    console.error("Erreur fin des travaux:", error);
+    res.status(500).json({
+      error: "Erreur lors du marquage des travaux comme terminés",
+    });
+  }
+});// POST /api/demande-actions/:demandeId/confirmer-travaux-termines-client
+router.post("/:demandeId/confirmer-travaux-termines-client", authenticateToken, async (req, res) => {
+  try {
+    const { demandeId } = req.params;
+    const userId = req.user.id;
+    const { confirmer } = req.body; // true ou false
+
+    // Vérifier que l'utilisateur est le client de cette demande
+    const demande = await prisma.demande.findUnique({
+      where: { id: parseInt(demandeId) },
+      include: {
+        artisans: {
+          where: { recruited: true }
+        }
+      }
+    });
+
+    if (!demande || demande.createdById !== userId) {
+      return res.status(403).json({
+        error: "Vous n'êtes pas autorisé à confirmer les travaux",
+      });
+    }
+
+    const artisanRecrute = demande.artisans[0];
+    if (!artisanRecrute) {
+      return res.status(400).json({
+        error: "Aucun artisan sélectionné pour cette demande",
+      });
+    }
+
+    // Vérifier que les travaux sont marqués comme terminés par l'artisan
+    if (!artisanRecrute.travauxTermines) {
+      return res.status(400).json({
+        error: "L'artisan n'a pas encore marqué les travaux comme terminés",
+      });
+    }
+
+    // Mettre à jour la confirmation client
+    const updatedDemandeArtisan = await prisma.demandeArtisan.update({
+      where: {
+        userId_demandeId: {
+          userId: artisanRecrute.userId,
+          demandeId: parseInt(demandeId),
+        },
+      },
+      data: {
+        clientConfirmeTravaux: confirmer,
+      },
+    });
+
+    // Mettre à jour le statut global de la demande
+    const updatedDemande = await prisma.demande.update({
+      where: {
+        id: parseInt(demandeId),
+      },
+      data: {
+        statut: confirmer ? "terminée" : "en_cours",
+      },
+    });
+
+    // Créer un message système
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        demandeId: parseInt(demandeId),
+      },
+    });
+
+    if (conversation) {
+      const message = confirmer 
+        ? "Travaux confirmés comme terminés par le client - Demande clôturée" 
+        : "Travaux non confirmés - Veuillez contacter l'artisan pour plus d'informations";
+      
+      const messages = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          expediteurId: userId,
+          contenu: message,
+          type: "SYSTEM",
+          evenementType: confirmer
+            ? "TRAVAUX_CONFIRMES_CLIENT"
+            : "TRAVAUX_NON_CONFIRMES_CLIENT",
+        },
+      });
+      emitNewMessage(req, messages);
+    }
+
+    res.json({
+      success: true,
+      message: confirmer ? "Travaux confirmés comme terminés" : "Confirmation refusée",
+      statut: updatedDemande.statut,
+      demandeTerminee: confirmer,
+    });
+  } catch (error) {
+    console.error("Erreur confirmation travaux client:", error);
+    res.status(500).json({
+      error: "Erreur lors de la confirmation des travaux",
+    });
+  }
+});
 module.exports = router;
