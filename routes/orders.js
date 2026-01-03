@@ -101,39 +101,42 @@ router.post('/pro/migrate-product-types', async (req, res) => {
     });
   }
 });
+
 /**
  * 👨‍🔧 GET /api/orders/pro - Récupérer TOUTES les commandes - VERSION ULTRA ROBUSTE
  */
 
-router.get("/pro", authenticateToken, async (req, res) => {
+router.get('/pro', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 50, status, productType } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const prestataireId = req.user.id; // ID du prestataire connecté
 
-    console.log(`🔍 Récupération commandes pro pour prestataire:`, { 
-      prestataireId,
-      productType, 
-      status,
-      page,
-      limit 
-    });
+    let whereClause = {};
 
-    // Construire le filtre de base avec le prestataireId
-    const whereClause = {
-      idPrestataire: prestataireId // Filtrer par le prestataire connecté
-    };
+    // 🔐 FILTRAGE PAR RÔLE
+    if (req.user.role === 'admin') {
+      // Admin → aucune restriction (voit tout)
+      whereClause = {};
+    } else if (req.user.role === 'professional') {
+      // Pro → uniquement ses commandes
+      whereClause.idPrestataire = req.user.id;
+    } else {
+      // Autres rôles → refus
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé'
+      });
+    }
 
-    // Ajouter le filtre de statut si spécifié
+    // 🎯 Filtre par statut
     if (status && status !== 'all') {
       whereClause.status = status;
     }
 
-    // Récupérer les commandes avec relations utilisateur
-    const allOrders = await prisma.order.findMany({
+    const orders = await prisma.order.findMany({
       where: whereClause,
       include: {
-        user: { // Relation avec le client
+        user: {
           select: {
             id: true,
             firstName: true,
@@ -141,73 +144,43 @@ router.get("/pro", authenticateToken, async (req, res) => {
             email: true,
             phone: true,
             companyName: true,
-          }
-        }
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
 
-    // Fonction pour obtenir le productType d'un item
-    const getItemProductType = (item) => {
-      if (item.productType) return item.productType;
-      return deduceProductTypeFromName(item.name);
-    };
+    // 🔎 Filtre productType (optionnel)
+    const filteredOrders = productType && productType !== 'all'
+      ? orders.filter(order =>
+          order.items?.some(item => item.productType === productType)
+        )
+      : orders;
 
-    // Filtrer par productType si spécifié
-    let filteredOrders = allOrders;
-    if (productType && productType !== 'all') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.items || !Array.isArray(order.items)) return false;
-        
-        return order.items.some(item => {
-          const itemProductType = getItemProductType(item);
-          return itemProductType === productType;
-        });
-      });
-    }
-
-    console.log(`📊 Résultats pour prestataire ${prestataireId}: ${allOrders.length} -> ${filteredOrders.length} commandes`);
-
-    // Pagination
-    const paginatedOrders = filteredOrders.slice(skip, skip + parseInt(limit));
-
-    // Filtrer les items si un productType spécifique est demandé
-    const finalOrders = paginatedOrders.map(order => {
-      let displayItems = order.items;
-      if (productType && productType !== 'all') {
-        displayItems = order.items.filter(item => 
-          getItemProductType(item) === productType
-        );
-      }
-
-      return {
-        ...order,
-        items: displayItems
-      };
-    });
-
-    console.log(`✅ ${finalOrders.length} commandes récupérées pour prestataire ${prestataireId}`);
+    // 📄 Pagination
+    const paginatedOrders = filteredOrders.slice(
+      skip,
+      skip + parseInt(limit)
+    );
 
     res.json({
       success: true,
-      orders: finalOrders,
+      orders: paginatedOrders,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         total: filteredOrders.length,
-        pages: Math.ceil(filteredOrders.length / parseInt(limit))
+        pages: Math.ceil(filteredOrders.length / limit),
       },
-      filters: {
-        status: status || 'all',
-        productType: productType || 'all'
-      }
     });
+
   } catch (error) {
-    console.error('💥 Erreur récupération commandes pro:', error);
+    console.error('💥 Erreur récupération commandes:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des commandes',
-      error: error.message
     });
   }
 });
@@ -1348,4 +1321,5 @@ router.get('/pro/migration-preview', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
 module.exports = router
