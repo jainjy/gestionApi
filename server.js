@@ -274,10 +274,16 @@ app.use('/test',require('./routes/user'))
 // AJOUTEZ ICI les nouvelles routes ↓
 app.use("/api/pro/formations", require("./routes/formations")); // <-- AJOUTEZ CETTE LIGNE
 
-// 🆕 AJOUTEZ CETTE LIGNE POUR LES FORMATIONS PUBLIQUES
+// Routes publiques des formations
 app.use("/api/formations", require("./routes/formations-public"));
+// Assurez-vous d'avoir cette ligne
+const candidaturesRoutes = require('./routes/candidatures');
 
-const formationsPublicRoutes = require('./routes/formations-public');
+// Et cette ligne pour monter la route
+app.use('/api/candidatures', candidaturesRoutes);
+
+// Routes protégées des formations (pour les professionnels)
+app.use("/api/pro/formations", require("./routes/formations"));
 
 // Dans server.js, ajoutez cette ligne avec les autres routes :
 app.use("/api/emploi", require("./routes/emploi"));

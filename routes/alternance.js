@@ -1009,52 +1009,106 @@ router.put('/:id', alternanceValidation, validationMiddleware, async (req, res) 
 
 // DELETE alternance/stage - CORRIGÉ
 router.delete('/:id', async (req, res) => {
+  console.log('=== DELETE ALTERNANCE START ===');
+  console.log('ID:', req.params.id);
+  console.log('User ID:', req.user.id);
+  
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
-    console.log(`🗑️ Deleting alternance ${id} for user ${userId}`);
+    // Convertir l'ID
+    const alternanceId = parseInt(id);
+    if (isNaN(alternanceId)) {
+      console.log('❌ ID invalide:', id);
+      return res.status(400).json({ 
+        success: false,
+        error: 'ID invalide' 
+      });
+    }
 
-    // Check if alternance belongs to pro
-    const existingAlternance = await prisma.alternanceStage.findFirst({
+    console.log(`🔍 Vérification alternance ${alternanceId} pour user ${userId}`);
+
+    // Vérifier si l'alternance existe et appartient à l'utilisateur
+    const alternance = await prisma.alternanceStage.findFirst({
       where: {
-        id: parseInt(id),
+        id: alternanceId,
         proId: userId
       }
     });
 
-    if (!existingAlternance) {
+    if (!alternance) {
+      console.log(`❌ Alternance ${alternanceId} non trouvée ou non autorisée`);
       return res.status(404).json({ 
         success: false,
-        error: 'Offre not found or unauthorized' 
+        error: 'Offre non trouvée ou non autorisée' 
       });
     }
 
-    // Supprimer d'abord les candidatures associées
-    await prisma.candidature.deleteMany({
+    console.log(`✅ Alternance trouvée: "${alternance.title}"`);
+
+    // 🔍 Vérifier d'abord s'il y a des candidatures
+    const candidaturesCount = await prisma.candidature.count({
       where: {
-        offreId: parseInt(id),
-        offreType: 'alternance'
+        alternanceStageId: alternanceId,
+        offreType: 'ALTERNANCE'
       }
     });
 
-    // Delete alternance
+    console.log(`📊 Candidatures associées: ${candidaturesCount}`);
+
+    // Supprimer les candidatures associées si elles existent
+    if (candidaturesCount > 0) {
+      console.log(`🗑️ Suppression des ${candidaturesCount} candidatures...`);
+      const deleteResult = await prisma.candidature.deleteMany({
+        where: {
+          alternanceStageId: alternanceId,
+          offreType: 'ALTERNANCE'
+        }
+      });
+      console.log(`✅ Candidatures supprimées: ${deleteResult.count}`);
+    } else {
+      console.log('ℹ️ Aucune candidature à supprimer');
+    }
+
+    // Supprimer l'alternance
+    console.log(`🗑️ Suppression de l'alternance ${alternanceId}...`);
     await prisma.alternanceStage.delete({
-      where: { id: parseInt(id) }
+      where: { id: alternanceId }
     });
 
-    console.log(`✅ Alternance ${id} deleted successfully`);
+    console.log(`✅ Alternance ${alternanceId} supprimée avec succès`);
+    console.log('=== DELETE ALTERNANCE SUCCESS ===');
 
     res.json({ 
       success: true,
-      message: 'Offre supprimée avec succès' 
+      message: 'Offre supprimée avec succès',
+      deletedId: alternanceId
     });
+
   } catch (error) {
-    console.error('❌ Error deleting alternance:', error);
-    res.status(500).json({ 
+    console.error('💥 ERREUR suppression alternance:');
+    console.error('Message:', error.message);
+    console.error('Code:', error.code);
+    console.error('Meta:', error.meta);
+    console.error('Stack:', error.stack);
+    console.log('=== DELETE ALTERNANCE ERROR ===');
+
+    let errorMessage = 'Erreur lors de la suppression';
+    let statusCode = 500;
+
+    if (error.code === 'P2025') {
+      errorMessage = 'Offre non trouvée';
+      statusCode = 404;
+    } else if (error.code === 'P2003') {
+      errorMessage = 'Impossible de supprimer (contrainte de clé étrangère)';
+      statusCode = 400;
+    }
+
+    res.status(statusCode).json({ 
       success: false,
-      error: 'Error deleting alternance',
-      message: error.message
+      error: errorMessage,
+      debug: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -1220,24 +1274,32 @@ router.get('/stats/summary', async (req, res) => {
 });
 
 // GET export CSV - CORRIGÉ
-router.get('/export/csv', async (req, res) => {
+// ✅ GET export CSV - VERSION CORRIGÉE
+router.get('/export/csv', authenticateToken, async (req, res) => {
+  console.log('=== EXPORT CSV START ===');
+  console.log('User ID:', req.user.id);
+  
   try {
     const userId = req.user.id;
     
     console.log(`📥 Exporting CSV for user ${userId}`);
 
+    // Récupérer les alternances de l'utilisateur
     const alternances = await prisma.alternanceStage.findMany({
       where: { proId: userId },
       orderBy: { createdAt: 'desc' }
     });
 
+    console.log(`✅ Found ${alternances.length} alternances for export`);
+
     // Format CSV
     const csvRows = [];
     
     // Headers
-    csvRows.push([
+    const headers = [
       'ID',
       'Titre',
+      'Description',
       'Type',
       'Niveau d\'étude',
       'Durée',
@@ -1252,21 +1314,50 @@ router.get('/export/csv', async (req, res) => {
       'Urgent',
       'Candidatures',
       'Vues',
-      'Date création'
-    ].join(','));
+      'Date création',
+      'Missions',
+      'Compétences',
+      'Avantages'
+    ];
+    
+    csvRows.push(headers.join(','));
 
     // Data rows
     for (const alternance of alternances) {
-      const candidaturesCount = await prisma.candidature.count({
-        where: {
-          offreId: alternance.id,
-          offreType: 'alternance'
-        }
-      });
+      console.log(`Processing alternance ${alternance.id}: ${alternance.title}`);
       
+      // Compter les candidatures
+      let candidaturesCount = 0;
+      try {
+        candidaturesCount = await prisma.candidature.count({
+          where: {
+            alternanceStageId: alternance.id,
+            offreType: 'ALTERNANCE'
+          }
+        });
+        console.log(`  Candidatures: ${candidaturesCount}`);
+      } catch (error) {
+        console.error(`  Error counting candidatures: ${error.message}`);
+      }
+      
+      // Formatter les tableaux en string
+      const missionsStr = Array.isArray(alternance.missions) 
+        ? alternance.missions.filter(m => m && m.trim() !== '').join(' | ')
+        : '';
+      
+      const competencesStr = Array.isArray(alternance.competences)
+        ? alternance.competences.filter(c => c && c.trim() !== '').join(' | ')
+        : '';
+      
+      const avantagesStr = Array.isArray(alternance.avantages)
+        ? alternance.avantages.filter(a => a && a.trim() !== '').join(' | ')
+        : '';
+      
+      // Créer la ligne CSV
       const row = [
         alternance.id,
         `"${(alternance.title || '').replace(/"/g, '""')}"`,
+        `"${(alternance.description || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
         alternance.type || '',
         alternance.niveauEtude || '',
         alternance.duree || '',
@@ -1281,24 +1372,38 @@ router.get('/export/csv', async (req, res) => {
         alternance.urgent ? 'Oui' : 'Non',
         candidaturesCount,
         alternance.vues || 0,
-        alternance.createdAt.toISOString().split('T')[0]
+        alternance.createdAt.toISOString().split('T')[0],
+        `"${missionsStr.replace(/"/g, '""')}"`,
+        `"${competencesStr.replace(/"/g, '""')}"`,
+        `"${avantagesStr.replace(/"/g, '""')}"`
       ];
       
       csvRows.push(row.join(','));
     }
 
     const csvString = csvRows.join('\n');
+    
+    console.log(`✅ CSV created with ${alternances.length} rows`);
+    console.log('CSV preview:', csvString.substring(0, 500) + '...');
 
-    console.log(`✅ CSV exported with ${alternances.length} rows`);
-
-    res.setHeader('Content-Type', 'text/csv');
+    // Définir les headers
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename=offres-alternance-${Date.now()}.csv`);
-    res.send(csvString);
+    
+    // Envoyer la réponse
+    res.status(200).send(csvString);
+    
+    console.log('=== EXPORT CSV SUCCESS ===');
+
   } catch (error) {
-    console.error('❌ Error exporting CSV:', error);
+    console.error('💥 ERREUR export CSV:');
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    console.log('=== EXPORT CSV ERROR ===');
+
     res.status(500).json({ 
       success: false,
-      error: 'Error exporting CSV',
+      error: 'Erreur lors de l\'export CSV',
       message: error.message
     });
   }
@@ -1344,6 +1449,287 @@ router.get('/test', async (req, res) => {
       success: false,
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// ✅ GET candidatures pour une offre d'alternance
+router.get('/:id/candidatures', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    
+    console.log(`📋 Fetching candidatures for alternance ${id} by user ${userId}`);
+    
+    // Vérifier que l'offre appartient à l'utilisateur
+    const alternance = await prisma.alternanceStage.findFirst({
+      where: {
+        id: parseInt(id),
+        proId: userId
+      }
+    });
+    
+    if (!alternance) {
+      return res.status(404).json({
+        success: false,
+        error: 'Offre non trouvée ou non autorisée'
+      });
+    }
+    
+    // Récupérer les candidatures
+    const candidatures = await prisma.candidature.findMany({
+      where: {
+        alternanceStageId: parseInt(id),
+        offreType: 'ALTERNANCE'
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    
+    // Formater la réponse
+    const formattedCandidatures = candidatures.map(candidature => ({
+      id: candidature.id,
+      nomCandidat: candidature.nomCandidat,
+      emailCandidat: candidature.emailCandidat,
+      telephoneCandidat: candidature.telephoneCandidat,
+      cvUrl: candidature.cvUrl,
+      lettreMotivationUrl: candidature.lettreMotivationUrl,
+      messageMotivation: candidature.messageMotivation,
+      statut: candidature.statut,
+      createdAt: candidature.createdAt,
+      offreId: candidature.alternanceStageId,
+      titreOffre: candidature.titreOffre
+    }));
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        offre: {
+          id: alternance.id,
+          title: alternance.title
+        },
+        candidatures: formattedCandidatures,
+        count: candidatures.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération candidatures:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des candidatures'
+    });
+  }
+});
+
+// ✅ PUT mettre à jour le statut d'une candidature
+router.put('/candidatures/:candidatureId/status', authenticateToken, async (req, res) => {
+  try {
+    const { candidatureId } = req.params;
+    const { statut } = req.body;
+    const userId = req.user.id;
+    
+    console.log(`🔄 Updating candidature ${candidatureId} status to ${statut}`);
+    
+    // Valider le statut
+    const validStatuses = ['en_attente', 'acceptee', 'refusee'];
+    if (!validStatuses.includes(statut)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Statut invalide'
+      });
+    }
+    
+    // Trouver la candidature
+    const candidature = await prisma.candidature.findUnique({
+      where: { id: parseInt(candidatureId) },
+      include: {
+        alternanceStage: true
+      }
+    });
+    
+    if (!candidature) {
+      return res.status(404).json({
+        success: false,
+        error: 'Candidature non trouvée'
+      });
+    }
+    
+    // Vérifier que l'offre associée appartient à l'utilisateur
+    if (candidature.alternanceStage.proId !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Non autorisé'
+      });
+    }
+    
+    // Mettre à jour le statut
+    const updatedCandidature = await prisma.candidature.update({
+      where: { id: parseInt(candidatureId) },
+      data: { statut }
+    });
+    
+    // Si la candidature est acceptée, marquer l'offre comme "pourvue" si nécessaire
+    if (statut === 'acceptee') {
+      await prisma.alternanceStage.update({
+        where: { id: candidature.alternanceStageId },
+        data: { status: 'filled' }
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Statut mis à jour avec succès',
+      data: updatedCandidature
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur mise à jour statut candidature:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la mise à jour du statut'
+    });
+  }
+});
+
+// ✅ DELETE une candidature
+router.delete('/candidatures/:candidatureId', authenticateToken, async (req, res) => {
+  try {
+    const { candidatureId } = req.params;
+    const userId = req.user.id;
+    
+    console.log(`🗑️ Deleting candidature ${candidatureId}`);
+    
+    // Trouver la candidature
+    const candidature = await prisma.candidature.findUnique({
+      where: { id: parseInt(candidatureId) },
+      include: {
+        alternanceStage: true
+      }
+    });
+    
+    if (!candidature) {
+      return res.status(404).json({
+        success: false,
+        error: 'Candidature non trouvée'
+      });
+    }
+    
+    // Vérifier que l'offre associée appartient à l'utilisateur
+    if (candidature.alternanceStage.proId !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Non autorisé'
+      });
+    }
+    
+    // Supprimer la candidature
+    await prisma.candidature.delete({
+      where: { id: parseInt(candidatureId) }
+    });
+    
+    // Décrémenter le compteur de candidatures
+    await prisma.alternanceStage.update({
+      where: { id: candidature.alternanceStageId },
+      data: {
+        candidaturesCount: {
+          decrement: 1
+        }
+      }
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Candidature supprimée avec succès'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur suppression candidature:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la suppression de la candidature'
+    });
+  }
+});
+
+// ✅ GET téléchargement de fichier (CV ou LM)
+router.get('/candidatures/:candidatureId/download/:fileType', authenticateToken, async (req, res) => {
+  try {
+    const { candidatureId, fileType } = req.params;
+    const userId = req.user.id;
+    
+    if (!['cv', 'lettreMotivation'].includes(fileType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Type de fichier invalide'
+      });
+    }
+    
+    // Trouver la candidature
+    const candidature = await prisma.candidature.findUnique({
+      where: { id: parseInt(candidatureId) },
+      include: {
+        alternanceStage: true
+      }
+    });
+    
+    if (!candidature) {
+      return res.status(404).json({
+        success: false,
+        error: 'Candidature non trouvée'
+      });
+    }
+    
+    // Vérifier que l'offre associée appartient à l'utilisateur
+    if (candidature.alternanceStage.proId !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Non autorisé'
+      });
+    }
+    
+    const fileUrl = fileType === 'cv' ? candidature.cvUrl : candidature.lettreMotivationUrl;
+    
+    if (!fileUrl) {
+      return res.status(404).json({
+        success: false,
+        error: 'Fichier non disponible'
+      });
+    }
+    
+    // Si c'est une URL S3 ou cloud storage, rediriger
+    if (fileUrl.startsWith('http')) {
+      return res.redirect(fileUrl);
+    }
+    
+    // Si c'est un chemin local (à adapter selon votre configuration)
+    const filePath = path.join(__dirname, '../uploads', path.basename(fileUrl));
+    
+    if (fs.existsSync(filePath)) {
+      const fileName = `${candidature.nomCandidat || 'candidat'}_${fileType === 'cv' ? 'CV' : 'LM'}${path.extname(fileUrl)}`;
+      
+      res.download(filePath, fileName, (err) => {
+        if (err) {
+          console.error('❌ Erreur téléchargement fichier:', err);
+          res.status(500).json({
+            success: false,
+            error: 'Erreur lors du téléchargement'
+          });
+        }
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'Fichier non trouvé sur le serveur'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erreur téléchargement:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors du téléchargement'
     });
   }
 });
