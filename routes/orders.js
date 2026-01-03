@@ -101,6 +101,7 @@ router.post('/pro/migrate-product-types', async (req, res) => {
     });
   }
 });
+
 /**
  * 👨‍🔧 GET /api/orders/pro - Récupérer TOUTES les commandes - VERSION ULTRA ROBUSTE
  */
@@ -647,7 +648,9 @@ router.post('/', authenticateToken, async (req, res) => {
     console.log('📦 [ORDERS] Début création commande pour utilisateur:', userId);
     console.log('📦 [ORDERS] Items reçus:', JSON.stringify(items, null, 2));
 
-    // Validation basique
+    // =====================================================
+    // VALIDATION INITIALE
+    // =====================================================
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
@@ -655,19 +658,67 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    // =====================================================
+    // VALIDATION DES QUANTITÉS ET PRIX NÉGATIFS
+    // =====================================================
+    const validationErrors = [];
+    const validatedItems = [];
+
+    for (const [index, item] of items.entries()) {
+      const itemNumber = index + 1;
+      
+      // 1. Validation de la quantité
+      if (item.quantity === undefined || item.quantity === null) {
+        validationErrors.push(`Item ${itemNumber}: La quantité est requise`);
+        continue;
+      }
+
+      const quantity = parseInt(item.quantity);
+      if (isNaN(quantity)) {
+        validationErrors.push(`Item ${itemNumber}: La quantité doit être un nombre valide`);
+        continue;
+      }
+
+      // VALIDATION PRINCIPALE : QUANTITÉ NÉGATIVE
+      if (quantity <= 0) {
+        validationErrors.push(`Item ${itemNumber}: La quantité doit être supérieure à 0 (valeur: ${quantity})`);
+        continue;
+      }
+
+      // 2. Vérification ID produit
+      if (!item.productId) {
+        validationErrors.push(`Item ${itemNumber}: L'ID du produit/service est requis`);
+        continue;
+      }
+
+      validatedItems.push({
+        ...item,
+        quantity: quantity
+      });
+    }
+
+    if (validationErrors.length > 0) {
+      console.log('❌ Erreurs de validation:', validationErrors);
+      return res.status(400).json({
+        success: false,
+        message: "Erreurs de validation dans votre panier",
+        errors: validationErrors,
+      });
+    }
+
+    // =====================================================
+    // TRAITEMENT DES ITEMS VALIDÉS
+    // =====================================================
     let totalAmount = 0;
     const orderItems = [];
     const stockErrors = [];
     let idPrestataire = null;
 
-    // =====================================================
-    // BOUCLE SUR LES ITEMS - VERSION SIMPLIFIÉE
-    // =====================================================
-    for (const item of items) {
+    for (const item of validatedItems) {
       const productId = item.productId;
-      const quantity = parseInt(item.quantity) || 1;
+      const quantity = item.quantity;
 
-      console.log(`🔍 Traitement item:`, { productId, quantity });
+      console.log(`🔍 Traitement item validé:`, { productId, quantity });
 
       // 1. Chercher d'abord dans les produits
       try {
@@ -688,6 +739,14 @@ router.post('/', authenticateToken, async (req, res) => {
         if (product) {
           console.log(`✅ Produit trouvé: ${product.name}`);
           
+          // VALIDATION DU PRIX NÉGATIF
+          if (product.price < 0) {
+            stockErrors.push(
+              `Le prix du produit "${product.name}" est invalide (${product.price}€). Contactez le prestataire.`
+            );
+            continue;
+          }
+
           // Vérifier le prestataire
           if (!idPrestataire) {
             idPrestataire = product.userId;
@@ -743,6 +802,14 @@ router.post('/', authenticateToken, async (req, res) => {
           if (service) {
             console.log(`✅ Service trouvé: ${service.libelle}`);
             
+            // VALIDATION DU PRIX NÉGATIF
+            if (service.price < 0) {
+              stockErrors.push(
+                `Le prix du service "${service.libelle}" est invalide (${service.price}€). Contactez le prestataire.`
+              );
+              continue;
+            }
+
             // Récupérer propriétaire du service
             const serviceOwner = service.users?.[0]?.userId;
             if (!serviceOwner) {
@@ -787,10 +854,10 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // =====================================================
-    // VÉRIFICATION FINALE
+    // VÉRIFICATION FINALE AVANT CRÉATION
     // =====================================================
     if (stockErrors.length > 0) {
-      console.log('❌ Erreurs de stock:', stockErrors);
+      console.log('❌ Erreurs de stock/prix:', stockErrors);
       return res.status(400).json({
         success: false,
         message: "Problèmes détectés dans votre panier",
@@ -805,6 +872,16 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    // VALIDATION FINALE DU MONTANT TOTAL
+    if (totalAmount <= 0) {
+      console.log('❌ Montant total invalide:', totalAmount);
+      return res.status(400).json({
+        success: false,
+        message: "Le montant total de la commande doit être supérieur à 0",
+        details: `Montant calculé: ${totalAmount}€`
+      });
+    }
+
     // =====================================================
     // CRÉATION DE LA COMMANDE
     // =====================================================
@@ -815,7 +892,7 @@ router.post('/', authenticateToken, async (req, res) => {
       userId,
       idPrestataire,
       itemsCount: orderItems.length,
-      totalAmount
+      totalAmount: totalAmount.toFixed(2) + '€'
     });
 
     const order = await prisma.order.create({
@@ -835,25 +912,47 @@ router.post('/', authenticateToken, async (req, res) => {
     // =====================================================
     // MISE À JOUR DES STOCKS (produits seulement)
     // =====================================================
+    const stockUpdateErrors = [];
     for (const item of orderItems) {
       if (item.productType !== "service") {
         try {
-          await prisma.product.update({
+          // Vérification supplémentaire avant décrémentation
+          const currentProduct = await prisma.product.findUnique({
             where: { id: item.productId },
-            data: {
-              quantity: { decrement: item.quantity },
-              updatedAt: new Date()
-            }
+            select: { quantity: true }
           });
-          console.log(`✅ Stock mis à jour pour ${item.name}: -${item.quantity}`);
+
+          if (currentProduct && currentProduct.quantity >= item.quantity) {
+            await prisma.product.update({
+              where: { id: item.productId },
+              data: {
+                quantity: { decrement: item.quantity },
+                updatedAt: new Date()
+              }
+            });
+            console.log(`✅ Stock mis à jour pour ${item.name}: -${item.quantity}`);
+          } else {
+            stockUpdateErrors.push(`Stock insuffisant pour ${item.name} après validation`);
+          }
         } catch (stockError) {
+          stockUpdateErrors.push(`Erreur mise à jour stock ${item.name}: ${stockError.message}`);
           console.error(`❌ Erreur mise à jour stock ${item.name}:`, stockError);
-          // Ne pas bloquer la commande pour une erreur de stock
         }
       }
     }
 
-    console.log(`🎉 Commande ${orderNumber} créée avec succès!`);
+    if (stockUpdateErrors.length > 0) {
+      console.warn('⚠️ Erreurs lors de la mise à jour des stocks:', stockUpdateErrors);
+      // On ne bloque pas la commande mais on log les erreurs
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          notes: `⚠️ Erreurs stock: ${stockUpdateErrors.join('; ')}`
+        }
+      });
+    }
+
+    console.log(`🎉 Commande ${orderNumber} créée avec succès! Total: ${totalAmount.toFixed(2)}€`);
 
     return res.status(201).json({
       success: true,
@@ -866,6 +965,12 @@ router.post('/', authenticateToken, async (req, res) => {
           lastName: req.user.lastName,
           email: req.user.email
         }
+      },
+      validationSummary: {
+        itemsValidated: validatedItems.length,
+        itemsInOrder: orderItems.length,
+        totalAmount: totalAmount.toFixed(2) + '€',
+        stockWarnings: stockUpdateErrors.length > 0 ? stockUpdateErrors : undefined
       }
     });
 
