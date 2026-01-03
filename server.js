@@ -221,6 +221,12 @@ app.use("/api", xssSanitizer);
 // ======================
 // ROUTES API EXISTANTES
 // ======================
+require('dotenv').config({ path: '.env' });
+
+console.log('Token chargé:', process.env.DELIVERY_PLATFORM_TOKEN);
+
+app.use('/api/delivery', require('./routes/deliveryApi'));
+
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/upload", require("./routes/upload"));
