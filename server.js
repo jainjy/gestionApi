@@ -221,6 +221,7 @@ app.use("/api", xssSanitizer);
 // ======================
 // ROUTES API EXISTANTES
 // ======================
+app.use("/api/test-internal", require("./routes/test-internal"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/upload", require("./routes/upload"));
