@@ -33,12 +33,309 @@ function getItemProductType(item) {
   return deduceProductTypeFromName(item.name);
 }
 
-
 // Middleware de logging pour le débogage
 router.use((req, res, next) => {
   console.log(`📍 [ORDERS] ${req.method} ${req.originalUrl}`)
   next()
 })
+
+/**
+ * 🛍️ POST /api/orders - Créer une commande (AVEC AUTHENTIFICATION) - VERSION COMPATIBLE AVEC LE NOUVEAU FRONTEND
+ */
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const { items, shippingAddress, paymentMethod, deliveryAddress, latitude, longitude } = req.body;
+    const userId = req.user.id;
+
+    console.log('📦 [ORDERS] Début création commande pour utilisateur:', userId);
+    console.log('📦 [ORDERS] Items reçus:', JSON.stringify(items, null, 2));
+    console.log('📍 [ORDERS] Données livraison:', { deliveryAddress, latitude, longitude });
+
+    // Validation basique
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Le panier est vide",
+      });
+    }
+
+    let totalAmount = 0;
+    const orderItems = [];
+    const stockErrors = [];
+    let idPrestataire = null;
+
+    // =====================================================
+    // BOUCLE SUR LES ITEMS - VERSION SIMPLIFIÉE
+    // =====================================================
+    for (const item of items) {
+      const productId = item.productId;
+      const quantity = parseInt(item.quantity) || 1;
+
+      console.log(`🔍 Traitement item:`, { productId, quantity });
+
+      // 1. Chercher d'abord dans les produits
+      try {
+        const product = await prisma.product.findUnique({
+          where: { id: productId },
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            quantity: true,
+            images: true,
+            trackQuantity: true,
+            productType: true,
+            userId: true
+          }
+        });
+
+        if (product) {
+          console.log(`✅ Produit trouvé: ${product.name}`);
+          
+          // Vérifier le prestataire
+          if (!idPrestataire) {
+            idPrestataire = product.userId;
+          } else if (idPrestataire !== product.userId) {
+            return res.status(400).json({
+              success: false,
+              message: "Une commande ne peut contenir que les produits d'un seul prestataire."
+            });
+          }
+
+          // Vérification stock
+          if (product.trackQuantity && product.quantity < quantity) {
+            stockErrors.push(
+              `Stock insuffisant pour "${product.name}". Disponible: ${product.quantity}, Demandé: ${quantity}`
+            );
+            continue;
+          }
+
+          const itemTotal = product.price * quantity;
+          totalAmount += itemTotal;
+
+          orderItems.push({
+            productId: product.id,
+            name: product.name,
+            price: product.price,
+            quantity: quantity,
+            images: product.images || [],
+            productType: product.productType || "general",
+            itemTotal: Number(itemTotal.toFixed(2))
+          });
+
+          continue; // Passer au prochain item
+        }
+      } catch (productError) {
+        console.log(`ℹ️ Product ${productId} non trouvé, test en tant que service`);
+      }
+
+      // 2. Chercher comme service (si l'ID est numérique)
+      try {
+        const serviceId = parseInt(productId);
+        if (!isNaN(serviceId)) {
+          const service = await prisma.service.findUnique({
+            where: { id: serviceId },
+            include: {
+              users: {
+                include: {
+                  user: true
+                }
+              }
+            }
+          });
+
+          if (service) {
+            console.log(`✅ Service trouvé: ${service.libelle}`);
+            
+            // Récupérer propriétaire du service
+            const serviceOwner = service.users?.[0]?.userId;
+            if (!serviceOwner) {
+              return res.status(400).json({
+                success: false,
+                message: `Aucun prestataire trouvé pour le service: ${service.libelle}`
+              });
+            }
+
+            // Vérifier le prestataire
+            if (!idPrestataire) {
+              idPrestataire = serviceOwner;
+            } else if (idPrestataire !== serviceOwner) {
+              return res.status(400).json({
+                success: false,
+                message: "Impossible de commander chez plusieurs prestataires."
+              });
+            }
+
+            const itemTotal = (service.price || 0) * quantity;
+            totalAmount += itemTotal;
+
+            orderItems.push({
+              productId: service.id.toString(), // Convertir en string pour cohérence
+              name: service.libelle,
+              price: service.price || 0,
+              quantity: quantity,
+              images: service.images || [],
+              productType: "service",
+              itemTotal: Number(itemTotal.toFixed(2))
+            });
+
+            continue;
+          }
+        }
+      } catch (serviceError) {
+        console.log(`ℹ️ Service ${productId} non trouvé`);
+      }
+
+      // Si ni produit ni service trouvé
+      stockErrors.push(`Produit introuvable avec l'ID: ${productId}`);
+    }
+
+    // =====================================================
+    // VÉRIFICATION FINALE
+    // =====================================================
+    if (stockErrors.length > 0) {
+      console.log('❌ Erreurs de stock:', stockErrors);
+      return res.status(400).json({
+        success: false,
+        message: "Problèmes détectés dans votre panier",
+        errors: stockErrors,
+      });
+    }
+
+    if (orderItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Aucun article valide dans votre panier",
+      });
+    }
+
+    // =====================================================
+    // CRÉATION DE LA COMMANDE AVEC DONNÉES DE LIVRAISON
+    // =====================================================
+    const orderNumber = `CMD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+    console.log('📝 Création commande avec:', {
+      orderNumber,
+      userId,
+      idPrestataire,
+      itemsCount: orderItems.length,
+      totalAmount,
+      deliveryAddress,
+      latitude,
+      longitude
+    });
+
+    // Préparer les données pour la commande
+    const orderData = {
+      orderNumber,
+      userId,
+      idPrestataire,
+      items: orderItems,
+      totalAmount: Number(totalAmount.toFixed(2)),
+      shippingAddress: shippingAddress || {},
+      paymentMethod: paymentMethod || "card",
+      status: "pending",
+      paymentStatus: "pending",
+    };
+
+    // Ajouter les données de livraison si elles existent
+    if (deliveryAddress) {
+      orderData.deliveryAddress = deliveryAddress;
+    }
+    if (latitude) {
+      orderData.latitude = parseFloat(latitude);
+    }
+    if (longitude) {
+      orderData.longitude = parseFloat(longitude);
+    }
+
+    const order = await prisma.order.create({
+      data: orderData,
+    });
+
+    // =====================================================
+    // MISE À JOUR DES STOCKS (produits seulement)
+    // =====================================================
+    for (const item of orderItems) {
+      if (item.productType !== "service") {
+        try {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: {
+              quantity: { decrement: item.quantity },
+              updatedAt: new Date()
+            }
+          });
+          console.log(`✅ Stock mis à jour pour ${item.name}: -${item.quantity}`);
+        } catch (stockError) {
+          console.error(`❌ Erreur mise à jour stock ${item.name}:`, stockError);
+          // Ne pas bloquer la commande pour une erreur de stock
+        }
+      }
+    }
+
+    console.log(`🎉 Commande ${orderNumber} créée avec succès!`);
+
+    return res.status(201).json({
+      success: true,
+      message: "Commande créée avec succès",
+      order: {
+        ...order,
+        deliveryInfo: {
+          deliveryAddress: order.deliveryAddress || deliveryAddress,
+          latitude: order.latitude || latitude,
+          longitude: order.longitude || longitude,
+          trackingNumber: `TRK-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
+        },
+        userInfo: {
+          id: userId,
+          firstName: req.user.firstName,
+          lastName: req.user.lastName,
+          email: req.user.email
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("💥 [ORDERS] Erreur création commande:", error);
+    console.error("💥 [ORDERS] Stack trace:", error.stack);
+    
+    return res.status(500).json({
+      success: false,
+      message: "Erreur lors de la création de la commande",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * 🛍️ POST /api/orders/with-delivery - Route alternative pour compatibilité avec l'ancien frontend
+ */
+router.post('/with-delivery', authenticateToken, async (req, res) => {
+  try {
+    console.log('🚚 Route /with-delivery appelée pour compatibilité');
+    
+    // Simplement rediriger vers la route principale
+    const response = await router.handle({
+      method: 'POST',
+      url: '/',
+      body: req.body,
+      user: req.user
+    });
+    
+    return res.json(response);
+  } catch (error) {
+    console.error('💥 Erreur route /with-delivery:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Erreur lors de la création de la commande",
+      error: error.message
+    });
+  }
+});
+
+// Les autres routes restent exactement les mêmes que dans votre code original...
+// (Toutes les routes GET, PUT, stats, etc.)
 
 /**
  * 🔧 POST /api/orders/pro/migrate-product-types - MIGRATION des productType
@@ -105,7 +402,6 @@ router.post('/pro/migrate-product-types', async (req, res) => {
 /**
  * 👨‍🔧 GET /api/orders/pro - Récupérer TOUTES les commandes - VERSION ULTRA ROBUSTE
  */
-
 router.get("/pro", authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 50, status, productType } = req.query;
@@ -326,7 +622,6 @@ router.get("/pro/stats", authenticateToken, async (req, res) => {
   }
 });
 
-
 /**
  * 📈 GET /api/orders/pro/product-types - Récupérer les statistiques par type de produit
  */
@@ -422,6 +717,9 @@ router.get('/pro/debug', async (req, res) => {
       id: order.id,
       orderNumber: order.orderNumber,
       status: order.status,
+      deliveryAddress: order.deliveryAddress,
+      latitude: order.latitude,
+      longitude: order.longitude,
       items: order.items?.map(item => ({
         name: item.name,
         productType: item.productType,
@@ -621,6 +919,7 @@ function calculateMonthlyRevenue(orders) {
 }
 
 /**
+<<<<<<< Updated upstream
  * 📦 Fonction interne pour mettre à jour le stock
  */
 async function updateStock(orderItems) {
@@ -1000,6 +1299,8 @@ async function updateStock(orderItems) {
 }
 
 /**
+=======
+>>>>>>> Stashed changes
  * 👤 GET /api/orders/user/my-orders - Commandes de l'utilisateur connecté
  */
 router.get('/user/my-orders', authenticateToken, async (req, res) => {
@@ -1453,4 +1754,160 @@ router.get('/pro/migration-preview', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// Ajouter après vos autres routes dans routes/orders.js
+
+/**
+ * 🚚 GET /api/orders/:id/delivery-status - Vérifier le statut de livraison
+ */
+router.get('/:id/delivery-status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Vérifier que l'utilisateur a accès à cette commande
+    const order = await prisma.order.findFirst({
+      where: {
+        id,
+        userId
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Commande non trouvée"
+      });
+    }
+
+    // Si la commande a un deliveryId, vérifier auprès de la plateforme
+    let deliveryStatus = order.status;
+    let trackingNumber = order.trackingNumber;
+    let eta = null;
+
+    if (order.deliveryId) {
+      // Ici, vous appellerez votre service de livraison
+      // Pour l'exemple, on simule
+      const deliveryService = require('../lib/deliveryService');
+      const deliveryInfo = await deliveryService.checkDeliveryStatus(order.deliveryId);
+      
+      if (deliveryInfo) {
+        deliveryStatus = deliveryInfo.status;
+        trackingNumber = deliveryInfo.trackingNumber || trackingNumber;
+        eta = deliveryInfo.eta;
+      }
+    }
+
+    res.json({
+      success: true,
+      deliveryStatus,
+      trackingNumber,
+      eta,
+      orderId: order.id,
+      orderNumber: order.orderNumber
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur vérification statut livraison:', error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de la vérification du statut de livraison"
+    });
+  }
+});
+
+/**
+ * 🔄 GET /api/orders/:id/sync-status - Vérifier le statut de synchronisation
+ */
+router.get('/:id/sync-status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const order = await prisma.order.findFirst({
+      where: {
+        id,
+        userId
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        deliveryId: true,
+        trackingNumber: true,
+        syncStatus: true,
+        updatedAt: true
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Commande non trouvée"
+      });
+    }
+
+    res.json({
+      success: true,
+      syncStatus: order.syncStatus || 'unknown',
+      hasDeliveryId: !!order.deliveryId,
+      lastUpdated: order.updatedAt,
+      orderInfo: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 Erreur vérification synchronisation:', error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de la vérification de la synchronisation"
+    });
+  }
+});
+
+/**
+ * 🚛 POST /api/delivery/track/:trackingNumber - Suivre une livraison
+ */
+router.get('/delivery/track/:trackingNumber', authenticateToken, async (req, res) => {
+  try {
+    const { trackingNumber } = req.params;
+
+    // Ici, vous intégrerez l'API de votre plateforme de livraison
+    // Pour l'exemple, on simule
+    const mockTrackingInfo = {
+      success: true,
+      trackingNumber,
+      status: "in_transit",
+      currentLocation: "Centre de tri Paris Nord",
+      estimatedDelivery: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Demain
+      history: [
+        {
+          date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          status: "picked_up",
+          location: "Entrepôt principal",
+          description: "Colis pris en charge"
+        },
+        {
+          date: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+          status: "in_transit",
+          location: "En route vers le centre de tri",
+          description: "Colis en cours de transport"
+        }
+      ]
+    };
+
+    res.json(mockTrackingInfo);
+
+  } catch (error) {
+    console.error('💥 Erreur tracking:', error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors du suivi de la livraison"
+    });
+  }
+});
+
 module.exports = router
