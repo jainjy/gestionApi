@@ -77,7 +77,7 @@ router.post('/upload', authenticateToken, upload.single('image'), async (req, re
   }
 });
 
-// ✅ 2. ROUTE DE CRÉATION COMPLÈTE - UTILISATION DE SUBCATEGORY POUR LE TYPE
+// ✅ 2. ROUTE DE CRÉATION COMPLÈTE - CORRIGÉE POUR MODÈLE EXISTANT
 router.post('/create', authenticateToken, async (req, res) => {
   try {
     console.log('🔍 POST /create - Body:', req.body);
@@ -89,12 +89,15 @@ router.post('/create', authenticateToken, async (req, res) => {
     const { 
       name, 
       description, 
-      type,          // Type principal
+      type,          // Type principal: photographie, sculpture, peinture, artisanat
       category,      // Métier spécifique
       price, 
       status = 'published',
       images = [],
-      dimensions = {}
+      dimensions = {},
+      materials,
+      creationDate,
+      artistName
     } = req.body;
     
     // Validation des champs requis
@@ -158,7 +161,7 @@ router.post('/create', authenticateToken, async (req, res) => {
       });
     }
     
-    // Traiter les dimensions
+    // Traiter les dimensions et ajouter toutes les métadonnées
     let parsedDimensions = {};
     if (dimensions) {
       try {
@@ -167,6 +170,20 @@ router.post('/create', authenticateToken, async (req, res) => {
         parsedDimensions = { raw: dimensions };
       }
     }
+    
+    // Ajouter les métadonnées spécifiques aux œuvres dans dimensions
+    const artworkMetadata = {
+      ...parsedDimensions,
+      // Informations artistiques
+      materials: materials || parsedDimensions.materials || '',
+      creationDate: creationDate || parsedDimensions.creationDate || null,
+      artistName: artistName || req.user.companyName || `${req.user.firstName} ${req.user.lastName}`,
+      type: type, // Stocker le type ici aussi pour facilité d'accès
+      category: category,
+      // Pour compatibilité avec le panier
+      isArtwork: true,
+      artworkType: type
+    };
     
     // Créer le slug
     const slug = name
@@ -177,40 +194,83 @@ router.post('/create', authenticateToken, async (req, res) => {
       .replace(/[^\w-]+/g, '')
       + '-' + Date.now();
     
-    // CRÉATION DU PRODUIT - Utilisation de subcategory pour le type
+    // CRÉATION DU PRODUIT - Utiliser les champs existants du modèle
     const product = await prisma.product.create({
       data: {
+        // Champs de base
         name,
         slug,
         description: description || '',
-        category: category,           // Métier spécifique
-        subcategory: type,            // Type principal (stocké dans subcategory)
+        
+        // Utilisation des champs existants pour l'art
+        category: category,           // Métier spécifique (ex: "Peintre à l'huile")
+        subcategory: type,            // Type principal (ex: "peinture")
+        productType: 'artwork',       // IMPORTANT: identifier les œuvres d'art
+        
+        // Prix et statut
         price: priceNum,
         status: status,
+        
+        // Images
         images: Array.isArray(images) ? images : [],
-        dimensions: parsedDimensions,
+        
+        // Métadonnées dans dimensions (JSON)
+        dimensions: artworkMetadata,
+        
+        // Propriétaire
         userId: req.user.id,
-        productType: 'artwork',       // Important pour identifier les œuvres d'art
+        
+        // Champs requis par le modèle avec valeurs par défaut adaptées
         comparePrice: null,
         cost: null,
-        trackQuantity: true,
-        quantity: 1,
+        trackQuantity: true,           // Pour gérer le stock des œuvres
+        quantity: 1,                   // Œuvre unique par défaut
         weight: null,
         featured: false,
         visibility: 'public',
         viewCount: 0,
         clickCount: 0,
         purchaseCount: 0,
-        publishedAt: status === 'published' ? new Date() : null
+        publishedAt: status === 'published' ? new Date() : null,
+        
+        // Champs alimentaires (garder null pour œuvres)
+        allergens: [],
+        brand: null,
+        expiryDate: null,
+        foodCategory: null,
+        isVegan: null,
+        isVegetarian: null,
+        healthScore: null,
+        isOrganic: null,
+        isPerishable: null,
+        nutritionalInfo: null,
+        origin: null,
+        storageTips: null,
+        unit: null,
+        sku: `ART-${Date.now()}`,     // Générer un SKU unique
+        barcode: null
       }
     });
     
-    console.log('✅ Produit créé:', {
+    console.log('✅ Œuvre d\'art créée:', {
       id: product.id,
       name: product.name,
-      type: product.subcategory,    // Lire depuis subcategory
-      category: product.category,   // Lire depuis category
-      status: product.status
+      type: product.subcategory,
+      category: product.category,
+      status: product.status,
+      productType: product.productType,
+      quantity: product.quantity
+    });
+    
+    // Récupérer les infos utilisateur pour la réponse
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        firstName: true,
+        lastName: true,
+        companyName: true,
+        commercialName: true
+      }
     });
     
     res.status(201).json({
@@ -219,31 +279,45 @@ router.post('/create', authenticateToken, async (req, res) => {
       product: {
         id: product.id,
         name: product.name,
-        type: product.subcategory,   // Retourner depuis subcategory
-        category: product.category,  // Retourner depuis category
+        type: product.subcategory,     // Depuis subcategory
+        category: product.category,    // Depuis category
+        productType: product.productType,
         price: product.price,
         status: product.status,
         images: product.images,
         slug: product.slug,
-        createdAt: product.createdAt
+        dimensions: product.dimensions,
+        quantity: product.quantity,
+        createdAt: product.createdAt,
+        artist: {
+          id: req.user.id,
+          name: user?.companyName || user?.commercialName || 
+                `${user?.firstName} ${user?.lastName}`.trim() || req.user.email
+        }
       }
     });
     
   } catch (error) {
-    console.error('❌ ERREUR création:', error);
+    console.error('❌ ERREUR création œuvre:', error);
+    console.error('❌ Stack:', error.stack);
     
     // Gestion des erreurs Prisma spécifiques
     if (error.code === 'P2002') {
       return res.status(400).json({
+        success: false,
         error: 'Erreur de contrainte unique',
-        message: 'Un produit avec ce nom existe déjà'
+        message: 'Une œuvre avec ce nom existe déjà',
+        field: error.meta?.target || 'slug'
       });
     }
     
     res.status(500).json({
-      error: 'Erreur lors de la création du produit',
+      success: false,
+      error: 'Erreur lors de la création de l\'œuvre',
       message: error.message,
-      code: error.code
+      code: error.code,
+      // Stack seulement en développement
+      ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
     });
   }
 });
