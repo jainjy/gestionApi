@@ -808,7 +808,7 @@ model DemandeArtisan {
   clientConfirmeTravaux    Boolean?  @default(false) // Client confirme travaux terminés
   travauxTermines          Boolean?  @default(false)
   factureConfirmee         Boolean?  @default(false)
-  recruited                Boolean?
+  recruited                Boolean?  
   user                     User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
   demande                  Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
@@ -1065,6 +1065,11 @@ enum EvenementType {
   AVIS_LAISSE
   CLIENT_REFUSE
   GENERIC
+  PAIEMENT_CONFIRME_CLIENT
+  PAIEMENT_RECU_ARTISAN
+  TRAVAUX_CONFIRMES_CLIENT
+  TRAVAUX_NON_CONFIRMES_CLIENT
+  TRAVAUX_NON_CONFIRMES
 }
 
 //========================

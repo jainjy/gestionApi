@@ -749,6 +749,7 @@ router.post("/:demandeId/terminer-travaux", authenticateToken, async (req, res) 
         error: "Vous n'êtes pas artisan sur cette demande",
       });
     }
+    console.log(demandeArtisan)
 
     // Vérifier que la facture est confirmée
     if (!demandeArtisan.factureConfirmee) {
@@ -990,6 +991,7 @@ router.post("/:demandeId/confirmer-reception-paiement", authenticateToken, async
       },
       data: {
         artisanConfirmeReception: true,
+        factureConfirmee:true,
         // Optionnel: enregistrer le montant effectivement reçu
         paiementMontant: montantRecu ? parseFloat(montantRecu) : demandeArtisan.paiementMontant,
       },

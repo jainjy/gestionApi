@@ -14,18 +14,32 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max pour l'audio
+    fileSize: 50 * 1024 * 1024, // 50MB max pour l'audio et les fichiers
   },
   fileFilter: (req, file, cb) => {
-    // Accepter les images et les fichiers audio
-    if (
-      file.mimetype.startsWith("image/") ||
-      file.mimetype.startsWith("audio/") ||
-      file.mimetype === "application/octet-stream" // Pour certains fichiers audio
-    ) {
+    // ✅ CORRECTION: Accepter les images, fichiers audio ET les PDF
+    const acceptedTypes = [
+      // Images
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "image/svg+xml",
+      // Audio
+      "audio/mpeg",
+      "audio/wav",
+      "audio/ogg",
+      "audio/mp4",
+      // PDF et documents
+      "application/pdf",
+      "application/octet-stream",
+    ];
+
+    if (acceptedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Type de fichier non supporté"), false);
+      console.log(`❌ Type de fichier rejeté: ${file.mimetype}`);
+      cb(new Error(`Type de fichier non supporté: ${file.mimetype}`), false);
     }
   },
 });
@@ -34,9 +48,12 @@ const upload = multer({
 const uploadToSupabase = async (file, folder = "blog-images") => {
   try {
     const fileExt = file.originalname.split(".").pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const fileName = `${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(2)}.${fileExt}`;
     const filePath = `${folder}/${fileName}`;
     let bucket = "blog-images";
+    
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(filePath, file.buffer, {
