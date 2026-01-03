@@ -1,7 +1,10 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { PrismaClient } = require('@prisma/client');const prisma = new PrismaClient();
 
 exports.createCandidature = async (req, res) => {
+  console.log('📝 POST /candidatures - Début');
+  console.log('User:', req.user);
+  console.log('Body:', req.body);
+  
   try {
     const {
       offreId,
@@ -19,37 +22,67 @@ exports.createCandidature = async (req, res) => {
     // Validation
     if (!offreId || !offreType || !titreOffre) {
       return res.status(400).json({
+        success: false,
         error: 'Champs obligatoires manquants'
       });
     }
 
-    // Vérifier si l'offre existe selon son type
-    let offreExistante;
-    switch (offreType) {
+    const offreIdNum = parseInt(offreId);
+    if (isNaN(offreIdNum)) {
+      return res.status(400).json({
+        success: false,
+        error: 'offreId doit être un nombre'
+      });
+    }
+
+    // 🔴 CORRECTION : Déterminer quel champ utiliser selon le type
+    let offreField;
+    let whereCondition;
+    
+    switch (offreType.toLowerCase()) {
       case 'formation':
-        offreExistante = await prisma.formation.findUnique({
-          where: { id: parseInt(offreId), status: 'active' }
-        });
+        offreField = 'formationId';
+        whereCondition = { formationId: offreIdNum };
         break;
       case 'emploi':
-        offreExistante = await prisma.emploi.findUnique({
-          where: { id: parseInt(offreId), status: 'active' }
-        });
+        offreField = 'emploiId';
+        whereCondition = { emploiId: offreIdNum };
         break;
       case 'alternance':
-        offreExistante = await prisma.alternanceStage.findUnique({
-          where: { id: parseInt(offreId), status: 'active' }
-        });
+        offreField = 'alternanceStageId';
+        whereCondition = { alternanceStageId: offreIdNum };
         break;
       default:
         return res.status(400).json({
+          success: false,
           error: "Type d'offre invalide"
         });
     }
 
+    // Vérifier si l'offre existe
+    let offreExistante;
+    switch (offreType.toLowerCase()) {
+      case 'formation':
+        offreExistante = await prisma.formation.findUnique({
+          where: { id: offreIdNum, status: 'active' }
+        });
+        break;
+      case 'emploi':
+        offreExistante = await prisma.emploi.findUnique({
+          where: { id: offreIdNum, status: 'active' }
+        });
+        break;
+      case 'alternance':
+        offreExistante = await prisma.alternanceStage.findUnique({
+          where: { id: offreIdNum, status: 'active' }
+        });
+        break;
+    }
+
     if (!offreExistante) {
       return res.status(404).json({
-        error: 'Offre non trouvée ou non disponible'
+        success: false,
+        error: 'Offre non trouvée'
       });
     }
 
@@ -57,66 +90,109 @@ exports.createCandidature = async (req, res) => {
     const candidatureExistante = await prisma.candidature.findFirst({
       where: {
         userId: req.user.id,
-        offreId: parseInt(offreId),
-        offreType
+        offreType: offreType.toUpperCase(),
+        ...whereCondition
       }
     });
 
     if (candidatureExistante) {
+      console.log('⚠️ Candidature déjà existante:', candidatureExistante.id);
       return res.status(400).json({
+        success: false,
         error: 'Vous avez déjà postulé à cette offre'
       });
     }
 
-    // Créer la candidature
+    // ✅ CORRECTION : Créer la candidature EN BASE DE DONNÉES
+    const candidatureData = {
+      userId: req.user.id,
+      offreType: offreType.toUpperCase(),
+      titreOffre: titreOffre,
+      messageMotivation: messageMotivation || '',
+      cvUrl: cvUrl || null,
+      lettreMotivationUrl: lettreMotivationUrl || null,
+      nomCandidat: nomCandidat || `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim(),
+      emailCandidat: emailCandidat || req.user.email,
+      telephoneCandidat: telephoneCandidat || null,
+      documents: documents || null,
+      statut: 'en_attente'
+    };
+
+    // Ajouter le champ spécifique
+    candidatureData[offreField] = offreIdNum;
+
+    console.log('📝 Données à insérer en BD:', candidatureData);
+
+    // 🔴 CRÉER EN BASE DE DONNÉES
     const candidature = await prisma.candidature.create({
-      data: {
-        userId: req.user.id,
-        offreId: parseInt(offreId),
-        offreType,
-        titreOffre,
-        messageMotivation: messageMotivation || '',
-        cvUrl: cvUrl || null,
-        lettreMotivationUrl: lettreMotivationUrl || null,
-        nomCandidat: nomCandidat || req.user.name || null,
-        emailCandidat: emailCandidat || req.user.email || null,
-        telephoneCandidat: telephoneCandidat || null,
-        documents: documents || null
-      }
+      data: candidatureData
     });
 
-    // Mettre à jour le compteur de candidatures de l'offre
-    switch (offreType) {
-      case 'formation':
+    console.log('✅ Candidature créée en BD ID:', candidature.id);
+
+    // Mettre à jour le compteur
+    try {
+      if (offreType.toLowerCase() === 'formation') {
         await prisma.formation.update({
-          where: { id: parseInt(offreId) },
-          data: { applications: { increment: 1 } }
+          where: { id: offreIdNum },
+          data: { 
+            applications: { increment: 1 },
+            currentParticipants: { increment: 1 }
+          }
         });
-        break;
-      case 'emploi':
+      } else if (offreType.toLowerCase() === 'emploi') {
         await prisma.emploi.update({
-          where: { id: parseInt(offreId) },
+          where: { id: offreIdNum },
           data: { candidaturesCount: { increment: 1 } }
         });
-        break;
-      case 'alternance':
+      } else if (offreType.toLowerCase() === 'alternance') {
         await prisma.alternanceStage.update({
-          where: { id: parseInt(offreId) },
+          where: { id: offreIdNum },
           data: { candidaturesCount: { increment: 1 } }
         });
-        break;
+      }
+      console.log('✅ Compteur mis à jour');
+    } catch (updateError) {
+      console.warn('⚠️ Erreur mise à jour compteur:', updateError.message);
     }
 
+    // Réponse avec les vraies données de la BD
     res.status(201).json({
       success: true,
       message: 'Candidature envoyée avec succès',
-      candidature
+      candidature: {
+        id: candidature.id,
+        offreId: offreIdNum,
+        offreType: offreType,
+        titreOffre: titreOffre,
+        messageMotivation: messageMotivation,
+        statut: candidature.statut,
+        createdAt: candidature.createdAt
+      }
     });
 
   } catch (error) {
-    console.error('Erreur lors de la création de candidature:', error);
-    res.status(500).json({
-      error: 'Erreur serveur'
+    console.error('💥 ERREUR création candidature:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta
+    });
+
+    let errorMessage = 'Erreur lors de la création de la candidature';
+    let statusCode = 500;
+
+    if (error.code === 'P2002') {
+      errorMessage = 'Vous avez déjà postulé à cette offre';
+      statusCode = 400;
+    } else if (error.code === 'P2003') {
+      errorMessage = 'Offre non trouvée';
+      statusCode = 404;
+    }
+
+    res.status(statusCode).json({
+      success: false,
+      error: errorMessage,
+      debug: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -130,41 +206,32 @@ exports.getUserCandidatures = async (req, res) => {
     };
 
     if (type) {
-      whereClause.offreType = type;
+      whereClause.offreType = type.toUpperCase();
     }
 
     if (statut) {
       whereClause.statut = statut;
     }
 
-    // Inclure dynamiquement les relations
-    const include = {};
-    if (type) {
-      if (type === 'formation') {
-        include.formation = true;
-      } else if (type === 'emploi') {
-        include.emploi = true;
-      } else if (type === 'alternance') {
-        include.alternanceStage = true;
-      }
-    } else {
-      // Si pas de type spécifié, inclure toutes les relations
-      include.formation = true;
-      include.emploi = true;
-      include.alternanceStage = true;
-    }
-
     const candidatures = await prisma.candidature.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
-      include
+      include: {
+        formation: true,
+        emploi: true,
+        alternanceStage: true
+      }
     });
 
-    res.json({ candidatures });
+    res.json({ 
+      success: true,
+      candidatures 
+    });
 
   } catch (error) {
-    console.error('Erreur lors de la récupération des candidatures:', error);
+    console.error('Erreur récupération candidatures:', error);
     res.status(500).json({
+      success: false,
       error: 'Erreur serveur'
     });
   }
