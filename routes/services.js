@@ -162,43 +162,72 @@ router.post("/bulk-assign-category", async (req, res) => {
 // ✅ Routes génériques (APRÈS les routes spécifiques)
 
 // GET /api/services - Récupérer tous les services avec leurs catégories
+const MAX_LIMIT = 100;
+const DEFAULT_LIMIT = 20;
+
 router.get('/', async (req, res) => {
   try {
-    const services = await prisma.service.findMany({
-      where: {type:{not:"art"}  },
-      select: {
-        id: true,
-        libelle: true,
-        description: true,
-        categoryId: true,
-        images: true,
-        price: true,
-        duration: true,
-        category: true,
-        metiers: {
-          include: {
-            metier: true,
-          },
+    // --- Pagination sécurisée ---
+    let limit = parseInt(req.query.limit, 10);
+    if (isNaN(limit) || limit <= 0) {
+      limit = DEFAULT_LIMIT;
+    }
+    limit = Math.min(limit, MAX_LIMIT);
+
+    let page = parseInt(req.query.page, 10);
+    if (isNaN(page) || page <= 0) {
+      page = 1;
+    }
+
+    const skip = (page - 1) * limit;
+
+    // --- Requête Prisma ---
+    const [services, total] = await Promise.all([
+      prisma.service.findMany({
+        where: {
+          type: { not: "art" }
         },
-        users: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                companyName: true,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          libelle: true,
+          description: true,
+          categoryId: true,
+          images: true,
+          price: true,
+          duration: true,
+          category: true,
+          metiers: {
+            include: {
+              metier: true,
+            },
+          },
+          users: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  companyName: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        id: "asc",
-      },
-    });
+        orderBy: {
+          id: "asc",
+        },
+      }),
+      prisma.service.count({
+        where: {
+          type: { not: "art" }
+        }
+      })
+    ]);
 
-    // Transformer les données pour le frontend
+    // --- Transformation frontend ---
     const transformedServices = services.map(service => ({
       id: service.id.toString(),
       name: service.libelle,
@@ -217,14 +246,25 @@ router.get('/', async (req, res) => {
         bookings: 0
       })),
       status: 'active'
-    }))
+    }));
 
-    res.json(transformedServices)
+    // --- Réponse sécurisée ---
+    res.json({
+      data: transformedServices,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+
   } catch (error) {
-    console.error('Erreur lors de la récupération des services:', error)
-    res.status(500).json({ error: 'Erreur serveur' })
+    console.error('Erreur lors de la récupération des services:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
-})
+});
+
 
 // ✅ GET service select par ID
 router.get("/:id", async (req, res) => {
