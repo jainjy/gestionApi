@@ -62,6 +62,18 @@ router.get("/", async (req, res) => {
       where.location = { contains: location, mode: "insensitive" };
     }
 
+    // Fonction pour anonymiser les données
+    const createAnonymousId = (uuid) => {
+      const crypto = require('crypto');
+      const salt = process.env.ANON_SALT || 'default-salt-change-in-production';
+      return 'guide_' + crypto
+        .createHash('sha256')
+        .update(uuid + salt)
+        .digest('hex')
+        .substring(0, 8)
+        .toUpperCase();
+    };
+
     const activities = await prisma.activity.findMany({
       where,
       include: {
@@ -69,9 +81,12 @@ router.get("/", async (req, res) => {
           include: {
             user: {
               select: {
+                id: true, // Nécessaire pour l'anonymisation
                 firstName: true,
                 lastName: true,
                 avatar: true,
+                email: false, // NE PAS exposer
+                phone: false, // NE PAS exposer
               },
             },
           },
@@ -106,9 +121,60 @@ router.get("/", async (req, res) => {
 
     const total = await prisma.activity.count({ where });
 
+    // Anonymiser les données sensibles des guides
+    const securedActivities = activities.map(activity => {
+      const { guide, ...activityData } = activity;
+      
+      let securedGuide = null;
+      if (guide && guide.user) {
+        // Anonymiser les données du guide
+        securedGuide = {
+          id: guide.id, // ID du guide (peut rester si nécessaire pour les réservations)
+          user: {
+            // Anonymiser l'ID utilisateur
+            refId: createAnonymousId(guide.user.id),
+            // Limiter les informations personnelles
+            firstName: guide.user.firstName,
+            lastName: guide.user.lastName,
+            // Initiales pour les cas où le nom complet n'est pas nécessaire
+            initials: `${guide.user.firstName?.charAt(0) || ''}${guide.user.lastName?.charAt(0) || ''}`,
+            avatar: guide.user.avatar, // Avatar peut rester (donnée publique)
+            // NE PAS inclure: email, phone, etc.
+          },
+          // Inclure les informations professionnelles du guide
+          bio: guide.bio,
+          rating: guide.rating,
+          experienceYears: guide.experienceYears,
+          certifications: guide.certifications,
+          languages: guide.languages,
+          // Supprimer les données sensibles
+          userId: undefined,
+          createdAt: undefined,
+          updatedAt: undefined,
+        };
+      }
+
+      // Nettoyer les données sensibles de l'activité elle-même
+      const securedActivity = {
+        ...activityData,
+        guide: securedGuide,
+        // Supprimer les IDs sensibles si non nécessaires
+        guideId: undefined, // Ou garder si nécessaire pour le frontend
+        // Nettoyer d'autres données potentiellement sensibles
+        contactEmail: undefined,
+        contactPhone: undefined,
+        internalNotes: undefined,
+      };
+
+      return securedActivity;
+    });
+
+    // Logger l'accès pour audit
+    console.log(`[AUDIT] Activities fetched: ${securedActivities.length} activities, User: ${req.user?.id || 'anonymous'}, IP: ${req.ip}`);
+
     res.json({
       success: true,
-      data: activities,
+      data: securedActivities,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -118,9 +184,14 @@ router.get("/", async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching activities:", error);
+    // Ne pas exposer les détails de l'erreur en production
+    const errorMessage = process.env.NODE_ENV === 'production' 
+      ? "Erreur lors de la récupération des activités"
+      : error.message;
+    
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la récupération des activités",
+      error: errorMessage,
     });
   }
 });

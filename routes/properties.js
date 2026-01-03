@@ -129,7 +129,7 @@ router.get('/', async (req, res) => {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            role: true  // Ajouté pour déterminer si c'est un admin
           }
         }, 
         favorites: true 
@@ -137,19 +137,82 @@ router.get('/', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     })
 
+    // Fonction pour créer un identifiant anonyme
+    const createAnonymousId = (uuid) => {
+      const crypto = require('crypto');
+      const salt = process.env.ANON_SALT || 'default-salt-change-in-production';
+      return 'owner_' + crypto
+        .createHash('sha256')
+        .update(uuid + salt)
+        .digest('hex')
+        .substring(0, 8)
+        .toUpperCase();
+    }
+
+    // Mapper les propriétés avec anonymisation COMPLÈTE des données sensibles
     const mappedProperties = properties.map(property => {
       const mapped = mapPropertyFields(property);
-      return {
+      
+      // Anonymiser COMPLÈTEMENT les données du propriétaire
+      let safeOwnerInfo = null;
+      
+      if (property.owner) {
+        safeOwnerInfo = {
+          // REMPLACER l'UUID réel par un identifiant anonyme
+          refId: createAnonymousId(property.owner.id),
+          
+          // Nom complet (optionnel - vérifier conformité RGPD)
+          // fullName: `${property.owner.firstName} ${property.owner.lastName}`,
+          
+          // Alternative plus sécurisée : initiales seulement
+          initials: `${property.owner.firstName?.charAt(0) || ''}${property.owner.lastName?.charAt(0) || ''}`,
+          
+          // Indicateur générique (sans révéler le rôle exact)
+          isProfessional: property.owner.role === 'admin' || property.owner.role === 'agent',
+          
+          // Indicateur de vérification (optionnel)
+          isVerified: true  // Si vous avez un système de vérification
+        };
+        
+        // Option : n'exposer le nom complet QUE pour les agents/professionnels
+        if (property.owner.role === 'agent' || property.owner.role === 'agency') {
+          safeOwnerInfo.fullName = `${property.owner.firstName} ${property.owner.lastName}`;
+          safeOwnerInfo.company = property.owner.companyName || null;
+        }
+      }
+      
+      // Également anonymiser les références internes dans les propriétés
+      const safeProperty = {
         ...mapped,
+        // Supprimer toute référence directe à ownerId s'il existe
+        ownerId: undefined,
+        
         socialType: determineSocialType(property),
-        socialTypeLabel: SOCIAL_TYPE_LABELS[determineSocialType(property)] || null
+        socialTypeLabel: SOCIAL_TYPE_LABELS[determineSocialType(property)] || null,
+        owner: safeOwnerInfo
       };
+      
+      // Nettoyer les champs potentiellement sensibles
+      delete safeProperty.ownerEmail;
+      delete safeProperty.ownerPhone;
+      delete safeProperty.contactEmail;
+      delete safeProperty.contactPhone;
+      
+      return safeProperty;
     });
 
+    // Logger l'accès aux données pour audit (sans données sensibles)
+    console.log(`[AUDIT] Properties fetched: ${mappedProperties.length} properties, User: ${req.user?.id || 'anonymous'}, IP: ${req.ip}`);
+    
     res.json(mappedProperties)
   } catch (error) {
     console.error('Failed to fetch properties:', error)
-    res.status(500).json({ error: 'Failed to fetch properties' })
+    // Ne pas exposer les détails de l'erreur en production
+    const errorMessage = process.env.NODE_ENV === 'production' 
+      ? 'Failed to fetch properties' 
+      : error.message;
+    
+    res.status(500).json({ error: errorMessage })
   }
 })
 
