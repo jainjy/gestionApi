@@ -10,7 +10,7 @@ const parseDiscoveryData = (data, userId = null) => {
   if (parsedData.coordinates) {
     const coords = validateCoordinates(parsedData.coordinates);
     if (coords) {
-      parsedData.coordinates = coords;
+      parsedData.coordinates = JSON.stringify(coords);
     } else {
       delete parsedData.coordinates;
     }
@@ -29,24 +29,23 @@ const parseDiscoveryData = (data, userId = null) => {
     "ageRestrictionMin",
     "ageRestrictionMax",
   ];
+  
   numberFields.forEach((field) => {
     if (parsedData[field] !== undefined) {
-      parsedData[field] = parseFloat(parsedData[field]) || 0;
+      const value = parseFloat(parsedData[field]);
+      parsedData[field] = isNaN(value) ? 0 : value;
     }
   });
 
-  // Gérer groupSize
+  // Gérer groupSize si fourni comme objet
   if (parsedData.groupSize && typeof parsedData.groupSize === "object") {
     parsedData.groupSizeMin = parsedData.groupSize.min || 1;
     parsedData.groupSizeMax = parsedData.groupSize.max || 10;
     delete parsedData.groupSize;
   }
 
-  // Gérer ageRestriction
-  if (
-    parsedData.ageRestriction &&
-    typeof parsedData.ageRestriction === "object"
-  ) {
+  // Gérer ageRestriction si fourni comme objet
+  if (parsedData.ageRestriction && typeof parsedData.ageRestriction === "object") {
     parsedData.ageRestrictionMin = parsedData.ageRestriction.min;
     parsedData.ageRestrictionMax = parsedData.ageRestriction.max;
     delete parsedData.ageRestriction;
@@ -63,9 +62,43 @@ const parseDiscoveryData = (data, userId = null) => {
     "petFriendly",
     "wheelchairAccessible",
   ];
+  
   booleanFields.forEach((field) => {
     if (parsedData[field] !== undefined) {
       parsedData[field] = Boolean(parsedData[field]);
+    }
+  });
+
+  // Convertir les champs Json
+  const jsonFields = [
+    "images",
+    "tags",
+    "highlights",
+    "bestSeason",
+    "bestTime",
+    "equipment",
+    "includes",
+    "notIncludes",
+    "languages",
+    "includedServices",
+    "requirements",
+    "availableDates",
+  ];
+  
+  jsonFields.forEach((field) => {
+    if (parsedData[field] !== undefined) {
+      if (Array.isArray(parsedData[field])) {
+        parsedData[field] = JSON.stringify(parsedData[field]);
+      } else if (typeof parsedData[field] === "string") {
+        try {
+          JSON.parse(parsedData[field]);
+        } catch {
+          parsedData[field] = JSON.stringify([parsedData[field]]);
+        }
+      }
+    } else {
+      // Valeur par défaut pour les champs Json
+      parsedData[field] = JSON.stringify([]);
     }
   });
 
@@ -73,11 +106,15 @@ const parseDiscoveryData = (data, userId = null) => {
   if (!parsedData.currency) parsedData.currency = "EUR";
   if (!parsedData.status) parsedData.status = "DRAFT";
   if (parsedData.featured === undefined) parsedData.featured = false;
-
+  
   // Assurer que maxVisitors est défini
   if (!parsedData.maxVisitors && parsedData.groupSizeMax) {
     parsedData.maxVisitors = parsedData.groupSizeMax;
   }
+  
+  // Valeurs par défaut pour groupSize
+  if (!parsedData.groupSizeMin) parsedData.groupSizeMin = 1;
+  if (!parsedData.groupSizeMax) parsedData.groupSizeMax = 10;
 
   // Associer à l'utilisateur si fourni
   if (userId) {
@@ -85,6 +122,22 @@ const parseDiscoveryData = (data, userId = null) => {
   }
 
   return parsedData;
+};
+
+// Fonction helper pour parser les champs Json
+const parseJsonField = (field) => {
+  if (!field) return [];
+  try {
+    if (Array.isArray(field)) return field;
+    if (typeof field === "string") {
+      const parsed = JSON.parse(field);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    }
+    if (typeof field === "object") return Object.values(field);
+    return [];
+  } catch (error) {
+    return [];
+  }
 };
 
 // Formater la réponse pour le frontend
@@ -104,7 +157,21 @@ const formatDiscoveryResponse = (discovery) => {
       }
     : null;
 
-  return {
+  // Parser les coordonnées
+  let coordinates = { lat: 0, lng: 0 };
+  if (discovery.coordinates) {
+    try {
+      if (typeof discovery.coordinates === "string") {
+        coordinates = JSON.parse(discovery.coordinates);
+      } else if (typeof discovery.coordinates === "object") {
+        coordinates = discovery.coordinates;
+      }
+    } catch (error) {
+      console.error("Erreur parsing coordinates:", error);
+    }
+  }
+
+  const formatted = {
     ...discovery,
     // Reconstruire groupSize
     groupSize: {
@@ -116,34 +183,23 @@ const formatDiscoveryResponse = (discovery) => {
       min: discovery.ageRestrictionMin,
       max: discovery.ageRestrictionMax,
     },
-    // Assurer que les tableaux sont des tableaux
-    tags: Array.isArray(discovery.tags) ? discovery.tags : [],
-    images: Array.isArray(discovery.images) ? discovery.images : [],
-    highlights: Array.isArray(discovery.highlights) ? discovery.highlights : [],
-    bestSeason: Array.isArray(discovery.bestSeason) ? discovery.bestSeason : [],
-    bestTime: Array.isArray(discovery.bestTime) ? discovery.bestTime : [],
-    equipment: Array.isArray(discovery.equipment) ? discovery.equipment : [],
-    includes: Array.isArray(discovery.includes) ? discovery.includes : [],
-    notIncludes: Array.isArray(discovery.notIncludes)
-      ? discovery.notIncludes
-      : [],
-    languages: Array.isArray(discovery.languages) ? discovery.languages : [],
-    includedServices: Array.isArray(discovery.includedServices)
-      ? discovery.includedServices
-      : [],
-    requirements: Array.isArray(discovery.requirements)
-      ? discovery.requirements
-      : [],
-    availableDates: Array.isArray(discovery.availableDates)
-      ? discovery.availableDates
-      : [],
-    // S'assurer que coordinates est un objet
-    coordinates:
-      discovery.coordinates && typeof discovery.coordinates === "object"
-        ? discovery.coordinates
-        : { lat: 0, lng: 0 },
+    // Parser tous les champs Json
+    tags: parseJsonField(discovery.tags),
+    images: parseJsonField(discovery.images),
+    highlights: parseJsonField(discovery.highlights),
+    bestSeason: parseJsonField(discovery.bestSeason),
+    bestTime: parseJsonField(discovery.bestTime),
+    equipment: parseJsonField(discovery.equipment),
+    includes: parseJsonField(discovery.includes),
+    notIncludes: parseJsonField(discovery.notIncludes),
+    languages: parseJsonField(discovery.languages),
+    includedServices: parseJsonField(discovery.includedServices),
+    requirements: parseJsonField(discovery.requirements),
+    availableDates: parseJsonField(discovery.availableDates),
+    // Coordonnées
+    coordinates: coordinates,
     // Ajouter l'ID si manquant
-    id: discovery.id || discovery._id,
+    id: discovery.id,
     // Informations de l'utilisateur
     user: userInfo,
     // Pour la compatibilité
@@ -154,7 +210,11 @@ const formatDiscoveryResponse = (discovery) => {
         : ""),
     contactEmail:
       discovery.contactEmail || (discovery.user ? discovery.user.email : ""),
+    // Assurer que rating est un nombre
+    rating: discovery.rating || 0,
   };
+
+  return formatted;
 };
 
 // Récupérer toutes les découvertes avec filtres
@@ -201,7 +261,7 @@ exports.getAllDiscoveries = async (req, res, next) => {
       if (ratingMax !== undefined) where.rating.lte = parseFloat(ratingMax);
     }
 
-    // Recherche texte
+    // Recherche texte - Éviter d'utiliser `has` sur les champs Json
     if (search) {
       where.OR = [
         { title: { contains: search, mode: "insensitive" } },
@@ -209,7 +269,6 @@ exports.getAllDiscoveries = async (req, res, next) => {
         { location: { contains: search, mode: "insensitive" } },
         { organizer: { contains: search, mode: "insensitive" } },
         { city: { contains: search, mode: "insensitive" } },
-        { tags: { has: search } },
       ];
     }
 
@@ -221,6 +280,7 @@ exports.getAllDiscoveries = async (req, res, next) => {
     const orderBy = {};
     const validSortFields = [
       "createdAt",
+      "updatedAt",
       "rating",
       "price",
       "title",
@@ -312,6 +372,7 @@ exports.getMyDiscoveries = async (req, res, next) => {
     const orderBy = {};
     const validSortFields = [
       "createdAt",
+      "updatedAt",
       "rating",
       "price",
       "title",
@@ -488,7 +549,7 @@ exports.checkDiscoveryOwnership = async (req, res, next) => {
       });
     }
 
-    // Autoriser l'professional ou le propriétaire
+    // Autoriser le professional ou le propriétaire
     if (discovery.userId !== userId && userRole !== "professional") {
       return res.status(403).json({
         success: false,
@@ -513,6 +574,11 @@ exports.updateDiscovery = async (req, res, next) => {
     const { id } = req.params;
     const userId = req.user.id;
     const discoveryData = parseDiscoveryData(req.body, userId);
+
+    // Supprimer les champs qui ne doivent pas être mis à jour
+    delete discoveryData.visits;
+    delete discoveryData.revenue;
+    delete discoveryData.createdAt;
 
     // Mettre à jour la découverte
     const discovery = await prisma.discovery.update({
@@ -731,63 +797,60 @@ exports.updateDiscoveryRating = async (req, res, next) => {
   }
 };
 
-// CORRECTION DE getDiscoveryStats
+// Obtenir les statistiques
 exports.getDiscoveryStats = async (req, res, next) => {
   try {
-    console.log('📊 getDiscoveryStats - Début');
-    
-    // Vérification de l'authentification
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({
-        success: false,
-        message: 'Utilisateur non authentifié'
-      });
-    }
-    
     const userId = req.user.id;
     const userRole = req.user.role;
-    
+
     // Clause WHERE
-    const where = userRole === 'professional' ? {} : { userId };
-    
-    console.log('WHERE clause:', where);
-    
-    // 1. Statistiques de base (corrigées)
+    const where = userRole === "professional" ? {} : { userId };
+
+    // 1. Statistiques de base
     const totals = {
       total: await prisma.discovery.count({ where }),
-      published: await prisma.discovery.count({ where: { ...where, status: 'PUBLISHED' } }),
-      active: await prisma.discovery.count({ where: { ...where, status: 'ACTIVE' } }),
-      draft: await prisma.discovery.count({ where: { ...where, status: 'DRAFT' } }),
-      archived: await prisma.discovery.count({ where: { ...where, status: 'ARCHIVED' } }),
-      featured: await prisma.discovery.count({ where: { ...where, featured: true } })
+      published: await prisma.discovery.count({
+        where: { ...where, status: "PUBLISHED" },
+      }),
+      active: await prisma.discovery.count({
+        where: { ...where, status: "ACTIVE" },
+      }),
+      draft: await prisma.discovery.count({
+        where: { ...where, status: "DRAFT" },
+      }),
+      archived: await prisma.discovery.count({
+        where: { ...where, status: "ARCHIVED" },
+      }),
+      featured: await prisma.discovery.count({
+        where: { ...where, featured: true },
+      }),
     };
-    
+
     // 2. Agrégations financières
     const financialAgg = await prisma.discovery.aggregate({
-      where: { 
+      where: {
         ...where,
-        status: { in: ['PUBLISHED', 'ACTIVE'] }
+        status: { in: ["PUBLISHED", "ACTIVE"] },
       },
       _sum: {
         revenue: true,
-        price: true
       },
       _avg: {
         price: true,
-        rating: true
-      }
+        rating: true,
+      },
     });
-    
+
     // 3. Agrégations visites
     const visitsAgg = await prisma.discovery.aggregate({
       where,
       _sum: {
-        visits: true
-      }
+        visits: true,
+      },
     });
-    
-    // 4. Récupérer toutes les découvertes pour grouper manuellement (solution temporaire)
-    const allDiscoveries = await prisma.discovery.findMany({
+
+    // 4. Récupérer les découvertes pour calculer les répartitions
+    const discoveries = await prisma.discovery.findMany({
       where,
       select: {
         type: true,
@@ -795,27 +858,27 @@ exports.getDiscoveryStats = async (req, res, next) => {
         status: true,
         rating: true,
         visits: true,
-        revenue: true
-      }
+        revenue: true,
+      },
     });
-    
-    // 5. Grouper manuellement
+
+    // 5. Calculer les répartitions manuellement
     const breakdown = {
       byType: {},
       byDifficulty: {},
-      byStatus: {}
+      byStatus: {},
     };
-    
-    allDiscoveries.forEach(discovery => {
+
+    discoveries.forEach((discovery) => {
       // Par type
-      const type = discovery.type || 'Non spécifié';
+      const type = discovery.type || "Non spécifié";
       if (!breakdown.byType[type]) {
         breakdown.byType[type] = {
           count: 0,
           visits: 0,
           revenue: 0,
           totalRating: 0,
-          countWithRating: 0
+          countWithRating: 0,
         };
       }
       breakdown.byType[type].count++;
@@ -825,14 +888,14 @@ exports.getDiscoveryStats = async (req, res, next) => {
         breakdown.byType[type].totalRating += discovery.rating;
         breakdown.byType[type].countWithRating++;
       }
-      
+
       // Par difficulté
-      const difficulty = discovery.difficulty || 'Non spécifié';
+      const difficulty = discovery.difficulty || "Non spécifié";
       if (!breakdown.byDifficulty[difficulty]) {
         breakdown.byDifficulty[difficulty] = {
           count: 0,
           totalRating: 0,
-          countWithRating: 0
+          countWithRating: 0,
         };
       }
       breakdown.byDifficulty[difficulty].count++;
@@ -840,40 +903,42 @@ exports.getDiscoveryStats = async (req, res, next) => {
         breakdown.byDifficulty[difficulty].totalRating += discovery.rating;
         breakdown.byDifficulty[difficulty].countWithRating++;
       }
-      
+
       // Par statut
-      const status = discovery.status || 'Non spécifié';
+      const status = discovery.status || "Non spécifié";
       if (!breakdown.byStatus[status]) {
         breakdown.byStatus[status] = 0;
       }
       breakdown.byStatus[status]++;
     });
-    
+
     // 6. Calculer les moyennes
-    Object.keys(breakdown.byType).forEach(type => {
+    Object.keys(breakdown.byType).forEach((type) => {
       const data = breakdown.byType[type];
-      data.averageRating = data.countWithRating > 0 
-        ? parseFloat((data.totalRating / data.countWithRating).toFixed(1))
-        : 0;
+      data.averageRating =
+        data.countWithRating > 0
+          ? parseFloat((data.totalRating / data.countWithRating).toFixed(1))
+          : 0;
       delete data.totalRating;
       delete data.countWithRating;
     });
-    
-    Object.keys(breakdown.byDifficulty).forEach(difficulty => {
+
+    Object.keys(breakdown.byDifficulty).forEach((difficulty) => {
       const data = breakdown.byDifficulty[difficulty];
-      data.averageRating = data.countWithRating > 0 
-        ? parseFloat((data.totalRating / data.countWithRating).toFixed(1))
-        : 0;
+      data.averageRating =
+        data.countWithRating > 0
+          ? parseFloat((data.totalRating / data.countWithRating).toFixed(1))
+          : 0;
       delete data.totalRating;
       delete data.countWithRating;
     });
-    
-    // 7. Découvertes en vedette (simplifié)
+
+    // 7. Découvertes en vedette
     const featuredDiscoveries = await prisma.discovery.findMany({
       where: {
         ...where,
         featured: true,
-        status: { in: ['PUBLISHED', 'ACTIVE'] }
+        status: { in: ["PUBLISHED", "ACTIVE"] },
       },
       include: {
         user: {
@@ -881,60 +946,52 @@ exports.getDiscoveryStats = async (req, res, next) => {
             id: true,
             firstName: true,
             lastName: true,
-            avatar: true
-          }
-        }
+            avatar: true,
+          },
+        },
       },
       take: 5,
-      orderBy: { rating: 'desc' }
+      orderBy: { rating: "desc" },
     });
-    
+
     // 8. Formater les résultats
     const stats = {
       totals,
       financials: {
         totalRevenue: financialAgg._sum.revenue || 0,
-        averagePrice: financialAgg._avg.price || 0,
-        averageRating: parseFloat((financialAgg._avg.rating || 0).toFixed(1))
+        averagePrice: parseFloat((financialAgg._avg.price || 0).toFixed(2)),
+        averageRating: parseFloat((financialAgg._avg.rating || 0).toFixed(1)),
       },
       visits: {
         total: visitsAgg._sum.visits || 0,
-        averagePerDiscovery: totals.total > 0 
-          ? parseFloat((visitsAgg._sum.visits || 0) / totals.total).toFixed(1)
-          : 0
+        averagePerDiscovery:
+          totals.total > 0
+            ? parseFloat((visitsAgg._sum.visits || 0) / totals.total).toFixed(1)
+            : 0,
       },
       breakdown,
-      featuredDiscoveries: featuredDiscoveries.map(formatDiscoveryResponse)
+      featuredDiscoveries: featuredDiscoveries.map(formatDiscoveryResponse),
     };
-    
-    console.log('📊 getDiscoveryStats - Succès');
-    
+
     res.json({
       success: true,
       data: stats,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
   } catch (error) {
-    console.error('❌ Erreur dans getDiscoveryStats:', error);
-    console.error('Stack trace:', error.stack);
-    
+    console.error("Erreur getDiscoveryStats:", error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors du calcul des statistiques',
-      message: error.message,
-      details: process.env.NODE_ENV === 'development' ? {
-        code: error.code,
-        meta: error.meta
-      } : undefined
+      message: "Erreur lors du calcul des statistiques",
+      error: error.message,
     });
   }
 };
 
-// Rechercher des découvertes par tags
+// Rechercher des découvertes par tags (attention: limitation avec Json)
 exports.searchByTags = async (req, res, next) => {
   try {
-    const { tags, operator = "OR", userId } = req.query;
+    const { tags, userId } = req.query;
 
     if (!tags) {
       return res.status(400).json({
@@ -948,9 +1005,7 @@ exports.searchByTags = async (req, res, next) => {
       : tags.split(",").map((tag) => tag.trim());
 
     const where = {
-      tags: {
-        [operator === "AND" ? "hasEvery" : "hasSome"]: tagArray,
-      },
+      status: { in: ["PUBLISHED", "ACTIVE"] },
     };
 
     // Filtrer par utilisateur si fourni
@@ -973,7 +1028,19 @@ exports.searchByTags = async (req, res, next) => {
       orderBy: { rating: "desc" },
     });
 
-    const formattedDiscoveries = discoveries.map(formatDiscoveryResponse);
+    // Filtrer manuellement par tags (limitation de Prisma avec Json)
+    const filteredDiscoveries = discoveries.filter((discovery) => {
+      const discoveryTags = parseJsonField(discovery.tags);
+      return tagArray.some((tag) =>
+        discoveryTags.some(
+          (discoveryTag) =>
+            discoveryTag.toLowerCase().includes(tag.toLowerCase()) ||
+            tag.toLowerCase().includes(discoveryTag.toLowerCase())
+        )
+      );
+    });
+
+    const formattedDiscoveries = filteredDiscoveries.map(formatDiscoveryResponse);
 
     res.json({
       success: true,
@@ -1019,7 +1086,6 @@ exports.searchDiscoveries = async (req, res, next) => {
         { description: { contains: query, mode: "insensitive" } },
         { location: { contains: query, mode: "insensitive" } },
         { organizer: { contains: query, mode: "insensitive" } },
-        { tags: { has: query } },
       ];
     }
 
@@ -1041,7 +1107,18 @@ exports.searchDiscoveries = async (req, res, next) => {
     }
 
     // Filtres d'aménités
-    Object.keys(amenities).forEach((amenity) => {
+    const amenityFields = [
+      "guideIncluded",
+      "transportIncluded",
+      "mealIncluded",
+      "parkingAvailable",
+      "wifiAvailable",
+      "familyFriendly",
+      "petFriendly",
+      "wheelchairAccessible",
+    ];
+
+    amenityFields.forEach((amenity) => {
       if (amenities[amenity] !== undefined) {
         where[amenity] = amenities[amenity];
       }
@@ -1146,7 +1223,6 @@ exports.exportDiscoveries = async (req, res, next) => {
     const formattedDiscoveries = discoveries.map(formatDiscoveryResponse);
 
     if (format === "csv") {
-      // Implémenter l'export CSV
       const { Parser } = require("json2csv");
 
       // Définir les champs CSV
@@ -1182,7 +1258,6 @@ exports.exportDiscoveries = async (req, res, next) => {
         "user.companyName",
       ];
 
-      // Options pour json2csv
       const opts = { fields };
 
       try {
@@ -1195,16 +1270,13 @@ exports.exportDiscoveries = async (req, res, next) => {
             "user.lastName": discovery.user?.lastName || "",
             "user.email": discovery.user?.email || "",
             "user.companyName": discovery.user?.companyName || "",
-            // Formater les dates
             createdAt: discovery.createdAt
               ? new Date(discovery.createdAt).toISOString()
               : "",
-            // Formater les booléens
             guideIncluded: discovery.guideIncluded ? "Oui" : "Non",
             transportIncluded: discovery.transportIncluded ? "Oui" : "Non",
             mealIncluded: discovery.mealIncluded ? "Oui" : "Non",
             featured: discovery.featured ? "Oui" : "Non",
-            // Convertir les tableaux en chaînes
             tags: Array.isArray(discovery.tags)
               ? discovery.tags.join("; ")
               : "",
@@ -1214,7 +1286,6 @@ exports.exportDiscoveries = async (req, res, next) => {
           }))
         );
 
-        // Nom du fichier avec date
         const filename = `discoveries_export_${new Date()
           .toISOString()
           .split("T")[0]}.csv`;
@@ -1273,29 +1344,60 @@ exports.getNearbyDiscoveries = async (req, res, next) => {
           },
         },
       },
-      take: parseInt(limit),
+      take: 100, // Prendre plus de résultats pour filtrer par distance
     });
 
-    // Filtrer par distance (implémentation basique)
+    // Fonction pour calculer la distance
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+      const R = 6371; // Rayon de la Terre en km
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLon = ((lon2 - lon1) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    // Filtrer par distance
     const userLat = parseFloat(lat);
     const userLng = parseFloat(lng);
     const radiusKm = parseFloat(radius);
 
     const nearbyDiscoveries = discoveries.filter((discovery) => {
-      if (!discovery.coordinates || typeof discovery.coordinates !== "object")
+      if (!discovery.coordinates) return false;
+
+      let coordinates;
+      try {
+        coordinates =
+          typeof discovery.coordinates === "string"
+            ? JSON.parse(discovery.coordinates)
+            : discovery.coordinates;
+      } catch {
         return false;
+      }
 
-      const { lat: discLat, lng: discLng } = discovery.coordinates;
-      if (!discLat || !discLng) return false;
+      if (!coordinates.lat || !coordinates.lng) return false;
 
-      const distance = calculateDistance(userLat, userLng, discLat, discLng);
+      const distance = calculateDistance(
+        userLat,
+        userLng,
+        coordinates.lat,
+        coordinates.lng
+      );
       return distance <= radiusKm;
     });
 
+    // Limiter les résultats
+    const limitedDiscoveries = nearbyDiscoveries.slice(0, parseInt(limit));
+
     res.json({
       success: true,
-      data: nearbyDiscoveries.map(formatDiscoveryResponse),
-      count: nearbyDiscoveries.length,
+      data: limitedDiscoveries.map(formatDiscoveryResponse),
+      count: limitedDiscoveries.length,
       location: { lat: userLat, lng: userLng },
       radius: radiusKm,
     });
@@ -1351,18 +1453,3 @@ exports.getUserDiscoveryStats = async (req, res, next) => {
     next(error);
   }
 };
-
-// Fonction utilitaire pour calculer la distance
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Rayon de la Terre en km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}

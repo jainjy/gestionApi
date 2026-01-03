@@ -2801,7 +2801,7 @@ model Event {
   price                Float       @default(0)
   discountPrice        Float?      @default(0)
   currency             String      @default("EUR")
-  image                String?     @db.VarChar(500)
+  image                String?     @db.Text // ← Changé de VarChar(500) à Text
   images               Json?       @default("[]")
   featured             Boolean     @default(false)
   status               EventStatus @default(DRAFT)
