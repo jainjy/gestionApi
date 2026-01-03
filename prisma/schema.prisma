@@ -893,7 +893,10 @@ model Appointment {
 model Order {
   id          String @id @default(uuid())
   orderNumber String @unique
-
+  deliveryId      String?      // ID dans la plateforme de livraison
+  trackingNumber  String?      // Numéro de suivi
+  syncStatus      String?      // pending, syncing, synced, failed
+  deliveryDetails Json?        // Détails de la livraison (driver, ETA, etc.)
   // Relations utilisateurs
   userId        String // client qui commande
   idPrestataire String // propriétaire du produit/service
