@@ -11,23 +11,24 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 )
 
-// Configuration Multer
+// Configuration Multer pour accepter images ET vidéos
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max
+    fileSize: 50 * 1024 * 1024, // 50MB max pour les vidéos
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    // Accepter images ET vidéos
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
       cb(null, true)
     } else {
-      cb(new Error('Le fichier doit être une image'), false)
+      cb(new Error('Le fichier doit être une image ou une vidéo'), false)
     }
   }
 })
 
-// Fonction pour uploader vers Supabase
-async function uploadAdvertisementImage(file) {
+// Fonction pour uploader vers Supabase (images ET vidéos)
+async function uploadAdvertisementMedia(file) {
   const fileExt = file.originalname.split('.').pop()
   const uniqueFileName = `ad-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
   const filePath = `advertisements/${uniqueFileName}`
@@ -59,7 +60,7 @@ async function uploadAdvertisementImage(file) {
  */
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, position } = req.query
+    const { page = 1, limit = 10, status, position, type } = req.query
     const skip = (parseInt(page) - 1) * parseInt(limit)
 
     // Vérifier les permissions admin
@@ -73,6 +74,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const where = {}
     if (status && status !== 'all') where.status = status
     if (position && position !== 'all') where.position = position
+    if (type && type !== 'all') where.type = type
 
     const [advertisements, total] = await Promise.all([
       prisma.advertisement.findMany({
@@ -119,7 +121,7 @@ router.get('/', authenticateToken, async (req, res) => {
  */
 router.get('/active', async (req, res) => {
   try {
-    const { position } = req.query
+    const { position, type } = req.query
     const now = new Date()
 
     const where = {
@@ -146,6 +148,10 @@ router.get('/active', async (req, res) => {
 
     if (position) {
       where.position = position
+    }
+
+    if (type) {
+      where.type = type
     }
 
     const advertisements = await prisma.advertisement.findMany({
@@ -185,8 +191,9 @@ router.get('/active', async (req, res) => {
 
 /**
  * ➕ POST /api/advertisements - Créer une nouvelle publicité (Admin)
+ * CORRECTION : upload.single('media') au lieu de upload.single('image')
  */
-router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
+router.post('/', authenticateToken, upload.single('media'), async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({
@@ -195,27 +202,65 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       })
     }
 
+    // Validation : fichier requis
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "Image requise"
+        message: "Media requis (image ou vidéo selon le type)"
       })
     }
 
     const { title, description, targetUrl, position, type, status, startDate, endDate, priority } = req.body
 
-    // Upload de l'image
-    const imageResult = await uploadAdvertisementImage(req.file)
+    // Validation : champs requis
+    if (!title || !type) {
+      return res.status(400).json({
+        success: false,
+        message: "Titre et type sont requis"
+      })
+    }
+
+    // Validation cohérence type de fichier / type de publicité
+    const fileType = req.file.mimetype.split('/')[0] // 'image' ou 'video'
+    
+    if (type === 'video' && fileType !== 'video') {
+      return res.status(400).json({
+        success: false,
+        message: "Le type 'video' nécessite un fichier vidéo"
+      })
+    }
+
+    if ((type === 'banner' || type === 'popup') && fileType !== 'image') {
+      return res.status(400).json({
+        success: false,
+        message: `Le type '${type}' nécessite une image`
+      })
+    }
+
+    // Validation des dates
+    if (startDate && endDate) {
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      if (end < start) {
+        return res.status(400).json({
+          success: false,
+          message: "La date de fin ne peut pas être avant la date de début"
+        })
+      }
+    }
+
+    // Upload du média
+    const mediaResult = await uploadAdvertisementMedia(req.file)
 
     // Créer la publicité
     const advertisement = await prisma.advertisement.create({
       data: {
         title,
         description,
-        imageUrl: imageResult.url,
+        imageUrl: mediaResult.url,
         targetUrl: targetUrl || null,
         position: position || 'header',
-        type: type || 'banner',
+        type: type,
         status: status || 'active',
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
@@ -251,8 +296,9 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
 
 /**
  * ✏️ PUT /api/advertisements/:id - Modifier une publicité (Admin)
+ * CORRECTION : upload.single('media') au lieu de upload.single('image')
  */
-router.put('/:id', authenticateToken, upload.single('image'), async (req, res) => {
+router.put('/:id', authenticateToken, upload.single('media'), async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({
@@ -276,6 +322,26 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res) =
       })
     }
 
+    // Validation : champs requis
+    if (!title || !type) {
+      return res.status(400).json({
+        success: false,
+        message: "Titre et type sont requis"
+      })
+    }
+
+    // Validation des dates
+    if (startDate && endDate) {
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      if (end < start) {
+        return res.status(400).json({
+          success: false,
+          message: "La date de fin ne peut pas être avant la date de début"
+        })
+      }
+    }
+
     const updateData = {
       title,
       description,
@@ -288,18 +354,38 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res) =
       priority: parseInt(priority) || 1
     }
 
-    // Si nouvelle image fournie
+    // Si nouveau média fourni
     if (req.file) {
-      const imageResult = await uploadAdvertisementImage(req.file)
-      updateData.imageUrl = imageResult.url
+      // Validation cohérence type de fichier / type de publicité
+      const fileType = req.file.mimetype.split('/')[0]
+      
+      if (type === 'video' && fileType !== 'video') {
+        return res.status(400).json({
+          success: false,
+          message: "Le type 'video' nécessite un fichier vidéo"
+        })
+      }
 
-      // Optionnel: Supprimer l'ancienne image de Supabase
+      if ((type === 'banner' || type === 'popup') && fileType !== 'image') {
+        return res.status(400).json({
+          success: false,
+          message: `Le type '${type}' nécessite une image`
+        })
+      }
+
+      const mediaResult = await uploadAdvertisementMedia(req.file)
+      updateData.imageUrl = mediaResult.url
+
+      // Supprimer l'ancien média de Supabase si ce n'est pas une URL par défaut
       try {
-        await supabase.storage
-          .from('blog-images')
-          .remove([existingAd.imageUrl.split('/').pop()])
+        if (existingAd.imageUrl && !existingAd.imageUrl.includes('placeholder')) {
+          const oldFileName = existingAd.imageUrl.split('/').pop()
+          await supabase.storage
+            .from('blog-images')
+            .remove([`advertisements/${oldFileName}`])
+        }
       } catch (deleteError) {
-        console.warn('⚠️ Impossible de supprimer ancienne image:', deleteError)
+        console.warn('⚠️ Impossible de supprimer ancien média:', deleteError)
       }
     }
 
@@ -359,14 +445,16 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       })
     }
 
-    // Supprimer l'image de Supabase
+    // Supprimer le média de Supabase si ce n'est pas une URL par défaut
     try {
-      const imagePath = advertisement.imageUrl.split('/').pop()
-      await supabase.storage
-        .from('blog-images')
-        .remove([`advertisements/${imagePath}`])
+      if (advertisement.imageUrl && !advertisement.imageUrl.includes('placeholder')) {
+        const imagePath = advertisement.imageUrl.split('/').pop()
+        await supabase.storage
+          .from('blog-images')
+          .remove([`advertisements/${imagePath}`])
+      }
     } catch (deleteError) {
-      console.warn('⚠️ Impossible de supprimer image:', deleteError)
+      console.warn('⚠️ Impossible de supprimer média:', deleteError)
     }
 
     // Supprimer la publicité
@@ -444,10 +532,18 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
           title: true,
           clicks: true,
           impressions: true,
-          position: true
+          position: true,
+          type: true
         }
       })
     ])
+
+    // Statistiques par type (banner, popup, video)
+    const adsByType = await prisma.advertisement.groupBy({
+      by: ['type'],
+      _count: { id: true },
+      _sum: { clicks: true, impressions: true }
+    })
 
     const stats = {
       total: totalAds,
@@ -458,6 +554,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
         ? ((totalClicks._sum.clicks / totalImpressions._sum.impressions) * 100).toFixed(2)
         : 0,
       byPosition: adsByPosition,
+      byType: adsByType,
       topPerforming: topPerformingAds
     }
 
