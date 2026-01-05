@@ -159,52 +159,66 @@ router.post("/bulk-assign-category", async (req, res) => {
   }
 });
 
-// ✅ Routes génériques (APRÈS les routes spécifiques)
 
-// GET /api/services - Récupérer tous les services avec leurs catégories
-const MAX_LIMIT = 100;
-const DEFAULT_LIMIT = 20;
+/**
+ * 🔐 PARAMÈTRES DE SÉCURITÉ PAGINATION
+ */
+const MAX_LIMIT = 100;      // plafond serveur
+const DEFAULT_LIMIT = 20;   // valeur par défaut
 
+/**
+ * 📌 GET /services
+ * Pagination sécurisée (anti dump BDD)
+ */
 router.get('/', async (req, res) => {
   try {
-    // --- Pagination sécurisée ---
+    // ---------- VALIDATION LIMIT ----------
     let limit = parseInt(req.query.limit, 10);
     if (isNaN(limit) || limit <= 0) {
       limit = DEFAULT_LIMIT;
     }
     limit = Math.min(limit, MAX_LIMIT);
 
+    // ---------- VALIDATION PAGE ----------
     let page = parseInt(req.query.page, 10);
     if (isNaN(page) || page <= 0) {
       page = 1;
     }
 
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    // --- Requête Prisma ---
+    // ---------- REQUÊTES DB ----------
     const [services, total] = await Promise.all([
       prisma.service.findMany({
         where: {
-          type: { not: "art" }
+          type: { not: 'art' },
         },
-        skip,
+        skip: offset,
         take: limit,
+        orderBy: { id: 'asc' },
         select: {
           id: true,
           libelle: true,
           description: true,
-          categoryId: true,
-          images: true,
           price: true,
           duration: true,
-          category: true,
+          images: true,
+          categoryId: true,
+          category: {
+            select: { name: true },
+          },
           metiers: {
-            include: {
-              metier: true,
+            select: {
+              metier: {
+                select: {
+                  id: true,
+                  libelle: true,
+                },
+              },
             },
           },
           users: {
-            include: {
+            select: {
               user: {
                 select: {
                   id: true,
@@ -216,52 +230,57 @@ router.get('/', async (req, res) => {
             },
           },
         },
-        orderBy: {
-          id: "asc",
-        },
       }),
       prisma.service.count({
         where: {
-          type: { not: "art" }
-        }
-      })
+          type: { not: 'art' },
+        },
+      }),
     ]);
 
-    // --- Transformation frontend ---
-    const transformedServices = services.map(service => ({
-      id: service.id.toString(),
+    // ---------- FORMAT FRONT ----------
+    const data = services.map(service => ({
+      id: service.id,
       name: service.libelle,
       description: service.description,
-      category: service.category?.name || 'non-categorise',
-      categoryId: service.categoryId,
+      price: service.price,
+      duration: service.duration,
       images: service.images,
+      categoryId: service.categoryId,
+      category: service.category?.name || 'non-categorise',
       metiers: service.metiers.map(m => ({
         id: m.metier.id,
-        libelle: m.metier.libelle
+        libelle: m.metier.libelle,
       })),
       vendors: service.users.map(u => ({
         id: u.user.id,
-        name: u.user.companyName || `${u.user.firstName} ${u.user.lastName}`,
+        name:
+          u.user.companyName ||
+          `${u.user.firstName} ${u.user.lastName}`,
         rating: 4.5,
-        bookings: 0
+        bookings: 0,
       })),
-      status: 'active'
+      status: 'active',
     }));
 
-    // --- Réponse sécurisée ---
-    res.json({
-      data: transformedServices,
+    // ---------- RÉPONSE ----------
+    res.status(200).json({
+      success: true,
+      data,
       pagination: {
         page,
         limit,
         total,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     });
 
   } catch (error) {
-    console.error('Erreur lors de la récupération des services:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error('[GET /services]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur',
+    });
   }
 });
 
