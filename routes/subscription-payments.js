@@ -8,16 +8,26 @@ const stripe = require("../utils/stripe");
 // POST /api/subscription-payments/create-payment-intent
 router.post("/create-payment-intent", authenticateToken, async (req, res) => {
   try {
-    const { amount, planId } = req.body;
+    const { planId } = req.body;
     const userId = req.user.id;
 
-    if (!amount || !planId) {
-      return res.status(400).json({
-        error: "Montant et ID du plan requis",
-      });
+    if (!planId) {
+      return res.status(400).json({ error: "ID du plan requis" });
     }
 
-    // Récupérer l'utilisateur pour avoir son Stripe Customer ID
+    // 1️⃣ Récupérer le plan depuis la BDD
+    const plan = await prisma.subscriptionPlan.findUnique({
+      where: { id: parseInt(planId) },
+    });
+
+    if (!plan) {
+      return res.status(404).json({ error: "Plan non trouvé" });
+    }
+
+    // 2️⃣ CALCUL DU MONTANT CÔTÉ SERVEUR
+    const amount = plan.price; // source de vérité
+
+    // 3️⃣ Récupérer l'utilisateur
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { stripeCustomerId: true, email: true },
@@ -25,85 +35,47 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
 
     let customerId = user.stripeCustomerId;
 
-    // Créer un customer Stripe si nécessaire
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        metadata: {
-          userId: userId,
-        },
+        metadata: { userId },
       });
 
       customerId = customer.id;
 
-      // Mettre à jour l'utilisateur avec le Stripe Customer ID
       await prisma.user.update({
         where: { id: userId },
         data: { stripeCustomerId: customerId },
       });
     }
 
-    // Récupérer le plan pour avoir les détails
-    const plan = await prisma.subscriptionPlan.findUnique({
-      where: { id: parseInt(planId) },
-    });
-
-    if (!plan) {
-      return res.status(404).json({
-        error: "Plan d'abonnement non trouvé",
-      });
-    }
-
-    // OPTION 1: Utiliser automatic_payment_methods (recommandé pour Google Pay/Apple Pay)
+    // 4️⃣ Création du PaymentIntent sécurisé
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount * 100, // Convertir en centimes
+      amount: Math.round(amount * 100),
       currency: "eur",
       customer: customerId,
       description: `Abonnement: ${plan.name}`,
       metadata: {
-        userId: userId,
-        planId: planId,
+        userId,
+        planId,
         planName: plan.name,
         type: "subscription",
       },
-      automatic_payment_methods: {
-        enabled: true, // Active automatiquement Google Pay/Apple Pay
-        allow_redirects: "never", // Optionnel: éviter les redirects
-      },
-      // NE PAS inclure payment_method_types quand automatic_payment_methods est activé
+      automatic_payment_methods: { enabled: true },
     });
 
-    // OPTION 2: Si vous voulez spécifier manuellement les méthodes (sans automatic_payment_methods)
-    /*
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount * 100,
-      currency: "eur",
-      customer: customerId,
-      description: `Abonnement: ${plan.name}`,
-      metadata: {
-        userId: userId,
-        planId: planId,
-        planName: plan.name,
-        type: "subscription",
-      },
-      payment_method_types: ["card", "apple_pay", "google_pay"],
-      // NE PAS inclure automatic_payment_methods ici
-    });
-    */
-
-    // Créer une transaction dans la base de données
+    // 5️⃣ Enregistrer la transaction avec montant serveur
     const transaction = await prisma.transaction.create({
       data: {
-        userId: userId,
-        amount: amount,
+        userId,
+        amount,
         currency: "eur",
         provider: "stripe",
         providerId: paymentIntent.id,
         status: "pending",
-        description: `Paiement abonnement: ${plan.name}`,
         referenceType: "subscription",
         metadata: {
-          planId: planId,
+          planId,
           planName: plan.name,
           planPrice: plan.price,
           planInterval: plan.interval,
@@ -113,21 +85,19 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
 
     res.json({
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
       transactionId: transaction.id,
-      planDetails: {
+      plan: {
         name: plan.name,
         price: plan.price,
         interval: plan.interval,
       },
     });
   } catch (error) {
-    console.error("Erreur création PaymentIntent:", error);
-    res.status(500).json({
-      error: "Erreur lors de la création du paiement",
-    });
+    console.error(error);
+    res.status(500).json({ error: "Erreur paiement" });
   }
 });
+
 
 // POST /api/subscription-payments/confirm-upgrade
 router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
