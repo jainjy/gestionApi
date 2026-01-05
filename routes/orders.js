@@ -645,7 +645,6 @@ router.post('/', authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     console.log('📦 [ORDERS] Début création commande pour utilisateur:', userId);
-    console.log('📦 [ORDERS] Items reçus:', JSON.stringify(items, null, 2));
 
     // Validation basique
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -660,12 +659,26 @@ router.post('/', authenticateToken, async (req, res) => {
     const stockErrors = [];
     let idPrestataire = null;
 
-    // =====================================================
-    // BOUCLE SUR LES ITEMS - VERSION SIMPLIFIÉE
-    // =====================================================
     for (const item of items) {
       const productId = item.productId;
-      const quantity = parseInt(item.quantity) || 1;
+      
+      // VALIDATION STRICTE DE LA QUANTITÉ
+      let quantity = parseInt(item.quantity);
+      
+      if (isNaN(quantity)) {
+        stockErrors.push(`Quantité invalide pour l'article: ${productId}`);
+        continue;
+      }
+      
+      if (!Number.isInteger(quantity)) {
+        stockErrors.push(`La quantité doit être un nombre entier pour: ${productId}`);
+        continue;
+      }
+      
+      if (quantity <= 0) {
+        stockErrors.push(`La quantité doit être supérieure à 0 pour: ${productId}`);
+        continue;
+      }
 
       console.log(`🔍 Traitement item:`, { productId, quantity });
 
@@ -688,6 +701,12 @@ router.post('/', authenticateToken, async (req, res) => {
         if (product) {
           console.log(`✅ Produit trouvé: ${product.name}`);
           
+          // Vérifier que le prix n'est pas négatif
+          if (product.price < 0) {
+            stockErrors.push(`Le prix du produit "${product.name}" est invalide`);
+            continue;
+          }
+          
           // Vérifier le prestataire
           if (!idPrestataire) {
             idPrestataire = product.userId;
@@ -707,6 +726,13 @@ router.post('/', authenticateToken, async (req, res) => {
           }
 
           const itemTotal = product.price * quantity;
+          
+          // Vérifier que le total est valide
+          if (!Number.isFinite(itemTotal) || itemTotal < 0) {
+            stockErrors.push(`Prix total invalide pour: ${product.name}`);
+            continue;
+          }
+          
           totalAmount += itemTotal;
 
           orderItems.push({
@@ -719,13 +745,13 @@ router.post('/', authenticateToken, async (req, res) => {
             itemTotal: Number(itemTotal.toFixed(2))
           });
 
-          continue; // Passer au prochain item
+          continue;
         }
       } catch (productError) {
         console.log(`ℹ️ Product ${productId} non trouvé, test en tant que service`);
       }
 
-      // 2. Chercher comme service (si l'ID est numérique)
+      // 2. Chercher comme service
       try {
         const serviceId = parseInt(productId);
         if (!isNaN(serviceId)) {
@@ -742,6 +768,12 @@ router.post('/', authenticateToken, async (req, res) => {
 
           if (service) {
             console.log(`✅ Service trouvé: ${service.libelle}`);
+            
+            // Vérifier que le prix n'est pas négatif
+            if (service.price < 0) {
+              stockErrors.push(`Le prix du service "${service.libelle}" est invalide`);
+              continue;
+            }
             
             // Récupérer propriétaire du service
             const serviceOwner = service.users?.[0]?.userId;
@@ -763,10 +795,17 @@ router.post('/', authenticateToken, async (req, res) => {
             }
 
             const itemTotal = (service.price || 0) * quantity;
+            
+            // Vérifier que le total est valide
+            if (!Number.isFinite(itemTotal) || itemTotal < 0) {
+              stockErrors.push(`Prix total invalide pour: ${service.libelle}`);
+              continue;
+            }
+            
             totalAmount += itemTotal;
 
             orderItems.push({
-              productId: service.id.toString(), // Convertir en string pour cohérence
+              productId: service.id.toString(),
               name: service.libelle,
               price: service.price || 0,
               quantity: quantity,
@@ -782,13 +821,10 @@ router.post('/', authenticateToken, async (req, res) => {
         console.log(`ℹ️ Service ${productId} non trouvé`);
       }
 
-      // Si ni produit ni service trouvé
       stockErrors.push(`Produit introuvable avec l'ID: ${productId}`);
     }
 
-    // =====================================================
-    // VÉRIFICATION FINALE
-    // =====================================================
+    // Vérifications finales
     if (stockErrors.length > 0) {
       console.log('❌ Erreurs de stock:', stockErrors);
       return res.status(400).json({
@@ -805,18 +841,15 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // =====================================================
-    // CRÉATION DE LA COMMANDE
-    // =====================================================
-    const orderNumber = `CMD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    // Vérifier que le total est positif
+    if (totalAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Le montant total de la commande est invalide"
+      });
+    }
 
-    console.log('📝 Création commande avec:', {
-      orderNumber,
-      userId,
-      idPrestataire,
-      itemsCount: orderItems.length,
-      totalAmount
-    });
+    const orderNumber = `CMD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     const order = await prisma.order.create({
       data: {
@@ -832,12 +865,20 @@ router.post('/', authenticateToken, async (req, res) => {
       },
     });
 
-    // =====================================================
-    // MISE À JOUR DES STOCKS (produits seulement)
-    // =====================================================
+    // Mise à jour des stocks avec validation
     for (const item of orderItems) {
       if (item.productType !== "service") {
         try {
+          // Vérifier le stock avant de mettre à jour
+          const currentProduct = await prisma.product.findUnique({
+            where: { id: item.productId },
+            select: { quantity: true }
+          });
+          
+          if (!currentProduct || currentProduct.quantity < item.quantity) {
+            throw new Error(`Stock insuffisant pour ${item.name}`);
+          }
+          
           await prisma.product.update({
             where: { id: item.productId },
             data: {
@@ -845,15 +886,17 @@ router.post('/', authenticateToken, async (req, res) => {
               updatedAt: new Date()
             }
           });
-          console.log(`✅ Stock mis à jour pour ${item.name}: -${item.quantity}`);
         } catch (stockError) {
-          console.error(`❌ Erreur mise à jour stock ${item.name}:`, stockError);
-          // Ne pas bloquer la commande pour une erreur de stock
+          console.error(`❌ Erreur mise à jour stock:`, stockError);
+          // Annuler la commande en cas d'erreur de stock
+          await prisma.order.delete({ where: { id: order.id } });
+          return res.status(400).json({
+            success: false,
+            message: `Erreur de stock: ${stockError.message}`
+          });
         }
       }
     }
-
-    console.log(`🎉 Commande ${orderNumber} créée avec succès!`);
 
     return res.status(201).json({
       success: true,
@@ -871,8 +914,6 @@ router.post('/', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error("💥 [ORDERS] Erreur création commande:", error);
-    console.error("💥 [ORDERS] Stack trace:", error.stack);
-    
     return res.status(500).json({
       success: false,
       message: "Erreur lors de la création de la commande",
@@ -880,19 +921,6 @@ router.post('/', authenticateToken, async (req, res) => {
     });
   }
 });
-
-async function updateStock(orderItems) {
-  for (const item of orderItems) {
-    await prisma.product.update({
-      where: { id: item.productId },
-      data: {
-        quantity: {
-          decrement: item.quantity
-        }
-      }
-    });
-  }
-}
 
 /**
  * 👤 GET /api/orders/user/my-orders - Commandes de l'utilisateur connecté
