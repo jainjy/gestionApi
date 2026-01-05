@@ -1147,35 +1147,52 @@ router.put('/user/:id/cancel', authenticateToken, async (req, res) => {
 /**
  * 📋 GET /api/orders - Toutes les commandes (admin seulement)
  */
+
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { userId, role } = req.user; // injecté par authenticateToken
+
+    const take = Math.min(parseInt(limit), 50); // anti-abus
+    const skip = (parseInt(page) - 1) * take;
+
+    // 🔒 Filtre d'accès
+    const whereClause =
+      role === 'admin'
+        ? {} // admin → toutes les commandes
+        : { userId }; // user → seulement SES commandes
 
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
-        orderBy: { createdAt: "desc" },
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
         skip,
-        take: parseInt(limit),
+        take,
+        select: {
+          id: true,
+          totalAmount: true,
+          status: true,
+          createdAt: true,
+        },
       }),
-      prisma.order.count(),
+      prisma.order.count({ where: whereClause }),
     ]);
 
-    res.json({
+    return res.json({
       success: true,
       orders,
       pagination: {
         page: parseInt(page),
-        limit: parseInt(limit),
+        limit: take,
         total,
-        pages: Math.ceil(total / parseInt(limit)),
+        pages: Math.ceil(total / take),
       },
     });
   } catch (error) {
-    console.error("Erreur récupération commandes:", error);
-    res.status(500).json({
+    console.error('Erreur récupération commandes:', error);
+    return res.status(500).json({
       success: false,
-      message: "Erreur lors de la récupération des commandes",
+      message: 'Erreur lors de la récupération des commandes',
     });
   }
 });
