@@ -242,14 +242,19 @@ model User {
 
   //vehicules
   vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
-  reservationsVehiculesClient      ReservationVehicule[] @relation("ReservationVehiculeClient")
-  reservationsVehiculesPrestataire ReservationVehicule[] @relation("ReservationVehiculePrestataire")
+  reservationsVehiculesClient      ReservationVehicule[]   @relation("ReservationVehiculeClient")
+  reservationsVehiculesPrestataire ReservationVehicule[]   @relation("ReservationVehiculePrestataire")
   avisVehicules                    AvisVehicule[] // Avis laissés sur les véhicules
-  experiencesCreated               Experience[]          @relation("ExperienceCreatedBy")
-  experiencesGuided                Experience[]          @relation("ExperienceGuide")
+  experiencesCreated               Experience[]            @relation("ExperienceCreatedBy")
+  experiencesGuided                Experience[]            @relation("ExperienceGuide")
   experienceBookings               ExperienceBooking[]
   experienceReviews                ExperienceReview[]
   experienceFavorites              ExperienceFavorite[]
+  // interviews       EntrepreneurInterview[] // Interviews créées par l'utilisateur
+  resources                        EntrepreneurResource[] // Ressources créées par l'utilisateur
+  eventsEntrepreneurs              EntrepreneurEvent[] // Événements créés par l'utilisateur
+  interviewInteractions            InterviewInteraction[] // Interactions avec les interviews
+  entrepreneurInterviews           EntrepreneurInterview[]
 
   @@index([userType]) // Pour filtrer facilement les professionnels
   @@index([email])
@@ -808,7 +813,7 @@ model DemandeArtisan {
   clientConfirmeTravaux    Boolean?  @default(false) // Client confirme travaux terminés
   travauxTermines          Boolean?  @default(false)
   factureConfirmee         Boolean?  @default(false)
-  recruited                Boolean?  
+  recruited                Boolean?
   user                     User      @relation("DemandeArtisanUser", fields: [userId], references: [id])
   demande                  Demande   @relation("DemandeArtisanDemande", fields: [demandeId], references: [id])
 
@@ -891,15 +896,15 @@ model Appointment {
 // COMMANDES
 // ======================
 model Order {
-  id          String @id @default(uuid())
-  orderNumber String @unique
-  deliveryId      String?      // ID dans la plateforme de livraison
-  trackingNumber  String?      // Numéro de suivi
-  syncStatus      String?      // pending, syncing, synced, failed
-  deliveryDetails Json?        // Détails de la livraison (driver, ETA, etc.)
+  id              String  @id @default(uuid())
+  orderNumber     String  @unique
+  deliveryId      String? // ID dans la plateforme de livraison
+  trackingNumber  String? // Numéro de suivi
+  syncStatus      String? // pending, syncing, synced, failed
+  deliveryDetails Json? // Détails de la livraison (driver, ETA, etc.)
   // Relations utilisateurs
-  userId        String // client qui commande
-  idPrestataire String // propriétaire du produit/service
+  userId          String // client qui commande
+  idPrestataire   String // propriétaire du produit/service
 
   // Données commande
   items           Json
@@ -3250,4 +3255,160 @@ model ConseilBookmark {
   @@unique([conseilId, userId])
   @@index([conseilId])
   @@index([userId])
+}
+
+// ======================
+// TABLES POUR ENTREPRENEURIAT
+// ======================
+
+// Table principale pour les interviews
+model EntrepreneurInterview {
+  id          String  @id @default(uuid())
+  title       String
+  slug        String  @unique
+  description String
+  content     String? // Transcription ou contenu détaillé
+  excerpt     String?
+
+  // Information sur l'interviewé
+  guest   String
+  role    String
+  company String
+
+  // Métadonnées
+  duration String // "45 min"
+  date     DateTime // Date de publication
+  tags     String[]
+  category String // jeunes, experimentes, politiques, success, etc.
+
+  // Médias
+  imageUrl     String
+  videoUrl     String?
+  audioUrl     String?
+  thumbnailUrl String?
+
+  // Statistiques
+  views   Int @default(0)
+  listens Int @default(0)
+  shares  Int @default(0)
+  likes   Int @default(0)
+
+  // Statut
+  status     String  @default("draft") // draft, published, archived
+  isFeatured Boolean @default(false)
+
+  // Relations
+  authorId String? // Utilisateur qui a créé l'interview
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  publishedAt           DateTime?
+  interviewInteractions InterviewInteraction[]
+
+  @@index([category])
+  @@index([status])
+  @@index([isFeatured])
+  @@index([publishedAt])
+  @@index([authorId])
+}
+
+// Table pour les ressources téléchargeables (guides, templates, etc.)
+model EntrepreneurResource {
+  id           String  @id @default(uuid())
+  title        String
+  description  String
+  type         String // guide, template, tool, checklist
+  category     String // financement, marketing, legal, etc.
+  fileUrl      String
+  fileSize     String?
+  fileType     String? // pdf, doc, xlsx, etc.
+  thumbnailUrl String?
+
+  // Métadonnées
+  tags      String[]
+  downloads Int      @default(0)
+  isFree    Boolean  @default(true)
+
+  // Relations
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  // Statut
+  status     String  @default("draft") // draft, published, archived
+  isFeatured Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([category])
+  @@index([status])
+  @@index([isFeatured])
+  @@index([authorId])
+}
+
+// Table pour les événements (webinars, workshops)
+model EntrepreneurEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  format      String // webinar, workshop, networking, conference
+  date        DateTime
+  time        String // "18:30"
+  duration    String? // "2h"
+
+  // Information sur le/les intervenants
+  speakers     String[] // Noms des intervenants
+  speakerRoles String[] // Rôles des intervenants
+
+  // Inscriptions
+  registered         Int     @default(0)
+  maxParticipants    Int?
+  isRegistrationOpen Boolean @default(true)
+
+  // Informations pratiques
+  location     String? // Pour les événements physiques
+  onlineLink   String? // Lien Zoom/Teams/etc.
+  recordingUrl String? // Enregistrement après l'événement
+
+  // Relations
+  organizerId String?
+  organizer   User?   @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+
+  // Statut
+  status String @default("upcoming") // upcoming, live, completed, cancelled
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([format])
+  @@index([date])
+  @@index([status])
+  @@index([organizerId])
+}
+
+// Table pour les statistiques d'interaction (optionnelle mais utile)
+model InterviewInteraction {
+  id          String  @id @default(uuid())
+  interviewId String
+  userId      String?
+  action      String // view, listen, share, like, bookmark
+  duration    Int? // Durée d'écoute/visionnage en secondes
+  completed   Boolean @default(false) // Écoute/visionnage complet
+  platform    String? // web, mobile, app
+
+  ipAddress String?
+  userAgent String?
+
+  interview EntrepreneurInterview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  user      User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([interviewId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
 }
