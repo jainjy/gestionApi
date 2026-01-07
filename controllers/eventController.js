@@ -1,6 +1,17 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { parseRequestData } = require('../utils/helpers');
+const { upload, uploadToSupabase } = require("../middleware/upload");
+const { createClient } = require("@supabase/supabase-js");
+
+// Configuration Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
+// Middleware pour l'upload d'image d'événement
+const uploadEventImage = upload.single("image");
 
 // Fonction pour parser les données d'événement
 const parseEventData = (data, userId = null) => {
@@ -149,12 +160,12 @@ exports.getAllEvents = async (req, res, next) => {
       dateTo,
       priceMin,
       priceMax,
-      userId, // Nouveau filtre
+      userId,
       page = 1,
       limit = 10,
       sortBy = 'date',
       sortOrder = 'asc',
-      includeUser = 'true' // Inclure les infos utilisateur
+      includeUser = 'true'
     } = req.query;
 
     const where = {};
@@ -164,7 +175,7 @@ exports.getAllEvents = async (req, res, next) => {
     if (category) where.category = category;
     if (subCategory) where.subCategory = subCategory;
     if (featured !== undefined) where.featured = featured === 'true';
-    if (userId) where.userId = userId; // Filtrer par utilisateur
+    if (userId) where.userId = userId;
     
     // Filtre par date
     if (dateFrom || dateTo) {
@@ -252,7 +263,7 @@ exports.getAllEvents = async (req, res, next) => {
 // Récupérer les événements de l'utilisateur connecté
 exports.getMyEvents = async (req, res, next) => {
   try {
-    const userId = req.user.id.toString(); // Convertir en string
+    const userId = req.user.id.toString();
     const { 
       status, 
       category,
@@ -363,72 +374,136 @@ exports.getEventById = async (req, res, next) => {
   }
 };
 
-// Créer un événement
+// Créer un événement avec image(s)
 exports.createEvent = async (req, res, next) => {
-  try {
-    const userId = req.user.id.toString(); // Convertir en string
-    const eventData = parseEventData(req.body, userId);
+  let eventData; // Déclaré ici pour être accessible dans le catch
 
-    // Vérifier si un événement similaire existe
-    const existingEvent = await prisma.event.findFirst({
-      where: {
-        title: eventData.title,
-        date: eventData.date,
-        location: eventData.location,
-        user: { // Utiliser la relation
-          id: userId
+  try {
+    // Utiliser le middleware pour gérer l'upload d'image
+    uploadEventImage(req, res, async (err) => {
+      if (err) {
+        console.error("Erreur upload image:", err);
+        return res.status(400).json({
+          success: false,
+          message: err.message || "Erreur lors du téléchargement de l'image",
+        });
+      }
+
+      const userId = req.user.id.toString();
+
+      // Préparer les données de l'événement
+      eventData = parseEventData(req.body, userId);
+
+      // Initialiser le tableau d'images si nécessaire
+      if (!eventData.images) eventData.images = [];
+
+      // Si une image a été uploadée
+      if (req.file) {
+        try {
+          // Uploader l'image vers Supabase
+          const uploadResult = await uploadToSupabase(req.file, "event-images");
+
+          // Stocker l'image principale dans `image`
+          eventData.image = uploadResult.url;
+
+          // Ajouter l'image au tableau `images`
+          eventData.images.push(uploadResult.url);
+
+          // Stocker le path pour nettoyage si besoin
+          eventData.imagePath = uploadResult.path;
+
+        } catch (uploadError) {
+          console.error("Erreur upload Supabase:", uploadError);
+          return res.status(500).json({
+            success: false,
+            message: "Erreur lors de l'enregistrement de l'image",
+          });
         }
       }
-    });
 
-    if (existingEvent) {
-      return res.status(409).json({
-        success: false,
-        message: 'Un événement similaire existe déjà'
+      // Vérifier si un événement similaire existe
+      const existingEvent = await prisma.event.findFirst({
+        where: {
+          title: eventData.title,
+          date: eventData.date,
+          location: eventData.location,
+          user: { id: userId },
+        },
       });
-    }
 
-    const event = await prisma.event.create({
-      data: eventData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            avatar: true
+      if (existingEvent) {
+        // Nettoyer l'image uploadée si l'événement existe déjà
+        if (eventData.imagePath) {
+          try {
+            await supabase.storage
+              .from("event-images")
+              .remove([eventData.imagePath]);
+          } catch (cleanupError) {
+            console.error("Erreur nettoyage image:", cleanupError);
           }
         }
+
+        return res.status(409).json({
+          success: false,
+          message: "Un événement similaire existe déjà",
+        });
       }
-    });
 
-    const formattedEvent = formatEventResponse(event);
+      // Créer l'événement
+      const event = await prisma.event.create({
+        data: eventData,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              avatar: true,
+            },
+          },
+        },
+      });
 
-    res.status(201).json({
-      success: true,
-      data: formattedEvent,
-      message: 'Événement créé avec succès'
+      const formattedEvent = formatEventResponse(event);
+
+      res.status(201).json({
+        success: true,
+        data: formattedEvent,
+        message: "Événement créé avec succès",
+      });
     });
   } catch (error) {
-    console.error('Erreur création événement:', error);
-    
-    if (error.code === 'P2002') {
+    console.error("Erreur création événement:", error);
+
+    // Nettoyer l'image en cas d'erreur
+    if (req?.file && eventData?.imagePath) {
+      try {
+        await supabase.storage
+          .from("event-images")
+          .remove([eventData.imagePath]);
+      } catch (cleanupError) {
+        console.error("Erreur nettoyage image après erreur:", cleanupError);
+      }
+    }
+
+    if (error.code === "P2002") {
       return res.status(400).json({
         success: false,
-        message: 'Erreur de contrainte unique'
+        message: "Erreur de contrainte unique",
       });
     }
-    
+
     next(error);
   }
 };
+
 
 // Middleware pour vérifier la propriété
 exports.checkEventOwnership = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id.toString(); // Convertir en string
+    const userId = req.user.id.toString();
     const userRole = req.user.role;
 
     const event = await prisma.event.findUnique({
@@ -443,7 +518,7 @@ exports.checkEventOwnership = async (req, res, next) => {
       });
     }
 
-    // Autoriser l'professional ou le propriétaire
+    // Autoriser le professional ou le propriétaire
     if (event.userId !== userId && userRole !== 'professional') {
       return res.status(403).json({
         success: false,
@@ -462,47 +537,130 @@ exports.checkEventOwnership = async (req, res, next) => {
   }
 };
 
-// Mettre à jour un événement
+// Mettre à jour un événement avec image(s)
 exports.updateEvent = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id.toString(); // Convertir en string
-    const eventData = parseEventData(req.body, userId);
+  let newImagePath = null; // Pour nettoyage en cas d'erreur
+  let updateData;           // Accessible dans catch
 
-    // Mettre à jour l'événement
-    const event = await prisma.event.update({
-      where: { id: parseInt(id) },
-      data: eventData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            avatar: true
+  try {
+    // Middleware pour upload d'image
+    uploadEventImage(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({
+          success: false,
+          message: err.message || "Erreur lors du téléchargement de l'image",
+        });
+      }
+
+      const eventId = parseInt(req.params.id);
+      const userId = req.user.id.toString();
+
+      // Récupérer l'événement existant
+      const existingEvent = await prisma.event.findUnique({
+        where: { id: eventId },
+      });
+
+      if (!existingEvent) {
+        return res.status(404).json({
+          success: false,
+          message: "Événement non trouvé",
+        });
+      }
+
+      // Vérifier les permissions
+      if (existingEvent.userId !== userId && req.user.role !== "professional") {
+        return res.status(403).json({
+          success: false,
+          message: "Non autorisé à modifier cet événement",
+        });
+      }
+
+      // Préparer les données à mettre à jour
+      updateData = parseEventData(req.body, userId);
+
+      // Assurer que images est un tableau
+      if (!updateData.images) updateData.images = existingEvent.images || [];
+
+      // Gérer l'image uploadée
+      if (req.file) {
+        try {
+          // Supprimer l'ancienne image principale si elle existe
+          if (existingEvent.imagePath) {
+            await supabase.storage
+              .from("event-images")
+              .remove([existingEvent.imagePath]);
           }
+
+          // Uploader la nouvelle image
+          const uploadResult = await uploadToSupabase(req.file, "event-images");
+
+          // Stocker la nouvelle image principale
+          updateData.image = uploadResult.url;
+          updateData.imagePath = uploadResult.path;
+          newImagePath = uploadResult.path;
+
+          // Ajouter la nouvelle image dans le tableau images si pas déjà présent
+          if (!updateData.images.includes(uploadResult.url)) {
+            updateData.images.push(uploadResult.url);
+          }
+        } catch (uploadError) {
+          console.error("Erreur upload image:", uploadError);
+          return res.status(500).json({
+            success: false,
+            message: "Erreur lors de la mise à jour de l'image",
+          });
         }
       }
-    });
 
-    const formattedEvent = formatEventResponse(event);
+      try {
+        // Mettre à jour l'événement
+        const updatedEvent = await prisma.event.update({
+          where: { id: eventId },
+          data: updateData,
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                avatar: true,
+              },
+            },
+          },
+        });
 
-    res.json({
-      success: true,
-      data: formattedEvent,
-      message: 'Événement mis à jour avec succès'
+        const formattedEvent = formatEventResponse(updatedEvent);
+
+        res.status(200).json({
+          success: true,
+          data: formattedEvent,
+          message: "Événement mis à jour avec succès",
+        });
+      } catch (updateError) {
+        // Nettoyage si erreur lors de la mise à jour
+        if (newImagePath) {
+          try {
+            await supabase.storage
+              .from("event-images")
+              .remove([newImagePath]);
+          } catch (cleanupError) {
+            console.error("Erreur nettoyage image après erreur:", cleanupError);
+          }
+        }
+        throw updateError;
+      }
     });
   } catch (error) {
-    console.error('Erreur mise à jour événement:', error);
-    
-    if (error.code === 'P2025') {
+    console.error("Erreur mise à jour événement:", error);
+
+    if (error.code === "P2025") {
       return res.status(404).json({
         success: false,
-        message: 'Événement non trouvé'
+        message: "Événement non trouvé",
       });
     }
-    
+
     next(error);
   }
 };
@@ -511,6 +669,39 @@ exports.updateEvent = async (req, res, next) => {
 exports.deleteEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const userId = req.user.id.toString();
+
+    // Récupérer l'événement pour vérifier la propriété et l'image
+    const event = await prisma.event.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Événement non trouvé'
+      });
+    }
+
+    // Vérifier les permissions
+    if (event.userId !== userId && req.user.role !== 'professional') {
+      return res.status(403).json({
+        success: false,
+        message: 'Non autorisé à supprimer cet événement'
+      });
+    }
+
+    // Supprimer l'image associée si elle existe
+    if (event.imagePath) {
+      try {
+        await supabase.storage
+          .from("event-images")
+          .remove([event.imagePath]);
+      } catch (imageError) {
+        console.error("Erreur suppression image:", imageError);
+        // Continuer quand même avec la suppression de l'événement
+      }
+    }
 
     // Supprimer l'événement
     await prisma.event.delete({
@@ -663,17 +854,12 @@ exports.incrementParticipants = async (req, res, next) => {
   }
 };
 
+// Obtenir les statistiques
 exports.getEventStats = async (req, res) => {
   try {
     console.log('📊 getEventStats - Début');
     
-    // 1. Vérification basique de l'authentification
-    if (!req.user) {
-      console.log('⚠️ Pas d\'utilisateur dans req.user');
-      // Pour les tests, continuer quand même sans user
-    }
-    
-    // 2. Définir des stats par défaut
+    // Définir des stats par défaut
     const defaultStats = {
       totals: {
         total: 0,
@@ -702,13 +888,13 @@ exports.getEventStats = async (req, res) => {
     };
     
     try {
-      // 3. Récupérer les données de base (sans filtres complexes)
+      // Récupérer les données de base
       const total = await prisma.event.count();
       const active = await prisma.event.count({ where: { status: 'ACTIVE' } });
       const upcoming = await prisma.event.count({ where: { status: 'UPCOMING' } });
       const completed = await prisma.event.count({ where: { status: 'COMPLETED' } });
       
-      // 4. Mettre à jour les stats
+      // Mettre à jour les stats
       defaultStats.totals.total = total;
       defaultStats.totals.active = active;
       defaultStats.totals.upcoming = upcoming;
@@ -736,7 +922,6 @@ exports.getEventStats = async (req, res) => {
   } catch (error) {
     console.error('❌ Erreur critique getEventStats:', error);
     
-    // Réponse d'erreur simple
     res.status(500).json({
       success: false,
       error: 'Erreur serveur',
@@ -755,7 +940,7 @@ exports.searchEvents = async (req, res, next) => {
       priceRange = {},
       status = [],
       featured,
-      userId, // Nouveau paramètre
+      userId,
       limit = 20,
       offset = 0,
       includeUser = true
@@ -775,7 +960,6 @@ exports.searchEvents = async (req, res, next) => {
         { description: { contains: query, mode: 'insensitive' } },
         { location: { contains: query, mode: 'insensitive' } },
         { organizer: { contains: query, mode: 'insensitive' } }
-        // Note: La recherche dans les tags JSON n'est pas directement supportée par Prisma
       ];
     }
 
@@ -849,7 +1033,7 @@ exports.searchEvents = async (req, res, next) => {
 // Exporter les événements
 exports.exportEvents = async (req, res, next) => {
   try {
-    const userId = req.user.id.toString(); // Convertir en string
+    const userId = req.user.id.toString();
     const userRole = req.user.role;
     const { format = 'json', filters = {} } = req.query;
     
@@ -888,10 +1072,8 @@ exports.exportEvents = async (req, res, next) => {
     const formattedEvents = events.map(formatEventResponse);
 
     if (format === 'csv') {
-      // Implémenter l'export CSV ici
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=events.csv');
-      // ... logique CSV
       res.send('CSV export à implémenter');
     } else {
       res.json({
