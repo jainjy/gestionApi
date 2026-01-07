@@ -373,85 +373,75 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// routes/candidatures.js - API corrigée
 router.get('/emplois/:emploiId', authenticateToken, async (req, res) => {
-  console.log('\n🔵 ========== GET CANDIDATURES EMPLOI ==========');
-  console.log('👤 User ID:', req.user.id);
-  console.log('👤 User Role:', req.user.role);
-  console.log('📋 Emploi ID:', req.params.emploiId);
-  
   try {
-    // Vérifier l'emploi d'abord
-    const emploiId = parseInt(req.params.emploiId);
+    const { emploiId } = req.params;
+    const userId = req.user.id;
     
-    console.log('🔍 Recherche de l\'emploi...');
-    const emploi = await prisma.emploi.findUnique({
-      where: { id: emploiId }
+    console.log(`🔍 DEBUG: Récupération candidatures pour emploi ID: ${emploiId}`);
+    console.log(`🔍 DEBUG: User ID: ${userId}`);
+    
+    // Vérifier que l'emploi existe et appartient à l'utilisateur
+    const emploi = await prisma.emploi.findFirst({
+      where: {
+        id: parseInt(emploiId),
+        proId: userId
+      }
     });
     
+    console.log(`🔍 DEBUG: Emploi trouvé:`, emploi ? 'OUI' : 'NON');
+    
     if (!emploi) {
-      console.log('❌ Emploi non trouvé');
       return res.status(404).json({
         success: false,
-        error: 'Offre d\'emploi non trouvée'
+        error: 'Offre non trouvée ou non autorisée'
       });
     }
     
-    console.log('✅ Emploi trouvé:', emploi.titre);
+    // 🔍 DEBUG: Vérifiez la requête Prisma
+    const whereClause = {
+      emploiId: parseInt(emploiId),
+      offreType: 'EMPLOI' // Assurez-vous que c'est bien 'EMPLOI' et non 'EMPLOI ' (avec espace)
+    };
     
-    // OPTION A : Rechercher SANS filtre offreType
-    console.log('🔍 Recherche candidatures (sans filtre offreType)...');
-    const candidaturesSansFiltre = await prisma.candidature.findMany({
-      where: { emploiId: emploiId }
+    console.log(`🔍 DEBUG: Clause WHERE Prisma:`, whereClause);
+    
+    // Récupérer les candidatures
+    const candidatures = await prisma.candidature.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' }
     });
-    console.log(`✅ ${candidaturesSansFiltre.length} candidatures sans filtre`);
     
-    // OPTION B : Rechercher AVEC filtre
-    console.log('🔍 Recherche candidatures (avec filtre offreType)...');
-    const candidaturesAvecFiltre = await prisma.candidature.findMany({
-      where: { 
-        emploiId: emploiId,
-        offreType: 'EMPLOI' 
-      }
+    console.log(`🔍 DEBUG: Résultat Prisma:`, {
+      count: candidatures.length,
+      firstCandidature: candidatures[0],
+      allCandidatures: candidatures
     });
-    console.log(`✅ ${candidaturesAvecFiltre.length} candidatures avec filtre`);
-    
-    // OPTION C : Voir TOUTES les candidatures
-    console.log('🔍 Voir toutes les candidatures...');
-    const toutesCandidatures = await prisma.candidature.findMany({
-      take: 10
-    });
-    console.log(`📊 Exemple de candidatures:`, toutesCandidatures.map(c => ({
-      id: c.id,
-      emploiId: c.emploiId,
-      formationId: c.formationId,
-      offreType: c.offreType
-    })));
-    
-    // Utiliser les résultats sans filtre
-    const candidatures = candidaturesSansFiltre;
-    
-    console.log('🟢 ========== FIN ROUTE ==========\n');
     
     res.json({
       success: true,
       data: candidatures,
       count: candidatures.length,
       debug: {
-        sansFiltre: candidaturesSansFiltre.length,
-        avecFiltre: candidaturesAvecFiltre.length,
-        emploiId: emploiId
+        emploiId: parseInt(emploiId),
+        userId,
+        whereClause,
+        prismaResultCount: candidatures.length
       }
     });
     
   } catch (error) {
-    console.error('❌ Erreur:', error);
+    console.error('❌ Erreur récupération candidatures:', error);
     res.status(500).json({
       success: false,
-      error: 'Erreur serveur',
-      details: error.message
+      error: 'Erreur lors de la récupération des candidatures',
+      debug: error.message
     });
   }
 });
+
+
 
 // Route de diagnostic
 router.get('/diagnostic/:emploiId', authenticateToken, async (req, res) => {
