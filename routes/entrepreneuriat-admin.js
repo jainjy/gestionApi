@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const { authenticateToken } = require("../middleware/auth");
+const { upload, uploadToSupabase } = require("../middleware/upload");
 const prisma = new PrismaClient();
 
 // Middleware admin only
@@ -333,6 +334,54 @@ router.get("/export/:type", async (req, res) => {
     });
   }
 });
+
+// POST - Upload image/fichier
+router.post(
+  "/upload/:type",
+  authenticateToken,
+  adminOnly,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: "Aucun fichier fourni",
+        });
+      }
+
+      const { type } = req.params;
+      let folder = "entrepreneuriat";
+
+      if (type === "interview-image") {
+        folder = "entrepreneuriat/interviews";
+      } else if (type === "resource-file") {
+        folder = "entrepreneuriat/resources";
+      } else if (type === "event-image") {
+        folder = "entrepreneuriat/events";
+      }
+
+      const uploadResult = await uploadToSupabase(req.file, folder);
+
+      res.json({
+        success: true,
+        data: {
+          url: uploadResult.url,
+          path: uploadResult.path,
+          name: uploadResult.name,
+          type: uploadResult.type,
+          size: req.file.size,
+        },
+      });
+    } catch (error) {
+      console.error("❌ Erreur upload:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Erreur lors de l'upload du fichier",
+      });
+    }
+  }
+);
 
 // Fonction utilitaire pour convertir en CSV
 function convertToCSV(data) {

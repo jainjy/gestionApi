@@ -10,16 +10,14 @@ router.get("/interviews", async (req, res) => {
   try {
     const {
       category,
-      status = "published",
+      status = "all",
       featured,
-      limit = 20,
+      limit = 100,
       offset = 0,
       search,
     } = req.query;
 
-    const where = {
-      status,
-    };
+    const where = status == "all" ? {} : { status };
 
     if (category && category !== "tous") {
       where.category = category;
@@ -475,15 +473,13 @@ router.get("/resources", async (req, res) => {
       type,
       category,
       isFree,
-      status = "published",
-      limit = 20,
+      status = "all",
+      limit = 100,
       offset = 0,
       search,
     } = req.query;
 
-    const where = {
-      status,
-    };
+    const where = status=="all" ? {} : { status };
 
     if (type) {
       where.type = type;
