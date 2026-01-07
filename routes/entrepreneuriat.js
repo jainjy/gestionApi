@@ -841,4 +841,349 @@ router.post("/events/:id/register", authenticateToken, async (req, res) => {
   }
 });
 
+// POST - Créer une ressource (admin only)
+router.post("/resources", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!["admin", "content-manager"].includes(user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: "Permission refusée",
+      });
+    }
+
+    const {
+      title,
+      description,
+      type,
+      category,
+      fileUrl,
+      fileSize,
+      fileType,
+      isFree = true,
+      status = "draft",
+      isFeatured = false,
+    } = req.body;
+
+    if (!title || !type || !category || !fileUrl) {
+      return res.status(400).json({
+        success: false,
+        error: "Champs obligatoires manquants",
+      });
+    }
+
+    const resource = await prisma.entrepreneurResource.create({
+      data: {
+        title,
+        description,
+        type,
+        category,
+        fileUrl,
+        fileSize,
+        fileType,
+        isFree,
+        status,
+        isFeatured,
+        authorId: user.userId,
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: resource,
+    });
+  } catch (error) {
+    console.error("❌ Erreur création ressource:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la création de la ressource",
+    });
+  }
+});
+
+// PUT - Mettre à jour une ressource
+router.put("/resources/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+    const updateData = req.body;
+
+    const existingResource = await prisma.entrepreneurResource.findUnique({
+      where: { id },
+    });
+
+    if (!existingResource) {
+      return res.status(404).json({
+        success: false,
+        error: "Ressource non trouvée",
+      });
+    }
+
+    if (
+      existingResource.authorId !== user.userId &&
+      !["admin", "content-manager"].includes(user.role)
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Permission refusée",
+      });
+    }
+
+    const updatedResource = await prisma.entrepreneurResource.update({
+      where: { id },
+      data: updateData,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: updatedResource,
+    });
+  } catch (error) {
+    console.error("❌ Erreur mise à jour ressource:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la mise à jour de la ressource",
+    });
+  }
+});
+
+// DELETE - Supprimer une ressource
+router.delete("/resources/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    const existingResource = await prisma.entrepreneurResource.findUnique({
+      where: { id },
+    });
+
+    if (!existingResource) {
+      return res.status(404).json({
+        success: false,
+        error: "Ressource non trouvée",
+      });
+    }
+
+    if (!["admin"].includes(user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: "Permission refusée",
+      });
+    }
+
+    await prisma.entrepreneurResource.delete({
+      where: { id },
+    });
+
+    res.json({
+      success: true,
+      message: "Ressource supprimée avec succès",
+    });
+  } catch (error) {
+    console.error("❌ Erreur suppression ressource:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la suppression de la ressource",
+    });
+  }
+});
+
+// POST - Créer un événement (admin only)
+router.post("/events", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!["admin", "content-manager"].includes(user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: "Permission refusée",
+      });
+    }
+
+    const {
+      title,
+      description,
+      format,
+      date,
+      time,
+      duration,
+      speakers = [],
+      registered = 0,
+      maxParticipants,
+      isRegistrationOpen = true,
+      location,
+      onlineLink,
+      status = "upcoming",
+    } = req.body;
+
+    if (!title || !format || !date) {
+      return res.status(400).json({
+        success: false,
+        error: "Champs obligatoires manquants",
+      });
+    }
+
+    const event = await prisma.entrepreneurEvent.create({
+      data: {
+        title,
+        description,
+        format,
+        date: new Date(date),
+        time,
+        duration,
+        speakers,
+        registered,
+        maxParticipants,
+        isRegistrationOpen,
+        location,
+        onlineLink,
+        status,
+        organizerId: user.userId,
+      },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: event,
+    });
+  } catch (error) {
+    console.error("❌ Erreur création événement:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la création de l'événement",
+    });
+  }
+});
+
+// PUT - Mettre à jour un événement
+router.put("/events/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+    const updateData = req.body;
+
+    const existingEvent = await prisma.entrepreneurEvent.findUnique({
+      where: { id },
+    });
+
+    if (!existingEvent) {
+      return res.status(404).json({
+        success: false,
+        error: "Événement non trouvé",
+      });
+    }
+
+    if (
+      existingEvent.organizerId !== user.userId &&
+      !["admin", "content-manager"].includes(user.role)
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Permission refusée",
+      });
+    }
+
+    // Convertir la date si présente
+    if (updateData.date) {
+      updateData.date = new Date(updateData.date);
+    }
+
+    const updatedEvent = await prisma.entrepreneurEvent.update({
+      where: { id },
+      data: updateData,
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            companyName: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: updatedEvent,
+    });
+  } catch (error) {
+    console.error("❌ Erreur mise à jour événement:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la mise à jour de l'événement",
+    });
+  }
+});
+
+// DELETE - Supprimer un événement
+router.delete("/events/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    const existingEvent = await prisma.entrepreneurEvent.findUnique({
+      where: { id },
+    });
+
+    if (!existingEvent) {
+      return res.status(404).json({
+        success: false,
+        error: "Événement non trouvé",
+      });
+    }
+
+    if (!["admin"].includes(user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: "Permission refusée",
+      });
+    }
+
+    await prisma.entrepreneurEvent.delete({
+      where: { id },
+    });
+
+    res.json({
+      success: true,
+      message: "Événement supprimé avec succès",
+    });
+  } catch (error) {
+    console.error("❌ Erreur suppression événement:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la suppression de l'événement",
+    });
+  }
+});
+
 module.exports = router;
