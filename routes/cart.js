@@ -607,4 +607,47 @@ router.post('/validate-artworks', authenticateToken, async (req, res) => {
 });
 
 
+// POST /api/cart/update-artwork-quantity - Mettre à jour la quantité d'une œuvre (propriétaire uniquement)
+router.post('/update-artwork-quantity', authenticateToken, async (req, res) => {
+  try {
+    const { productId, newQuantity } = req.body;
+
+    if (!productId || newQuantity === undefined) {
+      return res.status(400).json({ success: false, message: 'productId et newQuantity requis' });
+    }
+
+    const qty = parseInt(newQuantity, 10);
+    if (isNaN(qty) || qty < 0) {
+      return res.status(400).json({ success: false, message: 'newQuantity doit être un entier >= 0' });
+    }
+
+    // Vérifier que le produit existe
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Œuvre non trouvée' });
+    }
+
+    // Vérifier que l'utilisateur est le propriétaire du produit
+    if (product.userId !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Vous n\'êtes pas autorisé à modifier cette œuvre' });
+    }
+
+    // Mettre à jour la quantité et le statut
+    const updatedProduct = await prisma.product.update({
+      where: { id: productId },
+      data: {
+        quantity: qty,
+        status: qty === 0 ? 'sold' : 'published'
+      }
+    });
+
+    res.json({ success: true, message: 'Quantité mise à jour', product: updatedProduct });
+
+  } catch (error) {
+    console.error('Erreur mise à jour quantité:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour de la quantité' });
+  }
+});
+
+
 module.exports = router

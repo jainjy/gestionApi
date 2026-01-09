@@ -1,4 +1,4 @@
-// routes/art-creation.js - VERSION NETTOYÉE
+// routes/art-creation.js - VERSION CORRIGÉE COMPLÈTE
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
@@ -84,9 +84,8 @@ router.get('/photographie/categories', async (req, res) => {
   }
 });
 
-// ✅ ROUTE PRINCIPALE POUR LES PHOTOGRAPHES
+// ✅ ROUTE PRINCIPALE POUR LES PHOTOGRAPHES - CORRIGÉE
 router.get('/photographers', async (req, res) => {
-
   try {
     const { 
       search = '', 
@@ -123,8 +122,22 @@ router.get('/photographers', async (req, res) => {
 
     const metierIds = photoMetiers.map(m => m.id);
 
+    // ✅ CORRECTION : Utiliser une seule variable 'where'
     const where = {
-      ...(metierIds.length > 0 && {
+      AND: [
+        {
+          OR: [
+            { role: 'professional' },
+            { userType: 'PRESTATAIRE' },
+            { userType: 'PROFESSIONAL' }
+          ]
+        }
+      ]
+    };
+
+    // ✅ Condition des métiers
+    if (metierIds.length > 0) {
+      where.AND.push({
         metiers: {
           some: {
             metierId: {
@@ -132,19 +145,10 @@ router.get('/photographers', async (req, res) => {
             }
           }
         }
-      })
-    };
+      });
+    }
 
-    const roleCondition = {
-      OR: [
-        { role: 'professional' },
-        { userType: 'PRESTATAIRE' },
-        { userType: 'PROFESSIONAL' }
-      ]
-    };
-    
-    where.AND = [roleCondition];
-
+    // Condition de recherche
     if (search && search.trim() !== '') {
       where.AND.push({
         OR: [
@@ -158,6 +162,7 @@ router.get('/photographers', async (req, res) => {
       });
     }
 
+    // Condition de localisation
     if (location && location.trim() !== '') {
       where.AND.push({
         city: {
@@ -187,7 +192,7 @@ router.get('/photographers', async (req, res) => {
 
     const [users, totalCount] = await Promise.all([
       prisma.user.findMany({
-        where,
+        where, // ✅ Utiliser 'where' ici
         skip,
         take,
         select: {
@@ -208,11 +213,11 @@ router.get('/photographers', async (req, res) => {
           status: true,
           
           metiers: {
-            where: metierIds.length > 0 ? {
+            where: {
               metierId: {
                 in: metierIds
               }
-            } : {},
+            },
             include: {
               metier: {
                 select: {
@@ -221,11 +226,32 @@ router.get('/photographers', async (req, res) => {
                 }
               }
             }
+          },
+          
+          // ✅ AJOUTER LES PRODUITS (ŒUVRES D'ART)
+          Product: {
+            where: {
+              productType: 'artwork',
+              status: 'published'
+            },
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              images: true,
+              quantity: true,
+              status: true,
+              category: true,
+              subcategory: true
+            },
+            take: 5
           }
         },
         orderBy
       }),
-      prisma.user.count({ where })
+      prisma.user.count({ 
+        where // ✅ Utiliser 'where' ici aussi
+      })
     ]);
 
     const formattedProfessionals = users.map(user => {
@@ -238,6 +264,11 @@ router.get('/photographers', async (req, res) => {
       
       const rating = Math.random() * 2 + 3;
       const reviewCount = Math.floor(Math.random() * 50);
+      
+      // ✅ Compter les œuvres disponibles
+      const availableProducts = user.Product || [];
+      const totalProducts = availableProducts.length;
+      const availableCount = availableProducts.filter(p => p.quantity > 0).length;
 
       return {
         id: user.id,
@@ -266,7 +297,21 @@ router.get('/photographers', async (req, res) => {
         rating: parseFloat(rating.toFixed(1)),
         reviewCount: reviewCount,
         
-        services: [],
+        // ✅ AJOUTER LES INFORMATIONS SUR LES PRODUITS
+        products: {
+          total: totalProducts,
+          available: availableCount,
+          sample: availableProducts.slice(0, 3).map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            image: p.images?.[0] || null,
+            category: p.category,
+            type: p.subcategory,
+            quantity: p.quantity,
+            isAvailable: p.quantity > 0
+          }))
+        },
         
         isAvailable: user.status === 'active'
       };
@@ -299,10 +344,9 @@ router.get('/photographers', async (req, res) => {
   }
 });
 
-// ✅ ROUTE POUR LES SCULPTEURS (CORRIGÉE)
+// ✅ ROUTE POUR LES SCULPTEURS - CORRIGÉE
 router.get('/sculpture/products', async (req, res) => {
   try {
-    
     const { 
       search = '', 
       location = '', 
@@ -311,15 +355,13 @@ router.get('/sculpture/products', async (req, res) => {
       sort = 'newest'
     } = req.query;
 
-    // Récupérer les métiers de sculpture - VERSION SIMPLIFIÉE
+    // Récupérer les métiers de sculpture
     const sculptureMetiers = await prisma.metier.findMany({
       where: {
         OR: [
           { libelle: { contains: 'sculpteur', mode: 'insensitive' } },
           { libelle: { contains: 'sculpture', mode: 'insensitive' } },
           { libelle: { contains: 'sculpt', mode: 'insensitive' } }
-          // Supprimez { categorie: { equals: 'sculpture', mode: 'insensitive' } }
-          // si la colonne 'categorie' n'existe pas dans votre base
         ]
       },
       select: {
@@ -328,10 +370,7 @@ router.get('/sculpture/products', async (req, res) => {
       }
     });
 
-    
-
     if (sculptureMetiers.length === 0) {
-      console.log("⚠️ Aucun métier sculpture trouvé");
       return res.json({
         success: true,
         count: 0,
@@ -341,10 +380,9 @@ router.get('/sculpture/products', async (req, res) => {
     }
 
     const metierIds = sculptureMetiers.map(m => m.id);
-    
 
-    // Construction de la requête WHERE
-    const whereConditions = {
+    // ✅ CORRECTION : Utiliser 'where' au lieu de 'whereConditions'
+    const where = {
       AND: [
         {
           OR: [
@@ -358,7 +396,7 @@ router.get('/sculpture/products', async (req, res) => {
 
     // Ajout de la condition des métiers
     if (metierIds.length > 0) {
-      whereConditions.AND.push({
+      where.AND.push({
         metiers: {
           some: {
             metierId: {
@@ -371,7 +409,7 @@ router.get('/sculpture/products', async (req, res) => {
 
     // Condition de recherche
     if (search && search.trim() !== '') {
-      whereConditions.AND.push({
+      where.AND.push({
         OR: [
           { firstName: { contains: search, mode: 'insensitive' } },
           { lastName: { contains: search, mode: 'insensitive' } },
@@ -384,7 +422,7 @@ router.get('/sculpture/products', async (req, res) => {
 
     // Condition de localisation
     if (location && location.trim() !== '') {
-      whereConditions.AND.push({
+      where.AND.push({
         city: {
           contains: location.trim(),
           mode: 'insensitive'
@@ -413,7 +451,7 @@ router.get('/sculpture/products', async (req, res) => {
     try {
       const [users, totalCount] = await Promise.all([
         prisma.user.findMany({
-          where: whereConditions,
+          where, // ✅ Utiliser 'where'
           skip,
           take,
           select: {
@@ -447,13 +485,33 @@ router.get('/sculpture/products', async (req, res) => {
                   }
                 }
               }
+            },
+            
+            // ✅ AJOUTER LES PRODUITS
+            Product: {
+              where: {
+                productType: 'artwork',
+                status: 'published'
+              },
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                images: true,
+                quantity: true,
+                status: true,
+                category: true,
+                subcategory: true
+              },
+              take: 5
             }
           },
           orderBy
         }),
-        prisma.user.count({ where: whereConditions })
+        prisma.user.count({ 
+          where // ✅ Utiliser 'where'
+        })
       ]);
-
 
       const formattedSculptors = users.map(user => {
         const name = user.firstName && user.lastName 
@@ -463,9 +521,13 @@ router.get('/sculpture/products', async (req, res) => {
         const userMetiers = user.metiers || [];
         const primaryMetier = userMetiers[0]?.metier;
         
-        // Générer un rating et review count pour l'affichage
-        const rating = Math.random() * 2 + 3; // Entre 3 et 5
+        const rating = Math.random() * 2 + 3;
         const reviewCount = Math.floor(Math.random() * 50);
+        
+        // ✅ Compter les œuvres disponibles
+        const availableProducts = user.Product || [];
+        const totalProducts = availableProducts.length;
+        const availableCount = availableProducts.filter(p => p.quantity > 0).length;
 
         return {
           id: user.id,
@@ -494,7 +556,21 @@ router.get('/sculpture/products', async (req, res) => {
           rating: parseFloat(rating.toFixed(1)),
           reviewCount: reviewCount,
           
-          services: [],
+          // ✅ AJOUTER LES INFORMATIONS SUR LES PRODUITS
+          products: {
+            total: totalProducts,
+            available: availableCount,
+            sample: availableProducts.slice(0, 3).map(p => ({
+              id: p.id,
+              name: p.name,
+              price: p.price,
+              image: p.images?.[0] || null,
+              category: p.category,
+              type: p.subcategory,
+              quantity: p.quantity,
+              isAvailable: p.quantity > 0
+            }))
+          },
           
           isAvailable: user.status === 'active'
         };
@@ -528,7 +604,6 @@ router.get('/sculpture/products', async (req, res) => {
 
   } catch (error) {
     console.error("🔥 ERREUR récupération sculpteurs:", error);
-    console.error("🔥 Stack:", error.stack);
     
     res.status(500).json({
       success: false,
@@ -539,11 +614,9 @@ router.get('/sculpture/products', async (req, res) => {
   }
 });
 
-// ✅ ROUTE POUR LES PEINTRES
+// ✅ ROUTE POUR LES PEINTRES - CORRIGÉE
 router.get('/peinture/products', async (req, res) => {
   try {
-    
-    
     const { 
       search = '', 
       location = '', 
@@ -553,14 +626,13 @@ router.get('/peinture/products', async (req, res) => {
       sort = 'newest'
     } = req.query;
 
-    // Récupérer les métiers de peinture - VERSION CORRIGÉE
+    // Récupérer les métiers de peinture
     const peintureMetiers = await prisma.metier.findMany({
       where: {
         OR: [
           { libelle: { contains: 'peintre', mode: 'insensitive' } },
           { libelle: { contains: 'peinture', mode: 'insensitive' } },
           { libelle: { contains: 'peint', mode: 'insensitive' } }
-          // Supprimez la condition sur 'categorie' car la colonne n'existe pas
         ]
       },
       select: {
@@ -569,10 +641,7 @@ router.get('/peinture/products', async (req, res) => {
       }
     });
 
-   
-
     if (peintureMetiers.length === 0) {
-      console.log("⚠️ Aucun métier peinture trouvé");
       return res.json({
         success: true,
         count: 0,
@@ -582,10 +651,9 @@ router.get('/peinture/products', async (req, res) => {
     }
 
     const metierIds = peintureMetiers.map(m => m.id);
-   
 
-    // Construction de la requête WHERE
-    const whereConditions = {
+    // ✅ CORRECTION : Utiliser 'where' au lieu de 'whereConditions'
+    const where = {
       AND: [
         {
           OR: [
@@ -599,7 +667,7 @@ router.get('/peinture/products', async (req, res) => {
 
     // Ajout de la condition des métiers
     if (metierIds.length > 0) {
-      whereConditions.AND.push({
+      where.AND.push({
         metiers: {
           some: {
             metierId: {
@@ -612,7 +680,7 @@ router.get('/peinture/products', async (req, res) => {
 
     // Condition de recherche
     if (search && search.trim() !== '') {
-      whereConditions.AND.push({
+      where.AND.push({
         OR: [
           { firstName: { contains: search, mode: 'insensitive' } },
           { lastName: { contains: search, mode: 'insensitive' } },
@@ -625,14 +693,13 @@ router.get('/peinture/products', async (req, res) => {
 
     // Condition de localisation
     if (location && location.trim() !== '') {
-      whereConditions.AND.push({
+      where.AND.push({
         city: {
           contains: location.trim(),
           mode: 'insensitive'
         }
       });
     }
-
 
     const orderBy = {};
     switch (sort) {
@@ -655,7 +722,7 @@ router.get('/peinture/products', async (req, res) => {
     try {
       const [users, totalCount] = await Promise.all([
         prisma.user.findMany({
-          where: whereConditions,
+          where, // ✅ Utiliser 'where'
           skip,
           take,
           select: {
@@ -689,13 +756,33 @@ router.get('/peinture/products', async (req, res) => {
                   }
                 }
               }
+            },
+            
+            // ✅ AJOUTER LES PRODUITS
+            Product: {
+              where: {
+                productType: 'artwork',
+                status: 'published'
+              },
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                images: true,
+                quantity: true,
+                status: true,
+                category: true,
+                subcategory: true
+              },
+              take: 5
             }
           },
           orderBy
         }),
-        prisma.user.count({ where: whereConditions })
+        prisma.user.count({ 
+          where // ✅ Utiliser 'where'
+        })
       ]);
-
 
       const formattedPainters = users.map(user => {
         const name = user.firstName && user.lastName 
@@ -705,10 +792,14 @@ router.get('/peinture/products', async (req, res) => {
         const userMetiers = user.metiers || [];
         const primaryMetier = userMetiers[0]?.metier;
         
-        // Générer un rating et review count pour l'affichage
-        const rating = Math.random() * 2 + 3; // Entre 3 et 5
+        const rating = Math.random() * 2 + 3;
         const reviewCount = Math.floor(Math.random() * 50);
-        const worksCount = Math.floor(Math.random() * 30) + 5; // Entre 5 et 35 œuvres
+        const worksCount = Math.floor(Math.random() * 30) + 5;
+        
+        // ✅ Compter les œuvres disponibles
+        const availableProducts = user.Product || [];
+        const totalProducts = availableProducts.length;
+        const availableCount = availableProducts.filter(p => p.quantity > 0).length;
 
         return {
           id: user.id,
@@ -737,6 +828,22 @@ router.get('/peinture/products', async (req, res) => {
           
           rating: parseFloat(rating.toFixed(1)),
           reviewCount: reviewCount,
+          
+          // ✅ AJOUTER LES INFORMATIONS SUR LES PRODUITS
+          products: {
+            total: totalProducts,
+            available: availableCount,
+            sample: availableProducts.slice(0, 3).map(p => ({
+              id: p.id,
+              name: p.name,
+              price: p.price,
+              image: p.images?.[0] || null,
+              category: p.category,
+              type: p.subcategory,
+              quantity: p.quantity,
+              isAvailable: p.quantity > 0
+            }))
+          },
           
           bio: user.commercialName || user.companyName || 'Artiste spécialisé dans la peinture',
           
@@ -772,7 +879,6 @@ router.get('/peinture/products', async (req, res) => {
 
   } catch (error) {
     console.error("🔥 ERREUR récupération peintres:", error);
-    console.error("🔥 Stack:", error.stack);
     
     res.status(500).json({
       success: false,
@@ -783,10 +889,9 @@ router.get('/peinture/products', async (req, res) => {
   }
 });
 
-// ✅ ROUTE POUR LES ARTISANS
+// ✅ ROUTE POUR LES ARTISANS - CORRIGÉE
 router.get('/artisanat/products', async (req, res) => {
   try {
-        
     const { 
       search = '', 
       location = '', 
@@ -796,7 +901,7 @@ router.get('/artisanat/products', async (req, res) => {
       sort = 'newest'
     } = req.query;
 
-    // Récupérer les métiers d'artisanat basés sur votre seed
+    // Récupérer les métiers d'artisanat
     const artisanatMetiers = await prisma.metier.findMany({
       where: {
         OR: [
@@ -820,7 +925,6 @@ router.get('/artisanat/products', async (req, res) => {
       }
     });
 
-
     if (artisanatMetiers.length === 0) {
       return res.json({
         success: true,
@@ -832,8 +936,8 @@ router.get('/artisanat/products', async (req, res) => {
 
     const metierIds = artisanatMetiers.map(m => m.id);
 
-    // Construction de la requête WHERE
-    const whereConditions = {
+    // ✅ CORRECTION : Utiliser 'where' au lieu de 'whereConditions'
+    const where = {
       AND: [
         {
           OR: [
@@ -847,7 +951,7 @@ router.get('/artisanat/products', async (req, res) => {
 
     // Ajout de la condition des métiers
     if (metierIds.length > 0) {
-      whereConditions.AND.push({
+      where.AND.push({
         metiers: {
           some: {
             metierId: {
@@ -860,7 +964,7 @@ router.get('/artisanat/products', async (req, res) => {
 
     // Condition de recherche
     if (search && search.trim() !== '') {
-      whereConditions.AND.push({
+      where.AND.push({
         OR: [
           { firstName: { contains: search, mode: 'insensitive' } },
           { lastName: { contains: search, mode: 'insensitive' } },
@@ -873,7 +977,7 @@ router.get('/artisanat/products', async (req, res) => {
 
     // Condition de localisation
     if (location && location.trim() !== '') {
-      whereConditions.AND.push({
+      where.AND.push({
         city: {
           contains: location.trim(),
           mode: 'insensitive'
@@ -902,7 +1006,7 @@ router.get('/artisanat/products', async (req, res) => {
     try {
       const [users, totalCount] = await Promise.all([
         prisma.user.findMany({
-          where: whereConditions,
+          where, // ✅ Utiliser 'where'
           skip,
           take,
           select: {
@@ -936,11 +1040,32 @@ router.get('/artisanat/products', async (req, res) => {
                   }
                 }
               }
+            },
+            
+            // ✅ AJOUTER LES PRODUITS
+            Product: {
+              where: {
+                productType: 'artwork',
+                status: 'published'
+              },
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                images: true,
+                quantity: true,
+                status: true,
+                category: true,
+                subcategory: true
+              },
+              take: 5
             }
           },
           orderBy
         }),
-        prisma.user.count({ where: whereConditions })
+        prisma.user.count({ 
+          where // ✅ Utiliser 'where'
+        })
       ]);
 
       const formattedArtisans = users.map(user => {
@@ -951,13 +1076,17 @@ router.get('/artisanat/products', async (req, res) => {
         const userMetiers = user.metiers || [];
         const primaryMetier = userMetiers[0]?.metier;
         
-        // Générer des données pour l'affichage
-        const rating = Math.random() * 2 + 3; // Entre 3 et 5
+        const rating = Math.random() * 2 + 3;
         const reviewCount = Math.floor(Math.random() * 50);
         const worksCount = Math.floor(Math.random() * 30) + 5;
         const yearsExperience = Math.floor(Math.random() * 20) + 5;
         const deliveryOptions = ['Sous 7 jours', 'Sous 10 jours', 'Sur devis', 'Sous 15 jours'];
         const deliveryTime = deliveryOptions[Math.floor(Math.random() * deliveryOptions.length)];
+        
+        // ✅ Compter les œuvres disponibles
+        const availableProducts = user.Product || [];
+        const totalProducts = availableProducts.length;
+        const availableCount = availableProducts.filter(p => p.quantity > 0).length;
 
         return {
           id: user.id,
@@ -988,6 +1117,22 @@ router.get('/artisanat/products', async (req, res) => {
           
           rating: parseFloat(rating.toFixed(1)),
           reviewCount: reviewCount,
+          
+          // ✅ AJOUTER LES INFORMATIONS SUR LES PRODUITS
+          products: {
+            total: totalProducts,
+            available: availableCount,
+            sample: availableProducts.slice(0, 3).map(p => ({
+              id: p.id,
+              name: p.name,
+              price: p.price,
+              image: p.images?.[0] || null,
+              category: p.category,
+              type: p.subcategory,
+              quantity: p.quantity,
+              isAvailable: p.quantity > 0
+            }))
+          },
           
           bio: user.commercialName || user.companyName || `Artisan spécialisé dans ${primaryMetier?.libelle || "l'artisanat"} depuis ${yearsExperience} ans.`,
           
@@ -1033,7 +1178,7 @@ router.get('/artisanat/products', async (req, res) => {
   }
 });
 
-// Dans routes/art-creation.js, après les autres routes et avant le module.exports
+// ✅ ROUTE MARKETPLACE - CORRIGÉE
 router.get('/marketplace/all', async (req, res) => {
   try {
     const { 
@@ -1052,9 +1197,11 @@ router.get('/marketplace/all', async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
+    // ✅ Ajouter le filtre de quantité si nécessaire (décommentez si vous voulez filtrer)
     const where = {
       productType: 'artwork',
       status: 'published'
+      // quantity: { gt: 0 } // Décommentez pour ne montrer que les œuvres disponibles
     };
 
     // Filtre par recherche
@@ -1126,6 +1273,8 @@ router.get('/marketplace/all', async (req, res) => {
       image: product.images && product.images.length > 0 ? product.images[0] : '',
       images: product.images,
       price: product.price,
+      quantity: product.quantity, // ✅ Ajouter la quantité
+      isAvailable: product.quantity > 0, // ✅ Indiquer si disponible
       createdAt: product.createdAt,
       publishedAt: product.publishedAt,
       type: product.subcategory,
@@ -1160,7 +1309,6 @@ router.get('/marketplace/all', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Erreur marketplace:', error);
-    console.error('❌ Stack:', error.stack);
     
     res.status(500).json({
       success: false,
@@ -1173,4 +1321,127 @@ router.get('/marketplace/all', async (req, res) => {
 const ProduitsArtEtCreation = require('./ProduitsArtEtCreation');
 
 router.use('/products', ProduitsArtEtCreation);
+
+// ✅ ROUTE POUR LES ŒUVRES D'UN PROFESSIONNEL SPÉCIFIQUE
+router.get('/products/professional/:professionalId', async (req, res) => {
+  try {
+    const { professionalId } = req.params;
+    
+    console.log('🔍 Route œuvres par professionnel appelée:', professionalId);
+    
+    const { 
+      status = 'published',
+      quantity = 1
+    } = req.query;
+
+    // Chercher uniquement les œuvres d'art PUBLIÉES de ce professionnel
+    const where = {
+      userId: professionalId,
+      productType: 'artwork',
+      status: status,
+      // Optionnel : filtrer par quantité disponible
+      ...(quantity === '1' && { quantity: { gt: 0 } })
+    };
+
+    console.log('📊 Requête Prisma WHERE:', where);
+
+    const [products, professional] = await Promise.all([
+      // 1. Récupérer les œuvres
+      prisma.product.findMany({
+        where,
+        orderBy: {
+          createdAt: 'desc'
+        },
+        include: {
+          User: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              companyName: true,
+              commercialName: true,
+              city: true
+            }
+          }
+        }
+      }),
+      
+      // 2. Récupérer les infos du professionnel
+      prisma.user.findUnique({
+        where: { id: professionalId },
+        select: {
+          firstName: true,
+          lastName: true,
+          companyName: true,
+          commercialName: true,
+          avatar: true,
+          city: true,
+          email: true
+        }
+      })
+    ]);
+
+    console.log('📦 Résultats:', {
+      productsCount: products.length,
+      professional: professional
+    });
+
+    if (!professional) {
+      return res.status(404).json({
+        success: false,
+        error: 'Professionnel non trouvé'
+      });
+    }
+
+    // Formater les œuvres
+    const formattedOeuvres = products.map(product => ({
+      id: product.id,
+      title: product.name,
+      name: product.name,
+      description: product.description,
+      image: product.images && product.images.length > 0 ? product.images[0] : '',
+      images: product.images || [],
+      price: product.price,
+      quantity: product.quantity,
+      createdAt: product.createdAt,
+      publishedAt: product.publishedAt,
+      type: product.subcategory,
+      category: product.category,
+      userId: product.userId,
+      artist: product.User?.companyName || 
+              `${product.User?.firstName} ${product.User?.lastName}`.trim(),
+      professional: {
+        id: product.userId,
+        name: product.User?.companyName || 
+              `${product.User?.firstName} ${product.User?.lastName}`.trim(),
+        avatar: product.User?.avatar,
+        city: product.User?.city
+      },
+      status: product.status
+    }));
+
+    res.json({
+      success: true,
+      count: products.length,
+      data: formattedOeuvres,
+      professional: {
+        id: professionalId,
+        name: professional.companyName || 
+              `${professional.firstName} ${professional.lastName}`.trim(),
+        email: professional.email,
+        avatar: professional.avatar,
+        city: professional.city
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération œuvres professionnel:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des œuvres',
+      message: error.message
+    });
+  }
+});
 module.exports = router;

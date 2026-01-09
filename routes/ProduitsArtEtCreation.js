@@ -224,7 +224,7 @@ router.post('/create', authenticateToken, async (req, res) => {
         comparePrice: null,
         cost: null,
         trackQuantity: true,           // Pour gérer le stock des œuvres
-        quantity: 1,                   // Œuvre unique par défaut
+        quantity: req.body.quantity || 1, // Prendre la quantité du formulaire
         weight: null,
         featured: false,
         visibility: 'public',
@@ -573,12 +573,74 @@ router.delete('/:productId', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 7. ROUTE PUT POUR METTRE À JOUR UN PRODUIT - CORRIGÉE
+// ✅ 7. ROUTE PUT POUR METTRE À JOUR UN PRODUIT - VERSION CORRIGÉE COMPLÈTE
 router.put('/:productId', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const productId = req.params.productId;
     
+    console.log('🔄 [PUT] Mise à jour produit - ID:', productId, 'User:', userId);
+    console.log('📝 Body reçu:', JSON.stringify(req.body, null, 2));
+    
+    // Vérification plus stricte de l'ID
+    if (!productId || productId.trim() === '' || productId === 'undefined' || productId === 'null') {
+      console.log('❌ ID invalide:', productId);
+      return res.status(400).json({
+        success: false,
+        error: 'ID de produit invalide'
+      });
+    }
+    
+    // Chercher le produit AVANT la mise à jour
+    console.log('🔍 Recherche produit existant avec ID:', productId);
+    const existingProduct = await prisma.product.findUnique({
+      where: { 
+        id: productId
+      },
+      select: {
+        id: true,
+        userId: true,
+        productType: true,
+        name: true,
+        category: true,
+        subcategory: true,
+        dimensions: true,
+        images: true,
+        status: true,
+        createdAt: true
+      }
+    });
+    
+    console.log('📋 Produit existant trouvé:', existingProduct);
+    
+    // Vérifier que le produit existe
+    if (!existingProduct) {
+      console.log('❌ Produit non trouvé dans la base de données');
+      return res.status(404).json({
+        success: false,
+        error: 'Produit non trouvé'
+      });
+    }
+    
+    // Vérifier les permissions
+    if (existingProduct.userId !== userId) {
+      console.log('❌ Permission refusée: user', userId, '!=', existingProduct.userId);
+      return res.status(403).json({
+        success: false,
+        error: 'Vous n\'êtes pas autorisé à modifier ce produit'
+      });
+    }
+    
+    // Vérifier que c'est bien une œuvre d'art
+    if (existingProduct.productType !== 'artwork') {
+      console.log('❌ Mauvais type de produit:', existingProduct.productType);
+      return res.status(400).json({
+        success: false,
+        error: 'Ce produit n\'est pas une œuvre d\'art'
+      });
+    }
+    
+    // Récupérer les données de la requête
     const { 
       name, 
       description, 
@@ -587,104 +649,318 @@ router.put('/:productId', authenticateToken, async (req, res) => {
       price, 
       status,
       images,
-      dimensions
+      dimensions,
+      materials,
+      creationDate,
+      quantity
     } = req.body;
     
-    // Vérifier que le produit existe et appartient à l'utilisateur
-    const existingProduct = await prisma.product.findFirst({
-      where: {
-        id: productId,
-        userId: userId,
-        productType: 'artwork'
-      }
+    console.log('📊 Données de mise à jour:', {
+      name, type, category, price, status,
+      imagesCount: images?.length || 0,
+      hasDimensions: !!dimensions,
+      hasMaterials: !!materials,
+      quantity
     });
     
-    if (!existingProduct) {
-      return res.status(404).json({
-        success: false,
-        error: 'Produit non trouvé'
-      });
-    }
-    
-    // Validation si type ou category sont fournis
-    if (type && !VALID_TYPES.includes(type)) {
-      return res.status(400).json({ 
-        error: 'Type invalide', 
-        validTypes: VALID_TYPES
-      });
-    }
-    
-    if (category && !VALID_CATEGORIES.includes(category)) {
-      return res.status(400).json({ 
-        error: 'Catégorie invalide', 
-        validCategories: VALID_CATEGORIES
-      });
-    }
-    
-    // Vérifier la cohérence type/category si les deux sont fournis
-    if (type && category) {
-      const typeCategories = {
-        'photographie': VALID_CATEGORIES.slice(0, 5),
-        'sculpture': VALID_CATEGORIES.slice(5, 10),
-        'peinture': VALID_CATEGORIES.slice(10, 16),
-        'artisanat': VALID_CATEGORIES.slice(16)
-      };
-      
-      if (!typeCategories[type]?.includes(category)) {
-        return res.status(400).json({ 
-          error: 'Incohérence type/catégorie', 
-          message: 'La catégorie ne correspond pas au type sélectionné'
-        });
-      }
-    }
-    
-    // Préparer les données de mise à jour
+    // Validation des données
     const updateData = {};
     
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (type !== undefined) updateData.subcategory = type;     // Mettre à jour subcategory
-    if (category !== undefined) updateData.category = category; // Mettre à jour category
-    if (price !== undefined) updateData.price = parseFloat(price);
-    if (status !== undefined) updateData.status = status;
-    if (images !== undefined) updateData.images = Array.isArray(images) ? images : [];
-    if (dimensions !== undefined) {
-      try {
-        updateData.dimensions = typeof dimensions === 'string' ? JSON.parse(dimensions) : dimensions;
-      } catch (e) {
-        updateData.dimensions = { raw: dimensions };
+    // 1. Validation et préparation du nom et slug
+    if (name !== undefined) {
+      if (typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Le nom est requis et doit être une chaîne non vide'
+        });
+      }
+      updateData.name = name.trim();
+      
+      // Regénérer le slug uniquement si le nom a changé
+      if (name.trim() !== existingProduct.name) {
+        const newSlug = name.trim()
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/[^\w-]+/g, '')
+          + '-' + Date.now();
+        updateData.slug = newSlug;
+        console.log('🆕 Nouveau slug généré:', newSlug);
       }
     }
     
-    // Mettre à jour publishedAt si le statut passe à 'published'
-    if (status === 'published' && existingProduct.status !== 'published') {
-      updateData.publishedAt = new Date();
+    // 2. Validation de la description
+    if (description !== undefined) {
+      updateData.description = description || '';
     }
     
-    // Mettre à jour le produit
+    // 3. Validation du type
+    if (type !== undefined) {
+      if (!VALID_TYPES.includes(type)) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Type invalide', 
+          validTypes: VALID_TYPES,
+          received: type
+        });
+      }
+      updateData.subcategory = type;
+    }
+    
+    // 4. Validation de la catégorie (métier)
+    if (category !== undefined) {
+      if (!VALID_CATEGORIES.includes(category)) {
+        const typeForValidation = type || existingProduct.subcategory;
+        const typeCategories = {
+          'photographie': VALID_CATEGORIES.slice(0, 5),
+          'sculpture': VALID_CATEGORIES.slice(5, 10),
+          'peinture': VALID_CATEGORIES.slice(10, 16),
+          'artisanat': VALID_CATEGORIES.slice(16)
+        };
+        
+        const validForType = typeCategories[typeForValidation] || [];
+        
+        if (!validForType.includes(category)) {
+          return res.status(400).json({ 
+            success: false,
+            error: 'Catégorie invalide pour ce type', 
+            validCategories: validForType,
+            received: category,
+            type: typeForValidation
+          });
+        }
+      }
+      updateData.category = category;
+    }
+    
+    // 5. Validation du prix
+    if (price !== undefined) {
+      const priceNum = parseFloat(price);
+      if (isNaN(priceNum) || priceNum < 0) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Prix invalide', 
+          message: 'Le prix doit être un nombre positif'
+        });
+      }
+      
+      if (priceNum === 0) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Prix invalide', 
+          message: 'Le prix doit être supérieur à 0'
+        });
+      }
+      
+      updateData.price = priceNum;
+    }
+    
+    // 6. Validation du statut
+    if (status !== undefined) {
+      const validStatuses = ['published', 'draft', 'sold'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Statut invalide',
+          validStatuses: validStatuses
+        });
+      }
+      updateData.status = status;
+      
+      // Mettre à jour publishedAt en fonction du statut
+      if (status === 'published' && existingProduct.status !== 'published') {
+        updateData.publishedAt = new Date();
+        console.log('📅 Date de publication mise à jour');
+      } else if (status !== 'published' && existingProduct.status === 'published') {
+        updateData.publishedAt = null;
+        console.log('📅 Date de publication annulée');
+      }
+    }
+    
+    // 7. Validation des images
+    if (images !== undefined) {
+      if (!Array.isArray(images)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Les images doivent être un tableau'
+        });
+      }
+      
+      if (images.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Au moins une image est requise'
+        });
+      }
+      
+      updateData.images = images;
+    }
+    
+    // 8. Validation de la quantité
+    if (quantity !== undefined) {
+      const quantityNum = parseInt(quantity);
+      if (isNaN(quantityNum) || quantityNum < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Quantité invalide',
+          message: 'La quantité doit être un nombre positif'
+        });
+      }
+      updateData.quantity = quantityNum;
+    }
+    
+    // 9. Gestion des dimensions et métadonnées
+    if (dimensions !== undefined || materials !== undefined || creationDate !== undefined) {
+      let newDimensions = { ...existingProduct.dimensions };
+      
+      // Mettre à jour les dimensions si fournies
+      if (dimensions !== undefined) {
+        try {
+          const parsedDimensions = typeof dimensions === 'string' ? JSON.parse(dimensions) : dimensions;
+          newDimensions = {
+            ...newDimensions,
+            ...parsedDimensions
+          };
+        } catch (e) {
+          // Si ce n'est pas du JSON valide, traiter comme une chaîne simple
+          newDimensions = { 
+            ...newDimensions,
+            raw: dimensions 
+          };
+        }
+      }
+      
+      // Ajouter/Mettre à jour les métadonnées spécifiques
+      if (materials !== undefined) newDimensions.materials = materials;
+      if (creationDate !== undefined) newDimensions.creationDate = creationDate;
+      
+      // Toujours mettre à jour le type et la catégorie dans les dimensions
+      newDimensions.type = type || existingProduct.subcategory;
+      newDimensions.category = category || existingProduct.category;
+      newDimensions.isArtwork = true;
+      newDimensions.artworkType = type || existingProduct.subcategory;
+      
+      updateData.dimensions = newDimensions;
+    } else {
+      // Même si aucune dimension n'est fournie, s'assurer que le type est à jour
+      const currentDimensions = existingProduct.dimensions || {};
+      updateData.dimensions = {
+        ...currentDimensions,
+        type: type || existingProduct.subcategory,
+        category: category || existingProduct.category
+      };
+    }
+    
+    console.log('📤 Données à mettre à jour:', JSON.stringify(updateData, null, 2));
+    
+    // Vérifier s'il y a des modifications
+    const hasChanges = Object.keys(updateData).length > 0;
+    if (!hasChanges) {
+      console.log('⚠️ Aucune modification à apporter');
+      return res.status(200).json({
+        success: true,
+        message: 'Aucune modification nécessaire',
+        product: existingProduct
+      });
+    }
+    
+    // Mettre à jour le produit EXISTANT
+    console.log('💾 Début de la mise à jour dans la base de données...');
     const updatedProduct = await prisma.product.update({
-      where: { id: productId },
+      where: { 
+        id: productId
+      },
       data: updateData
     });
+    
+    console.log('✅ Produit mis à jour avec succès:', {
+      id: updatedProduct.id,
+      name: updatedProduct.name,
+      previousName: existingProduct.name,
+      changes: Object.keys(updateData)
+    });
+    
+    // Récupérer les informations utilisateur pour la réponse
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        firstName: true,
+        lastName: true,
+        companyName: true,
+        commercialName: true,
+        avatar: true
+      }
+    });
+    
+    // Formater la réponse
+    const responseData = {
+      id: updatedProduct.id,
+      name: updatedProduct.name,
+      slug: updatedProduct.slug,
+      type: updatedProduct.subcategory,
+      category: updatedProduct.category,
+      price: updatedProduct.price,
+      status: updatedProduct.status,
+      images: updatedProduct.images,
+      description: updatedProduct.description,
+      dimensions: updatedProduct.dimensions,
+      quantity: updatedProduct.quantity,
+      createdAt: updatedProduct.createdAt,
+      publishedAt: updatedProduct.publishedAt,
+      productType: updatedProduct.productType,
+      artist: {
+        id: userId,
+        name: user?.companyName || user?.commercialName || 
+              `${user?.firstName} ${user?.lastName}`.trim() || req.user.email
+      }
+    };
     
     res.json({
       success: true,
       message: 'Produit mis à jour avec succès',
-      product: {
-        id: updatedProduct.id,
-        name: updatedProduct.name,
-        type: updatedProduct.subcategory,   // Retourner depuis subcategory
-        category: updatedProduct.category,  // Retourner depuis category
-        status: updatedProduct.status,
-        price: updatedProduct.price
-      }
+      product: responseData,
+      changes: Object.keys(updateData),
+      timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    console.error('Erreur mise à jour produit:', error);
+    console.error('❌ ERREUR mise à jour produit:', error);
+    console.error('❌ Stack trace:', error.stack);
+    
+    // Gestion des erreurs Prisma spécifiques
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        error: 'Produit non trouvé',
+        message: 'Le produit que vous essayez de mettre à jour n\'existe pas'
+      });
+    }
+    
+    if (error.code === 'P2002') {
+      return res.status(400).json({
+        success: false,
+        error: 'Erreur de contrainte unique',
+        message: 'Une œuvre avec ce nom/slug existe déjà',
+        field: error.meta?.target || 'unknown'
+      });
+    }
+    
+    if (error.code === 'P2003') {
+      return res.status(400).json({
+        success: false,
+        error: 'Violation de contrainte de clé étrangère',
+        message: 'Erreur de relation avec l\'utilisateur'
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la mise à jour du produit'
+      error: 'Erreur lors de la mise à jour du produit',
+      message: error.message,
+      code: error.code,
+      // Stack seulement en développement
+      ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
     });
   }
 });
@@ -734,6 +1010,7 @@ router.get('/professional/:professionalId', async (req, res) => {
       userId: professionalId,
       productType: 'artwork',
       status: 'published',  // Important : seulement les œuvres publiées
+      quantity: { gt: 0 }
     };
 
     console.log('📊 Requête Prisma WHERE:', where);
