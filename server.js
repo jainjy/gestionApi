@@ -552,6 +552,9 @@ app.use("/api/user/metiers", require("./routes/userMetier"));
 // 🔥 AJOUTEZ ICI - ROUTES SERVICES ENTREPRISE & PRO
 app.use("/api/user/enterprise-services", require("./routes/userService"));
 
+// Api pour sync avec tracking de colis 
+app.use("/api/sync", require("./routes/syncRoutes"));
+
 // Route 404 - MISE À JOUR
 app.use("*", (req, res) => {
   res.status(404).json({
