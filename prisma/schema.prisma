@@ -120,6 +120,7 @@ model User {
   demandType          String?
   latitude            Float?
   longitude           Float?
+  siren               String?
   siret               String?
   zipCode             String?
   avatar              String?

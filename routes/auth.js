@@ -366,6 +366,7 @@ router.post("/signup-pro", async (req, res) => {
         longitude: utilisateur.longitude
           ? parseFloat(utilisateur.longitude)
           : null,
+        siren: utilisateur.siren || null,
         siret: utilisateur.siret || null,
         commercialName: utilisateur.commercialName || null,
         metiers: utilisateur.metiers &&
