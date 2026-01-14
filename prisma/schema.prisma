@@ -149,7 +149,7 @@ model User {
   Transaction         Transaction[]
   Review              Review[]
   Appointment         Appointment[]
-
+  professionalCategory String? // "real-estate", "artisan", "tourism", "sports", etc.
   // RELATIONS ORDER CORRIGÉES
   ordersClient              Order[]                   @relation("OrderClient") // Commandes passées en tant que client
   ordersPrestataire         Order[]                   @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
@@ -1257,6 +1257,9 @@ model SubscriptionPlan {
   updatedAt   DateTime @updatedAt
 
   planType  String
+  professionalCategory String? // Catégorie spécifique (correspond aux 5 catégories tarifaires)
+  isVisibilityEnhanced Boolean @default(false) // true = option visibilité renforcée
+  
   userTypes String[]
   popular   Boolean  @default(false)
   color     String?
@@ -1278,7 +1281,7 @@ model Subscription {
   autoRenew Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-
+  visibilityOption String @default("standard") // "standard" ou "enhanced"
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan         SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
   transactions Transaction[]
