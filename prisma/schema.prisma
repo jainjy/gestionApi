@@ -99,57 +99,57 @@ model BlogCommentLike {
 //UTILISATEUR - VERSION CORRIGÉE
 //===================
 model User {
-  id                  String               @id @default(uuid())
-  email               String               @unique
-  passwordHash        String?
-  provider            Json?
-  firstName           String?
-  lastName            String?
-  phone               String?
-  role                String               @default("user")
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  resetToken          String?
-  resetTokenExpiry    DateTime?
-  status              String               @default("active")
-  companyName         String?
-  address             String?
-  addressComplement   String?
-  city                String?
-  commercialName      String?
-  demandType          String?
-  latitude            Float?
-  longitude           Float?
-  siren               String?
-  siret               String?
-  zipCode             String?
-  avatar              String?
-  userType            String?
-  providerId          String?
-  providerName        String?
-  stripeCustomerId    String?
-  DevisClientToUser   String?              @map("_DevisClientToUser")
-  DevisProviderToUser String?              @map("_DevisProviderToUser")
-  demandesFinancement FinancementDemande[]
-  websiteUrl          String?
-  deletionRequestedAt DateTime? // Date de la demande de suppression
-  deletionReason      String? // Raison de la suppression (optionnel)
+  id                        String                    @id @default(uuid())
+  email                     String                    @unique
+  passwordHash              String?
+  provider                  Json?
+  firstName                 String?
+  lastName                  String?
+  phone                     String?
+  role                      String                    @default("user")
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  resetToken                String?
+  resetTokenExpiry          DateTime?
+  status                    String                    @default("active")
+  companyName               String?
+  address                   String?
+  addressComplement         String?
+  city                      String?
+  commercialName            String?
+  demandType                String?
+  latitude                  Float?
+  longitude                 Float?
+  siren                     String?
+  siret                     String?
+  zipCode                   String?
+  avatar                    String?
+  userType                  String?
+  providerId                String?
+  providerName              String?
+  stripeCustomerId          String?
+  DevisClientToUser         String?                   @map("_DevisClientToUser")
+  DevisProviderToUser       String?                   @map("_DevisProviderToUser")
+  demandesFinancement       FinancementDemande[]
+  websiteUrl                String?
+  deletionRequestedAt       DateTime? // Date de la demande de suppression
+  deletionReason            String? // Raison de la suppression (optionnel)
   // Relations existantes
-  blogArticles        BlogArticle[]        @relation("BlogArticleAuthor")
-  blogArticleLikes    BlogArticleLike[]    @relation("BlogArticleLikeUser")
-  blogComments        BlogComment[]        @relation("BlogCommentUser")
-  blogCommentLikes    BlogCommentLike[]    @relation("BlogCommentLikeUser")
-  properties          Property[]
-  favorites           Favorite[]
-  metiers             UtilisateurMetier[]
-  services            UtilisateurService[]
-  demandesCrees       Demande[]            @relation("DemandeCreePar")
-  demandesArtisan     DemandeArtisan[]     @relation("DemandeArtisanUser")
-  Product             Product[]
-  Transaction         Transaction[]
-  Review              Review[]
-  Appointment         Appointment[]
-  professionalCategory String? // "real-estate", "artisan", "tourism", "sports", etc.
+  blogArticles              BlogArticle[]             @relation("BlogArticleAuthor")
+  blogArticleLikes          BlogArticleLike[]         @relation("BlogArticleLikeUser")
+  blogComments              BlogComment[]             @relation("BlogCommentUser")
+  blogCommentLikes          BlogCommentLike[]         @relation("BlogCommentLikeUser")
+  properties                Property[]
+  favorites                 Favorite[]
+  metiers                   UtilisateurMetier[]
+  services                  UtilisateurService[]
+  demandesCrees             Demande[]                 @relation("DemandeCreePar")
+  demandesArtisan           DemandeArtisan[]          @relation("DemandeArtisanUser")
+  Product                   Product[]
+  Transaction               Transaction[]
+  Review                    Review[]
+  Appointment               Appointment[]
+  professionalCategory      String? // "real-estate", "artisan", "tourism", "sports", etc.
   // RELATIONS ORDER CORRIGÉES
   ordersClient              Order[]                   @relation("OrderClient") // Commandes passées en tant que client
   ordersPrestataire         Order[]                   @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
@@ -1246,45 +1246,49 @@ model Advertisement {
 // PLANS D'ABONNEMENT
 // ======================
 model SubscriptionPlan {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   name        String
   description String?
-  price       Float
-  interval    String   @default("month")
-  features    String[]
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  planType  String
-  professionalCategory String? // Catégorie spécifique (correspond aux 5 catégories tarifaires)
-  isVisibilityEnhanced Boolean @default(false) // true = option visibilité renforcée
-  
-  userTypes String[]
-  popular   Boolean  @default(false)
-  color     String?
-  icon      String?
+  // PRIX STANDARD (obligatoire)
+  price Float // Prix standard TTC
 
-  subscriptions Subscription[]
+  // PRIX AVEC VISIBILITÉ RENFORCÉE (optionnel mais recommandé)
+  enhancedVisibilityPrice Float? // Prix TTC avec option de visibilité renforcée
+
+  interval  String   @default("month")
+  features  String[]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  planType             String
+  professionalCategory String? // "real-estate", "artisan", "tourism", "sports", etc.
+  userTypes            String[]
+  popular              Boolean        @default(false)
+  color                String?
+  icon                 String?
+  isVisibilityEnhanced Boolean        @default(false) // true = option visibilité renforcée // Si ce plan propose l'option visibilité renforcée
+  subscriptions        Subscription[]
 }
 
 // ======================
 // ABONNEMENTS UTILISATEURS
 // ======================
 model Subscription {
-  id        String    @id @default(uuid())
-  userId    String
-  planId    Int?
-  startDate DateTime  @default(now())
-  endDate   DateTime?
-  status    String    @default("active")
-  autoRenew Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  visibilityOption String @default("standard") // "standard" ou "enhanced"
-  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan         SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  id               String            @id @default(uuid())
+  userId           String
+  planId           Int?
+  startDate        DateTime          @default(now())
+  endDate          DateTime?
+  status           String            @default("active")
+  autoRenew        Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  visibilityOption String            @default("standard") // "standard" ou "enhanced"
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan             SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
 
   @@index([userId])
   @@index([planId])

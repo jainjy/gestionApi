@@ -2,8 +2,984 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../lib/db');
 const { authenticateToken } = require('../middleware/auth');
+// POST /api/articles - Créer un nouvel article (avec authentification)
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const {
+      titre,
+      description,
+      contenu,
+      categorie,
+      tags,
+      statut,
+      datePublication,
+      image,
+      excerpt
+    } = req.body;
 
+    // Validation des champs obligatoires
+    if (!titre || titre.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Le titre est obligatoire'
+      });
+    }
 
+    if (!contenu || contenu.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Le contenu est obligatoire'
+      });
+    }
+
+    // Générer un slug à partir du titre
+    const slug = titre
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+
+    // Calculer le temps de lecture (environ 200 mots par minute)
+    const wordCount = contenu.split(/\s+/).length;
+    const readTimeMinutes = Math.ceil(wordCount / 200);
+    const readTime = `${readTimeMinutes} min`;
+
+    // Vérifier si le slug existe déjà
+    const existingArticle = await prisma.blogArticle.findFirst({
+      where: { slug }
+    });
+
+    let finalSlug = slug;
+    if (existingArticle) {
+      // Ajouter un suffixe numérique si le slug existe déjà
+      let counter = 1;
+      while (true) {
+        const newSlug = `${slug}-${counter}`;
+        const check = await prisma.blogArticle.findFirst({
+          where: { slug: newSlug }
+        });
+        if (!check) {
+          finalSlug = newSlug;
+          break;
+        }
+        counter++;
+      }
+    }
+
+    // Créer l'article
+    const article = await prisma.blogArticle.create({
+      data: {
+        title: titre.trim(),
+        slug: finalSlug,
+        content: contenu,
+        excerpt: (excerpt || description || contenu.substring(0, 150)).trim(),
+        category: categorie || 'Non catégorisé',
+        tags: Array.isArray(tags) ? tags : (tags ? tags.split(',').map(tag => tag.trim()) : []),
+        status: statut || 'brouillon',
+        coverUrl: image || null,
+        readTime,
+        publishedAt: (statut === 'publié' || statut === 'programmé') && datePublication
+          ? new Date(datePublication)
+          : statut === 'publié'
+          ? new Date()
+          : null,
+        authorId: req.user.id,
+        views: 0,
+        likes: 0,
+        comments: 0
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    // Formater la réponse
+    const formattedArticle = {
+      id: article.id,
+      titre: article.title,
+      slug: article.slug,
+      date: article.publishedAt?.toISOString() || article.createdAt.toISOString(),
+      dateFormatted: article.publishedAt
+        ? new Date(article.publishedAt).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          })
+        : 'Non publié',
+      categorie: article.category,
+      description: article.excerpt,
+      image: article.coverUrl || `https://via.placeholder.com/800x450/3b82f6/ffffff?text=${encodeURIComponent(article.title.substring(0, 30))}`,
+      contenu: article.content,
+      auteur: `${article.author.firstName} ${article.author.lastName}`,
+      auteurId: article.author.id,
+      auteurAvatar: article.author.avatar,
+      tempsLecture: article.readTime,
+      statut: article.status,
+      tags: article.tags || [],
+      views: article.views || 0,
+      likes: article.likes || 0,
+      comments: article.comments || 0,
+      shares: 0
+    };
+
+    res.status(201).json({
+      success: true,
+      data: formattedArticle,
+      message: 'Article créé avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la création de l\'article:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la création de l\'article'
+    });
+  }
+});
+
+// PUT /api/articles/:id - Mettre à jour un article (avec authentification)
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      titre,
+      description,
+      contenu,
+      categorie,
+      tags,
+      statut,
+      datePublication,
+      image,
+      excerpt
+    } = req.body;
+
+    // Vérifier si l'article existe
+    const existingArticle = await prisma.blogArticle.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: {
+            id: true
+          }
+        }
+      }
+    });
+
+    if (!existingArticle) {
+      return res.status(404).json({
+        success: false,
+        error: 'Article non trouvé'
+      });
+    }
+
+    // Vérifier les permissions (auteur ou admin)
+    if (existingArticle.author.id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Vous ne pouvez modifier que vos propres articles'
+      });
+    }
+
+    // Validation des champs obligatoires
+    if (titre !== undefined && titre.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Le titre ne peut pas être vide'
+      });
+    }
+
+    if (contenu !== undefined && contenu.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Le contenu ne peut pas être vide'
+      });
+    }
+
+    // Préparer les données de mise à jour
+    const updateData = {};
+
+    if (titre !== undefined) {
+      updateData.title = titre.trim();
+      
+      // Regénérer le slug si le titre change
+      if (titre !== existingArticle.title) {
+        const slug = titre
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)+/g, '');
+
+        // Vérifier si le nouveau slug existe déjà pour un autre article
+        const existingSlug = await prisma.blogArticle.findFirst({
+          where: {
+            slug,
+            id: { not: id }
+          }
+        });
+
+        if (!existingSlug) {
+          updateData.slug = slug;
+        }
+      }
+    }
+
+    if (contenu !== undefined) {
+      updateData.content = contenu;
+      // Recalculer le temps de lecture
+      const wordCount = contenu.split(/\s+/).length;
+      const readTimeMinutes = Math.ceil(wordCount / 200);
+      updateData.readTime = `${readTimeMinutes} min`;
+    }
+
+    if (excerpt !== undefined) {
+      updateData.excerpt = excerpt.trim();
+    } else if (description !== undefined) {
+      updateData.excerpt = description.trim();
+    }
+
+    if (categorie !== undefined) {
+      updateData.category = categorie;
+    }
+
+    if (tags !== undefined) {
+      updateData.tags = Array.isArray(tags) ? tags : (tags ? tags.split(',').map(tag => tag.trim()) : []);
+    }
+
+    if (statut !== undefined) {
+      updateData.status = statut;
+      
+      // Gérer la date de publication en fonction du statut
+      if (statut === 'publié' && !existingArticle.publishedAt) {
+        updateData.publishedAt = datePublication ? new Date(datePublication) : new Date();
+      } else if (statut === 'programmé' && datePublication) {
+        updateData.publishedAt = new Date(datePublication);
+      } else if (statut === 'brouillon') {
+        updateData.publishedAt = null;
+      }
+    } else if (datePublication !== undefined && existingArticle.status !== 'brouillon') {
+      updateData.publishedAt = new Date(datePublication);
+    }
+
+    if (image !== undefined) {
+      updateData.coverUrl = image || null;
+    }
+
+    updateData.updatedAt = new Date();
+
+    // Mettre à jour l'article
+    const updatedArticle = await prisma.blogArticle.update({
+      where: { id },
+      data: updateData,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    // Formater la réponse
+    const formattedArticle = {
+      id: updatedArticle.id,
+      titre: updatedArticle.title,
+      slug: updatedArticle.slug,
+      date: updatedArticle.publishedAt?.toISOString() || updatedArticle.createdAt.toISOString(),
+      dateFormatted: updatedArticle.publishedAt
+        ? new Date(updatedArticle.publishedAt).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          })
+        : 'Non publié',
+      categorie: updatedArticle.category,
+      description: updatedArticle.excerpt,
+      image: updatedArticle.coverUrl || `https://via.placeholder.com/800x450/3b82f6/ffffff?text=${encodeURIComponent(updatedArticle.title.substring(0, 30))}`,
+      contenu: updatedArticle.content,
+      auteur: `${updatedArticle.author.firstName} ${updatedArticle.author.lastName}`,
+      auteurId: updatedArticle.author.id,
+      auteurAvatar: updatedArticle.author.avatar,
+      tempsLecture: updatedArticle.readTime,
+      statut: updatedArticle.status,
+      tags: updatedArticle.tags || [],
+      views: updatedArticle.views || 0,
+      likes: updatedArticle.likes || 0,
+      comments: updatedArticle.comments || 0,
+      shares: 0
+    };
+
+    res.json({
+      success: true,
+      data: formattedArticle,
+      message: 'Article mis à jour avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de l\'article:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la mise à jour de l\'article'
+    });
+  }
+});
+
+// DELETE /api/articles/:id - Supprimer un article (avec authentification)
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Vérifier si l'article existe
+    const article = await prisma.blogArticle.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: {
+            id: true
+          }
+        }
+      }
+    });
+
+    if (!article) {
+      return res.status(404).json({
+        success: false,
+        error: 'Article non trouvé'
+      });
+    }
+
+    // Vérifier les permissions (auteur ou admin)
+    if (article.author.id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Vous ne pouvez supprimer que vos propres articles'
+      });
+    }
+
+    // Supprimer les likes de l'article
+    await prisma.blogArticleLike.deleteMany({
+      where: { articleId: id }
+    });
+
+    // Supprimer tous les commentaires et leurs likes associés
+    const comments = await prisma.blogComment.findMany({
+      where: { articleId: id },
+      select: { id: true }
+    });
+
+    for (const comment of comments) {
+      await prisma.blogCommentLike.deleteMany({
+        where: { commentId: comment.id }
+      });
+    }
+
+    await prisma.blogComment.deleteMany({
+      where: { articleId: id }
+    });
+
+    // Supprimer l'article
+    await prisma.blogArticle.delete({
+      where: { id }
+    });
+
+    res.json({
+      success: true,
+      message: 'Article supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la suppression de l\'article:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la suppression de l\'article'
+    });
+  }
+});
+
+// GET /api/articles/slug/:slug - Récupérer un article par son slug
+router.get('/slug/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const token = req.headers.authorization?.split(' ')[1];
+    let userId = null;
+
+    // Extraire userId du token si présent
+    if (token) {
+      if (token.startsWith('real-jwt-token-')) {
+        userId = token.replace('real-jwt-token-', '');
+      } else {
+        userId = token;
+      }
+    }
+
+    // Incrémenter le compteur de vues
+    await prisma.blogArticle.update({
+      where: { slug },
+      data: {
+        views: { increment: 1 }
+      }
+    });
+
+    const article = await prisma.blogArticle.findUnique({
+      where: { slug },
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true
+          }
+        },
+        blogComments: {
+          where: {
+            parentId: null // Ne prendre que les commentaires principaux
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true
+              }
+            },
+            _count: {
+              select: {
+                commentLikes: true,
+                replies: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        },
+        // Vérifier si l'utilisateur courant a liké l'article
+        articleLikes: userId ? {
+          where: { userId },
+          select: { id: true }
+        } : false
+      }
+    });
+
+    if (!article) {
+      return res.status(404).json({
+        success: false,
+        error: 'Article non trouvé'
+      });
+    }
+
+    // Vérifier si l'article est publié (sauf pour l'auteur ou l'admin)
+    if (article.status !== 'publié') {
+      if (!userId || (userId !== article.author.id && req.user?.role !== 'admin')) {
+        return res.status(403).json({
+          success: false,
+          error: 'Cet article n\'est pas accessible publiquement'
+        });
+      }
+    }
+
+    // Formater les commentaires
+    const formattedComments = await Promise.all(
+      article.blogComments.map(async (comment) => {
+        // Vérifier si l'utilisateur courant a liké ce commentaire
+        let isLiked = false;
+        if (userId) {
+          const like = await prisma.blogCommentLike.findUnique({
+            where: {
+              commentId_userId: {
+                commentId: comment.id,
+                userId: userId
+              }
+            }
+          });
+          isLiked = !!like;
+        }
+
+        return {
+          id: comment.id,
+          userId: comment.user.id,
+          userName: `${comment.user.firstName} ${comment.user.lastName}`,
+          userAvatar: comment.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(comment.user.firstName + ' ' + comment.user.lastName)}&background=random`,
+          content: comment.content,
+          date: comment.createdAt.toISOString(),
+          likes: comment._count.commentLikes,
+          isLiked: isLiked,
+          repliesCount: comment._count.replies,
+          isEdited: comment.isEdited,
+          updatedAt: comment.updatedAt?.toISOString()
+        };
+      })
+    );
+
+    // Vérifier si l'utilisateur courant a liké l'article
+    const isLiked = userId && article.articleLikes && article.articleLikes.length > 0;
+
+    // Générer une URL d'image par défaut si aucune image n'est fournie
+    let imageUrl = article.coverUrl;
+    if (!imageUrl) {
+      const colors = ['f97316', '3b82f6', '10b981', '8b5cf6', 'ef4444'];
+      const color = colors[article.id.charCodeAt(0) % colors.length];
+      imageUrl = `https://via.placeholder.com/800x450/${color}/ffffff?text=${encodeURIComponent(article.title)}`;
+    }
+
+    const responseData = {
+      id: article.id,
+      titre: article.title,
+      slug: article.slug,
+      date: article.publishedAt?.toISOString() || article.createdAt.toISOString(),
+      dateFormatted: article.publishedAt
+        ? new Date(article.publishedAt).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          })
+        : new Date(article.createdAt).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          }),
+      categorie: article.category,
+      description: article.excerpt || article.content.substring(0, 150) + '...',
+      image: imageUrl,
+      contenu: article.content,
+      auteur: `${article.author.firstName} ${article.author.lastName}`,
+      auteurId: article.author.id,
+      auteurAvatar: article.author.avatar,
+      tempsLecture: article.readTime || '3 min',
+      tags: article.tags || [],
+      views: article.views || 0,
+      likes: article.likes || 0,
+      isLiked: !!isLiked,
+      isBookmarked: false,
+      shares: 0,
+      statut: article.status,
+      comments: formattedComments
+    };
+
+    res.json({
+      success: true,
+      data: responseData
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération de l\'article par slug:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération de l\'article'
+    });
+  }
+});
+
+// GET /api/articles/:id/comments - Récupérer les commentaires d'un article
+router.get('/:id/comments', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const token = req.headers.authorization?.split(' ')[1];
+    let userId = null;
+
+    // Extraire userId du token si présent
+    if (token) {
+      if (token.startsWith('real-jwt-token-')) {
+        userId = token.replace('real-jwt-token-', '');
+      } else {
+        userId = token;
+      }
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Vérifier si l'article existe
+    const articleExists = await prisma.blogArticle.findUnique({
+      where: { id },
+      select: { id: true }
+    });
+
+    if (!articleExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Article non trouvé'
+      });
+    }
+
+    // Récupérer les commentaires avec pagination
+    const [comments, totalComments] = await Promise.all([
+      prisma.blogComment.findMany({
+        where: {
+          articleId: id,
+          parentId: null // Ne prendre que les commentaires principaux
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true
+            }
+          },
+          _count: {
+            select: {
+              commentLikes: true,
+              replies: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        skip,
+        take: parseInt(limit)
+      }),
+      prisma.blogComment.count({
+        where: {
+          articleId: id,
+          parentId: null
+        }
+      })
+    ]);
+
+    // Formater les commentaires avec vérification des likes
+    const formattedComments = await Promise.all(
+      comments.map(async (comment) => {
+        let isLiked = false;
+        if (userId) {
+          const like = await prisma.blogCommentLike.findUnique({
+            where: {
+              commentId_userId: {
+                commentId: comment.id,
+                userId: userId
+              }
+            }
+          });
+          isLiked = !!like;
+        }
+
+        return {
+          id: comment.id,
+          userId: comment.user.id,
+          userName: `${comment.user.firstName} ${comment.user.lastName}`,
+          userAvatar: comment.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(comment.user.firstName + ' ' + comment.user.lastName)}&background=random`,
+          content: comment.content,
+          date: comment.createdAt.toISOString(),
+          likes: comment._count.commentLikes,
+          isLiked: isLiked,
+          repliesCount: comment._count.replies,
+          isEdited: comment.isEdited,
+          updatedAt: comment.updatedAt?.toISOString()
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: {
+        comments: formattedComments,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: totalComments,
+          totalPages: Math.ceil(totalComments / parseInt(limit))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des commentaires:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération des commentaires'
+    });
+  }
+});
+
+// GET /api/articles/comments/:commentId/replies - Récupérer les réponses d'un commentaire
+router.get('/comments/:commentId/replies', async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const token = req.headers.authorization?.split(' ')[1];
+    let userId = null;
+
+    // Extraire userId du token si présent
+    if (token) {
+      if (token.startsWith('real-jwt-token-')) {
+        userId = token.replace('real-jwt-token-', '');
+      } else {
+        userId = token;
+      }
+    }
+
+    // Vérifier si le commentaire parent existe
+    const parentComment = await prisma.blogComment.findUnique({
+      where: { id: commentId },
+      select: { id: true }
+    });
+
+    if (!parentComment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Commentaire parent non trouvé'
+      });
+    }
+
+    // Récupérer les réponses
+    const replies = await prisma.blogComment.findMany({
+      where: {
+        parentId: commentId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true
+          }
+        },
+        _count: {
+          select: {
+            commentLikes: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
+
+    // Formater les réponses avec vérification des likes
+    const formattedReplies = await Promise.all(
+      replies.map(async (reply) => {
+        let isLiked = false;
+        if (userId) {
+          const like = await prisma.blogCommentLike.findUnique({
+            where: {
+              commentId_userId: {
+                commentId: reply.id,
+                userId: userId
+              }
+            }
+          });
+          isLiked = !!like;
+        }
+
+        return {
+          id: reply.id,
+          userId: reply.user.id,
+          userName: `${reply.user.firstName} ${reply.user.lastName}`,
+          userAvatar: reply.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(reply.user.firstName + ' ' + reply.user.lastName)}&background=random`,
+          content: reply.content,
+          date: reply.createdAt.toISOString(),
+          likes: reply._count.commentLikes,
+          isLiked: isLiked,
+          isEdited: reply.isEdited,
+          updatedAt: reply.updatedAt?.toISOString()
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: formattedReplies
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des réponses:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération des réponses'
+    });
+  }
+});
+
+// GET /api/articles/user/stats - Récupérer les statistiques de l'utilisateur
+router.get('/user/stats', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [
+      totalArticles,
+      publishedArticles,
+      draftArticles,
+      scheduledArticles,
+      totalViews,
+      totalLikes,
+      totalComments
+    ] = await Promise.all([
+      // Total des articles
+      prisma.blogArticle.count({
+        where: { authorId: userId }
+      }),
+      // Articles publiés
+      prisma.blogArticle.count({
+        where: {
+          authorId: userId,
+          status: 'publié'
+        }
+      }),
+      // Brouillons
+      prisma.blogArticle.count({
+        where: {
+          authorId: userId,
+          status: 'brouillon'
+        }
+      }),
+      // Articles programmés
+      prisma.blogArticle.count({
+        where: {
+          authorId: userId,
+          status: 'programmé'
+        }
+      }),
+      // Total des vues
+      prisma.blogArticle.aggregate({
+        where: { authorId: userId },
+        _sum: { views: true }
+      }),
+      // Total des likes
+      prisma.blogArticle.aggregate({
+        where: { authorId: userId },
+        _sum: { likes: true }
+      }),
+      // Total des commentaires
+      prisma.blogArticle.aggregate({
+        where: { authorId: userId },
+        _sum: { comments: true }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalArticles,
+        publishedArticles,
+        draftArticles,
+        scheduledArticles,
+        totalViews: totalViews._sum.views || 0,
+        totalLikes: totalLikes._sum.likes || 0,
+        totalComments: totalComments._sum.comments || 0
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération des statistiques'
+    });
+  }
+});
+
+// GET /api/articles/user/articles - Récupérer les articles de l'utilisateur
+router.get('/user/articles', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { status, page = 1, limit = 10 } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Construire le filtre where
+    const where = { authorId: userId };
+    if (status && status !== 'Tous') {
+      where.status = status;
+    }
+
+    const [articles, total] = await Promise.all([
+      prisma.blogArticle.findMany({
+        where,
+        include: {
+          author: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true
+            }
+          },
+          _count: {
+            select: {
+              blogComments: {
+                where: {
+                  parentId: null
+                }
+              }
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        skip,
+        take: parseInt(limit)
+      }),
+      prisma.blogArticle.count({ where })
+    ]);
+
+    // Formater les articles
+    const formattedArticles = articles.map(article => {
+      let imageUrl = article.coverUrl;
+      if (!imageUrl) {
+        const colors = ['f97316', '3b82f6', '10b981', '8b5cf6', 'ef4444'];
+        const color = colors[article.id.charCodeAt(0) % colors.length];
+        imageUrl = `https://via.placeholder.com/400x250/${color}/ffffff?text=${encodeURIComponent(article.title.substring(0, 20))}`;
+      }
+
+      return {
+        id: article.id,
+        titre: article.title,
+        slug: article.slug,
+        date: article.publishedAt?.toISOString() || article.createdAt.toISOString(),
+        dateFormatted: article.publishedAt
+          ? new Date(article.publishedAt).toLocaleDateString('fr-FR', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            })
+          : 'Non publié',
+        categorie: article.category,
+        description: article.excerpt || article.content.substring(0, 150) + '...',
+        image: imageUrl,
+        auteur: `${article.author.firstName} ${article.author.lastName}`,
+        auteurId: article.author.id,
+        tempsLecture: article.readTime || '3 min',
+        statut: article.status,
+        tags: article.tags || [],
+        views: article.views || 0,
+        likes: article.likes || 0,
+        comments: article._count.blogComments || 0
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        articles: formattedArticles,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages: Math.ceil(total / parseInt(limit))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des articles de l\'utilisateur:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération des articles'
+    });
+  }
+});
+  
 // GET /api/articles - Récupérer tous les articles avec filtres
 router.get('/', async (req, res) => {
   try {
@@ -48,7 +1024,7 @@ router.get('/', async (req, res) => {
     }
 
     const articles = await prisma.blogArticle.findMany({
-      where,
+    
       include: {
         author: {
           select: {
