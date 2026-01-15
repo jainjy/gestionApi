@@ -4,6 +4,7 @@ const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const { prisma } = require("../lib/db");
 const stripe = require("../utils/stripe");
+const oliplusEmailService = require("../services/oliplusEmailService");
 
 // POST /api/subscription-payments/create-payment-intent
 router.post("/create-payment-intent", authenticateToken, async (req, res) => {
@@ -71,7 +72,7 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
         amount,
         currency: "eur",
         provider: "stripe",
-        providerId: paymentIntent.id,
+        providerId: paymentIntent.id, // ⚠️ C'est le paymentIntentId
         status: "pending",
         referenceType: "subscription",
         metadata: {
@@ -85,6 +86,7 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
 
     res.json({
       clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id, // ✅ Ajouter cette ligne
       transactionId: transaction.id,
       plan: {
         name: plan.name,
@@ -198,11 +200,39 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
       });
     }
 
+    // 🔥 AJOUT: Envoyer l'email de confirmation de paiement
+    try {
+      // Récupérer les informations de l'utilisateur
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, firstName: true, lastName: true }
+      });
+
+      if (user) {
+        await oliplusEmailService.sendOliplusEmail({
+          to: user.email,
+          template: 'payment-confirmation',
+          data: {
+            userName: `${user.firstName} ${user.lastName}`,
+            serviceName: planName || plan.name,
+            amount: plan.price,
+            date: new Date().toLocaleDateString('fr-FR'),
+            transactionId: paymentIntentId.substring(0, 12) // Format court
+          }
+        });
+        console.log(`✅ Email de confirmation de paiement envoyé à ${user.email}`);
+      }
+    } catch (emailError) {
+      console.error('❌ Erreur lors de l\'envoi de l\'email de confirmation:', emailError);
+      // Ne pas bloquer le processus si l'email échoue
+    }
+
     res.json({
       success: true,
       message: "Abonnement mis à jour avec succès",
       subscription: subscription,
       paymentMethod: paymentIntent.payment_method_types[0] || "card",
+      emailSent: true
     });
   } catch (error) {
     console.error("Erreur confirmation upgrade:", error);

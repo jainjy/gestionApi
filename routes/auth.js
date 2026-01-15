@@ -8,6 +8,8 @@ const stripe = require("../utils/stripe");
 const { authenticateToken } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
+const oliplusEmailService = require("../services/oliplusEmailService");
+
 // Fonction de validation
 function isPasswordStrong(password) {
     // Min 8 chars, 1 majuscule, 1 minuscule, 1 chiffre
@@ -35,16 +37,81 @@ const passwordResetLimiter = rateLimit({
 });
 
 // Création du limiteur pour le login
+// Création du limiteur pour le login
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  // 🔥 AJOUT : Pour éviter l'erreur sur le login
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 tentatives maximum
   validate: { default: false },
-  message: {
-    error: "Trop de tentatives de connexion. Réessayez dans 15 minutes.",
-  },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Utiliser l'email comme clé pour le rate limiting
+    return req.body?.email || req.ip || "unknown";
+  },
+  // 🔥 AJOUT: Handler personnalisé quand la limite est dépassée
+  handler: async (req, res, next, options) => {
+    const email = req.body?.email;
+    const ip = req.ip || req.socket.remoteAddress;
+    
+    console.warn(`⚠️ Taux de connexion dépassé pour email: ${email}, IP: ${ip}`);
+    
+    try {
+      // 1. Chercher l'utilisateur par email
+      if (email) {
+        const user = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, email: true, firstName: true, lastName: true }
+        });
+        
+        if (user) {
+          // 2. Envoyer l'email d'alerte de sécurité
+          try {
+            await oliplusEmailService.sendOliplusEmail({
+              to: user.email,
+              template: 'security-alert',
+              data: {
+                userName: `${user.firstName} ${user.lastName}`,
+                date: new Date().toLocaleString('fr-FR'),
+                location: `IP: ${ip}`,
+                action: 'Tentatives de connexion excessives détectées'
+              }
+            });
+            console.log(`✅ Email d'alerte sécurité envoyé à ${user.email}`);
+            
+            // 3. Optionnel: Log l'incident en base de données
+            await prisma.securityLog.create({
+              data: {
+                userId: user.id,
+                type: 'RATE_LIMIT_EXCEEDED',
+                description: `Trop de tentatives de connexion (5+ en 15 min) depuis IP: ${ip}`,
+                ipAddress: ip,
+                metadata: {
+                  email: email,
+                  attempts: '5+',
+                  window: '15 minutes'
+                }
+              }
+            });
+          } catch (emailError) {
+            console.error('❌ Erreur lors de l\'envoi de l\'email d\'alerte:', emailError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors du traitement du rate limit:', error);
+    }
+    
+    // 4. Retourner la réponse d'erreur
+    return res.status(429).json({
+      success: false,
+      error: "Trop de tentatives de connexion. Réessayez dans 15 minutes.",
+      securityAlert: "Une alerte de sécurité a été envoyée à votre adresse email."
+    });
+  },
+  // Message par défaut (utilisé si handler n'est pas défini)
+  message: {
+    error: "Trop de tentatives de connexion. Réessayez dans 15 minutes.",
+  }
 });
 
 // 🔧 CORRECTION: Configuration rate-limit corrigée pour verifyToken
@@ -510,6 +577,29 @@ router.post("/confirm-payment", async (req, res) => {
             },
           },
         });
+
+        // 🔥 AJOUT: Envoyer l'email de confirmation de paiement
+        try {
+          // Récupérer les détails du plan depuis les métadonnées
+          const planName = paymentIntent.metadata.planName || "Service Oliplus";
+          const planPrice = paymentIntent.metadata.planPrice || transaction.amount || 0;
+          
+          await oliplusEmailService.sendOliplusEmail({
+            to: user.email,
+            template: 'payment-confirmation',
+            data: {
+              userName: `${user.firstName} ${user.lastName}`,
+              serviceName: planName,
+              amount: planPrice,
+              date: new Date().toLocaleDateString('fr-FR'),
+              transactionId: paymentIntentId.substring(0, 12)
+            }
+          });
+          console.log(`✅ Email de confirmation de paiement envoyé à ${user.email}`);
+        } catch (emailError) {
+          console.error('❌ Erreur lors de l\'envoi de l\'email de confirmation:', emailError);
+          // Continuer même si l'email échoue
+        }
         
         // Générer le token
         // 1. Générer l'Access Token (Court : 24hin à 1h)
@@ -550,6 +640,7 @@ router.post("/confirm-payment", async (req, res) => {
           },
           token: accessToken, // Access Token pour le header Authorization
           refreshToken: refreshToken, // À stocker côté client (localStorage ou Cookie)
+          emailSent: true
         });
       }
     }
