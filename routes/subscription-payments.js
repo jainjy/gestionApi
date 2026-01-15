@@ -71,7 +71,7 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
         amount,
         currency: "eur",
         provider: "stripe",
-        providerId: paymentIntent.id,
+        providerId: paymentIntent.id, // ⚠️ C'est le paymentIntentId
         status: "pending",
         referenceType: "subscription",
         metadata: {
@@ -85,6 +85,7 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
 
     res.json({
       clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id, // ✅ Ajouter cette ligne
       transactionId: transaction.id,
       plan: {
         name: plan.name,
@@ -97,7 +98,6 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Erreur paiement" });
   }
 });
-
 
 // POST /api/subscription-payments/confirm-upgrade
 router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
