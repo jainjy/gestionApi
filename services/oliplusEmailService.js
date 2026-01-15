@@ -123,6 +123,7 @@ class OliplusEmailService {
         </body>
         </html>
         `,
+
             'rgpd-confirmation': `
         <!DOCTYPE html>
             <html>
@@ -159,6 +160,7 @@ class OliplusEmailService {
                 </body>
             </html>
         `,
+
             'payment-confirmation': `
         <!DOCTYPE html>
         <html>
@@ -187,6 +189,7 @@ class OliplusEmailService {
         </body>
         </html>
         `,
+
             'security-alert': `
         <!DOCTYPE html>
         <html>
@@ -220,6 +223,7 @@ class OliplusEmailService {
         </body>
         </html>
         `,
+
             'cgu-update': `
             <!DOCTYPE html>
                 <html>
@@ -243,6 +247,8 @@ class OliplusEmailService {
                     </body>
                 </html>
         `,
+
+        // Envoyer confirmation RGPD prestataire
             'provider-welcome': `
             <!DOCTYPE html>
                 <html>
@@ -282,7 +288,8 @@ class OliplusEmailService {
                     </body>
                 </html>
         `,
-            'provider-rgpd': `
+            
+        'provider-rgpd': `
             <!DOCTYPE html>
                 <html>
                     <body>
@@ -310,6 +317,8 @@ class OliplusEmailService {
                     </body>
                 </html>
         `,
+
+
             'provider-billing': `
             <!DOCTYPE html>
                 <html>
@@ -341,7 +350,9 @@ class OliplusEmailService {
                     </body>
                 </html>
         `,
-            'provider-security': `
+          
+        
+        'provider-security': `
             <!DOCTYPE html>
                 <html>
                     <body>
@@ -378,6 +389,8 @@ class OliplusEmailService {
                     </body>
                 </html>
         `,
+
+
             'provider-cgu': `
             <!DOCTYPE html>
                 <html>
@@ -411,6 +424,8 @@ class OliplusEmailService {
                     </body>
                 </html>
         `,
+
+        
             'provider-onboarding': `
                 <!DOCTYPE html>
                 <html>

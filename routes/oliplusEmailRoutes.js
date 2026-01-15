@@ -212,32 +212,94 @@ router.post("/send-provider-welcome", async (req, res) => {
 // POST - Envoyer confirmation RGPD prestataire
 router.post("/send-provider-rgpd", async (req, res) => {
     try {
+        console.log("=== DÉBUT send-provider-rgpd ===");
+        console.log("Headers reçus:", req.headers['content-type']);
+        console.log("Body reçu complet:", JSON.stringify(req.body, null, 2));
+        
         const { email, providerName } = req.body;
         
+        console.log("Email extrait:", email);
+        console.log("ProviderName extrait:", providerName);
+        
+        // Validation des champs requis
         if (!email || !providerName) {
+            console.log("❌ Validation échouée - champs manquants");
             return res.status(400).json({
                 success: false,
-                error: "Email et nom du prestataire requis"
+                error: "Email et nom du prestataire requis",
+                details: {
+                    emailProvided: !!email,
+                    providerNameProvided: !!providerName
+                }
             });
         }
 
-        const result = await oliplusEmailService.sendOliplusEmail({
+        // Validation du format d'email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            console.log("❌ Format d'email invalide:", email);
+            return res.status(400).json({
+                success: false,
+                error: "Format d'email invalide"
+            });
+        }
+
+        console.log("✅ Validation réussie, préparation de l'email...");
+        
+        // Préparation des données pour l'email
+        const emailData = {
             to: email,
             template: 'provider-rgpd',
             data: { providerName }
-        });
+        };
+
+        console.log("Données envoyées au service email:", emailData);
+
+        // Appel du service email
+        const result = await oliplusEmailService.sendOliplusEmail(emailData);
+        
+        console.log("✅ Email envoyé avec succès:", result.messageId);
         
         res.json({
             success: true,
             data: result,
-            message: "Confirmation RGPD prestataire envoyée avec succès"
+            message: `Confirmation RGPD prestataire envoyée avec succès à ${email}`
         });
+
     } catch (error) {
-        console.error("Error sending provider RGPD:", error);
+        console.error("❌ ERREUR dans send-provider-rgpd:");
+        console.error("Message d'erreur:", error.message);
+        console.error("Stack trace:", error.stack);
+        
+        // Vérifier si c'est une erreur de template
+        if (error.message && error.message.includes('Template')) {
+            return res.status(500).json({
+                success: false,
+                error: "Erreur de configuration du template d'email",
+                details: error.message
+            });
+        }
+        
+        // Vérifier si c'est une erreur d'envoi SMTP
+        if (error.code) {
+            console.error("Code d'erreur SMTP:", error.code);
+            console.error("Réponse SMTP:", error.response);
+            
+            return res.status(500).json({
+                success: false,
+                error: "Erreur d'envoi d'email",
+                details: `Code SMTP: ${error.code}`,
+                smtpResponse: error.response
+            });
+        }
+
         res.status(500).json({
             success: false,
-            error: "Erreur lors de l'envoi de la confirmation RGPD prestataire"
+            error: "Erreur lors de l'envoi de la confirmation RGPD prestataire",
+            internalError: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
+    } finally {
+        console.log("=== FIN send-provider-rgpd ===");
     }
 });
 
