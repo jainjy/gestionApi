@@ -597,10 +597,21 @@ model Metier {
   id             Int                    @id @default(autoincrement())
   libelle        String
   embedding      Unsupported("vector")?
+  categorie      MetierCategorie        @default(AUTRE) // ✅ NOUVEAU
   services       MetierService[]
   users          UtilisateurMetier[]
   demandes       Demande[]
   ContactMessage ContactMessage[]
+}
+
+//categorie de metier
+enum MetierCategorie {
+  IMMOBILIER
+  ARTISAN
+  TOURISME
+  BIEN_ETRE
+  COMMERCE
+  AUTRE
 }
 
 // ======================
@@ -666,7 +677,7 @@ model UtilisateurMetier {
   metierId Int
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   metier   Metier @relation(fields: [metierId], references: [id])
-
+  descriptionMetierUser String? // ✅ Description personnalisée du métier par l'utilisateur
   @@id([userId, metierId])
 }
 

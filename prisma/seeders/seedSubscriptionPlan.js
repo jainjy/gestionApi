@@ -29,7 +29,7 @@ async function main() {
       ],
       planType: "professional",
       professionalCategory: "real-estate",
-      userTypes: ["AGENCE", "PRESTATAIRE", "VENDEUR"],
+      userTypes: ["AGENCE","VENDEUR"],
       popular: true,
       color: "#2563eb", // Bleu professionnel
       icon: "🏢",
@@ -54,7 +54,7 @@ async function main() {
       ],
       planType: "professional",
       professionalCategory: "artisan",
-      userTypes: ["PRESTATAIRE", "ARTISAN", "EXPERT"],
+      userTypes: ["PRESTATAIRE", "ARTISAN"],
       popular: false,
       color: "#059669", // Vert émeraude
       icon: "🔨",
@@ -79,7 +79,7 @@ async function main() {
       ],
       planType: "professional",
       professionalCategory: "tourism",
-      userTypes: ["TOURISME", "HEBERGEMENT", "ACTIVITE"],
+      userTypes: ["TOURISME"],
       popular: false,
       color: "#7c3aed", // Violet
       icon: "🏖️",
@@ -104,7 +104,7 @@ async function main() {
       ],
       planType: "professional",
       professionalCategory: "sports",
-      userTypes: ["BIEN_ETRE", "COACH", "SPORT"],
+      userTypes: ["BIEN_ETRE"],
       popular: false,
       color: "#db2777", // Rose
       icon: "💪",
@@ -112,31 +112,31 @@ async function main() {
       isActive: true,
     },
     // Plan pour prestations publicitaires complémentaires
-    {
-      name: "Prestations Publicitaires",
-      description:
-        "Services de communication complémentaires (mise en avant, contenus sponsorisés, campagnes ciblées)",
-      price: 150.0, // Prix de base TTC
-      enhancedVisibilityPrice: 1500.0, // Prix maximum TTC
-      interval: "month",
-      features: [
-        "Mise en avant sur supports digitaux",
-        "Publications sponsorisées",
-        "Campagnes de communication ciblées",
-        "Réseaux sociaux de la plateforme",
-        "Reporting d'impact détaillé",
-        "Personnalisation selon besoins",
-        "Gestion par expert OLIPLUS",
-      ],
-      planType: "advertising",
-      professionalCategory: "advertising",
-      userTypes: ["AGENCE", "PRESTATAIRE", "VENDEUR", "TOURISME", "BIEN_ETRE"],
-      popular: false,
-      color: "#f59e0b", // Orange
-      icon: "📢",
-      isVisibilityEnhanced: false,
-      isActive: true,
-    },
+    // {
+    //   name: "Prestations Publicitaires",
+    //   description:
+    //     "Services de communication complémentaires (mise en avant, contenus sponsorisés, campagnes ciblées)",
+    //   price: 150.0, // Prix de base TTC
+    //   enhancedVisibilityPrice: 1500.0, // Prix maximum TTC
+    //   interval: "month",
+    //   features: [
+    //     "Mise en avant sur supports digitaux",
+    //     "Publications sponsorisées",
+    //     "Campagnes de communication ciblées",
+    //     "Réseaux sociaux de la plateforme",
+    //     "Reporting d'impact détaillé",
+    //     "Personnalisation selon besoins",
+    //     "Gestion par expert OLIPLUS",
+    //   ],
+    //   planType: "advertising",
+    //   professionalCategory: "advertising",
+    //   userTypes: ["AGENCE", "PRESTATAIRE", "VENDEUR", "TOURISME", "BIEN_ETRE"],
+    //   popular: false,
+    //   color: "#f59e0b", // Orange
+    //   icon: "📢",
+    //   isVisibilityEnhanced: false,
+    //   isActive: true,
+    // },
   ];
 
   for (const planData of subscriptionPlans) {

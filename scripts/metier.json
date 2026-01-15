@@ -1,0 +1,1487 @@
+[
+  {
+    "id": 1,
+    "libelle": "ABF (Architecte Bâtiment de France)",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 231,
+    "libelle": "Accompagnateur touristique",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 2,
+    "libelle": "Agence D'urbanisme",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 244,
+    "libelle": "Agence immobilier",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 5,
+    "libelle": "Agence Incendie - Sécurité",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 3,
+    "libelle": "Agenceur (euse) - Désigner d'intérieur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 205,
+    "libelle": "Agent d'état des lieux",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 245,
+    "libelle": "Agent de Ménage",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 4,
+    "libelle": "Agent de nettoyage - Propreté",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 228,
+    "libelle": "Agent de voyage",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 218,
+    "libelle": "Agent Immobilier - Administrateur de biens",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 6,
+    "libelle": "Agent Immobilier - Administrateur de biens ",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 7,
+    "libelle": "Aménageur - Lotisseur",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 8,
+    "libelle": "Aménageur Extérieur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 9,
+    "libelle": "Aménageur Intérieur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 246,
+    "libelle": "Analyse de rentabilité",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 240,
+    "libelle": "Animateur sportif",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 230,
+    "libelle": "Animateur touristique",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 10,
+    "libelle": "Architecte ",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 11,
+    "libelle": "Architected Intérieur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 247,
+    "libelle": "Archivage sécurisé 10 ans",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 12,
+    "libelle": "Arroseur ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 225,
+    "libelle": "Artisan & Profession",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 248,
+    "libelle": "Artisan bijoutier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 250,
+    "libelle": "Artisan céramiste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 249,
+    "libelle": "Artisan coutelier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 257,
+    "libelle": "Artisan ébéniste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 251,
+    "libelle": "Artisan forgeron",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 252,
+    "libelle": "Artisan maroquinier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 253,
+    "libelle": "Artisan maroquinier d'art",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 254,
+    "libelle": "Artisan tisserand",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 255,
+    "libelle": "Artisan vannier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 256,
+    "libelle": "Artisan verrier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 13,
+    "libelle": "Ascensoriste",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 209,
+    "libelle": "Association",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 14,
+    "libelle": "Assureur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 15,
+    "libelle": "Auditeur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 16,
+    "libelle": "Avocat",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 258,
+    "libelle": "Bail personnalisé selon votre bien",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 17,
+    "libelle": "Bailleur Social",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 18,
+    "libelle": "Banquier",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 19,
+    "libelle": "Bardeur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 211,
+    "libelle": "BoutiqueNaturels",
+    "categorie": "COMMERCE"
+  },
+  {
+    "id": 20,
+    "libelle": "Bricoleur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 21,
+    "libelle": "Bureau d'étude",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 22,
+    "libelle": "Cableur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 23,
+    "libelle": "Calculateur et raitement des vibrations et chocs",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 24,
+    "libelle": "Canalisateur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 25,
+    "libelle": "Carreleur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 26,
+    "libelle": "Certifcateur - Contrôleur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 27,
+    "libelle": "Charpentier bois",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 28,
+    "libelle": "Charpentier Métallique",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 202,
+    "libelle": "Chef de chantier",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 29,
+    "libelle": "Chef de Chantier",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 30,
+    "libelle": "Cimentier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 259,
+    "libelle": "Clauses spécifiques adaptées",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 31,
+    "libelle": "Clerc de Notaire",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 221,
+    "libelle": "Coach Nutrition",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 236,
+    "libelle": "Coach sportif",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 32,
+    "libelle": "Coffreur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 206,
+    "libelle": "Commercial",
+    "categorie": "COMMERCE"
+  },
+  {
+    "id": 33,
+    "libelle": "Compresseur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 34,
+    "libelle": "Concasseur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 35,
+    "libelle": "Concepteur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 36,
+    "libelle": "Conducteur de travaux",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 260,
+    "libelle": "Conforme à la loi ALUR",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 37,
+    "libelle": "Consciergerie",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 38,
+    "libelle": "Conseiller Assurance",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 39,
+    "libelle": "Conseiller bancaire",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 40,
+    "libelle": "Conseiller en gestion de patrimoine",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 197,
+    "libelle": "Conseiller en prêt immobilier",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 41,
+    "libelle": "Conseiller Immobilier",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 42,
+    "libelle": "Conseiller télécom",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 261,
+    "libelle": "Conseils en défiscalisation",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 262,
+    "libelle": "Conseils juridiques inclus",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 43,
+    "libelle": "Constructeur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 44,
+    "libelle": "Constructeur de maison en Contenaire",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 45,
+    "libelle": "Contrôleur Bâtiment",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 46,
+    "libelle": "Contrôleur d'accés",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 47,
+    "libelle": "Contructeurs de maison en bois",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 48,
+    "libelle": "Courtier",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 50,
+    "libelle": "Couvreur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 49,
+    "libelle": "Couvreur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 263,
+    "libelle": "Créateur bijoux",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 264,
+    "libelle": "Créateur bijoux textile",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 265,
+    "libelle": "Créateur céramique",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 266,
+    "libelle": "Créateur luminaire",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 267,
+    "libelle": "Créateur maroquinerie",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 268,
+    "libelle": "Créateur mobilier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 269,
+    "libelle": "Créateur papier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 270,
+    "libelle": "Créateur textile",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 271,
+    "libelle": "Créateur verre soufflé",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 51,
+    "libelle": "Cuisiniste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 53,
+    "libelle": "Dalleur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 52,
+    "libelle": "Dalleur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 54,
+    "libelle": "Décorateur intérieur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 55,
+    "libelle": "Découpeur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 56,
+    "libelle": "Déménageur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 57,
+    "libelle": "Démolisseur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 58,
+    "libelle": "Dératiseur - Désinfecteur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 59,
+    "libelle": "Désamianteur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 272,
+    "libelle": "Description détaillée du bien",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 60,
+    "libelle": "Désenfumeur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 61,
+    "libelle": "Déssinateur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 62,
+    "libelle": "Déssinateur en bâtiment",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 63,
+    "libelle": "Diagnostiqueur",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 220,
+    "libelle": "Diététicien",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 217,
+    "libelle": "Digitalisation",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 64,
+    "libelle": "Domoticien",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 273,
+    "libelle": "Double exemplaire certifié",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 66,
+    "libelle": "Ebéniste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 65,
+    "libelle": "Ébéniste",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 67,
+    "libelle": "Échafaudeur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 68,
+    "libelle": "Echaffaudeur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 69,
+    "libelle": "Eclairagiste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 237,
+    "libelle": "Éducateur sportif",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 70,
+    "libelle": "Electricien",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 71,
+    "libelle": "Enduiseur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 238,
+    "libelle": "Entraîneur sportif",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 207,
+    "libelle": "Entreprise Abatatage, elagage, defrichage",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 96,
+    "libelle": "Entreprise deViabilistation, VRD, Terrassement",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 274,
+    "libelle": "Entretien et maintenance",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 275,
+    "libelle": "Esthéticienne",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 72,
+    "libelle": "Etancheur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 73,
+    "libelle": "Étancheur - Étanchéiste",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 297,
+    "libelle": "État des lieux d'entrée et sortie",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 74,
+    "libelle": "Expert en assurance",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 75,
+    "libelle": "Expert Immobilier",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 76,
+    "libelle": "Facadier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 77,
+    "libelle": "Fleuriste",
+    "categorie": "COMMERCE"
+  },
+  {
+    "id": 78,
+    "libelle": "Fontainier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 215,
+    "libelle": "Formateur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 79,
+    "libelle": "Forreur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 80,
+    "libelle": "Frigoriste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 81,
+    "libelle": "Géomètre",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 276,
+    "libelle": "Gestion des loyers et charges",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 201,
+    "libelle": "Gestionnaire d'actifs immobilier",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 82,
+    "libelle": "Gestionnaire de copropriété - Syndic",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 234,
+    "libelle": "Gestionnaire de gîte",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 235,
+    "libelle": "Gestionnaire de location saisonnière",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 83,
+    "libelle": "Gestionnaire de Sinistre",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 200,
+    "libelle": "Gestionnaire Locatif",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 229,
+    "libelle": "Guide touristique",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 204,
+    "libelle": "Huissier de justice",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 216,
+    "libelle": "IBR",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 224,
+    "libelle": "Immobilier & Commerce",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 84,
+    "libelle": "Ingénieur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 85,
+    "libelle": "Ingénieur Civil",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 86,
+    "libelle": "Ingénieur en Batiment",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 277,
+    "libelle": "Ingénieur en Patrimoine",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 87,
+    "libelle": "Ingénieur en Patrimoine - Conseiller Patrimonial",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 88,
+    "libelle": "Ingénieur environnement",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 89,
+    "libelle": "Ingénieur Infrastructure",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 90,
+    "libelle": "Installateur - Installatrice en Sanitaires",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 278,
+    "libelle": "Installateur en Sanitaires",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 91,
+    "libelle": "Installateur(trice) d'alarme",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 92,
+    "libelle": "Isolateur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 93,
+    "libelle": "Jardinier",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 279,
+    "libelle": "Jardinier Paysagiste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 94,
+    "libelle": "Juriste",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 280,
+    "libelle": "Laveur Auto",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 210,
+    "libelle": "Laveur Auto/voiture à domicile",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 95,
+    "libelle": "Maçon",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 203,
+    "libelle": "Mairie",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 97,
+    "libelle": "Marbriers",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 214,
+    "libelle": "Masseur",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 223,
+    "libelle": "Médecin Nutritionniste",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 281,
+    "libelle": "Menuisier Aluminium",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 98,
+    "libelle": "Menuisier Aluminium et Alliage",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 282,
+    "libelle": "Menuisier Bois",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 99,
+    "libelle": "Menuisier Bois et Charpente",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 100,
+    "libelle": "Menuisier Metallique",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 101,
+    "libelle": "Menuisier métalliques",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 102,
+    "libelle": "Menuisier Portes et Fenêtres",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 103,
+    "libelle": "Menuisier PVC",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 104,
+    "libelle": "Metreur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 283,
+    "libelle": "Métreur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 105,
+    "libelle": "Miroitier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 242,
+    "libelle": "Moniteur de sport",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 106,
+    "libelle": "Monnteur en Installation de panneau Solaire",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 107,
+    "libelle": "Monteur de Chaudiere ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 108,
+    "libelle": "Monteur en Installation d'isolant",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 109,
+    "libelle": "Monteur en Installation de Climatisation",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 110,
+    "libelle": "Monteur en Installation de fosse septique",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 111,
+    "libelle": "Monteur en Installation de panneau photovoltaique",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 284,
+    "libelle": "Monteur en Installation de panneau Solaire",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 285,
+    "libelle": "Monteur en installation de Store",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 112,
+    "libelle": "Monteur en installation de Store - Volet Roullant",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 113,
+    "libelle": "Monteur en installation Sanitaire",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 114,
+    "libelle": "Monteur en Installation Thermiques",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 115,
+    "libelle": "Monteur en Installations de Barrière de Sécurité ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 116,
+    "libelle": "Monteur en Installations de Pergola",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 117,
+    "libelle": "Monteur en Installations de volet Persiennes et jalousies",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 118,
+    "libelle": "Monteur et Installateur de Caillebotis",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 119,
+    "libelle": "Monteur et Installateur de Cheminés",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 120,
+    "libelle": "Monteur et Installateur de Cloture",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 121,
+    "libelle": "Monteur et Installateur de Gazon",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 122,
+    "libelle": "Monteur et Installateur de Gouttiere",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 123,
+    "libelle": "Monteur et Installateur de Grilles et Rideaux métalliques",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 124,
+    "libelle": "Monteur et Installateur de Jaccuzi",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 125,
+    "libelle": "Monteur et Installateur de Moustiquaire",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 126,
+    "libelle": "Monteur et Installateur de Panneau d'affichage",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 127,
+    "libelle": "Monteur et Installateur de Parquet",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 128,
+    "libelle": "Monteur et Installateur de Pergolas Biocliamtiques",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 129,
+    "libelle": "Monteur et Installateur de Placards",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 130,
+    "libelle": "Monteur et Installateur de SPA",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 131,
+    "libelle": "Monteur et Installateur de Tôle - Tôlerie ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 132,
+    "libelle": "Monteur et Installateur en Domotique",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 208,
+    "libelle": "Monteur et Installeur de Hammam",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 133,
+    "libelle": "Moquettiste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 134,
+    "libelle": "Muraillier ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 135,
+    "libelle": "Muralier",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 222,
+    "libelle": "Naturopathe",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 136,
+    "libelle": "Nettoyeur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 286,
+    "libelle": "Nettoyeur Spécialisé",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 137,
+    "libelle": "Notaire",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 219,
+    "libelle": "Nutritionniste",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 138,
+    "libelle": "Onduleur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 287,
+    "libelle": "Optimisation fiscale",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 139,
+    "libelle": "Outilleur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 140,
+    "libelle": "Parquetteur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 141,
+    "libelle": "Paysagiste ",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 142,
+    "libelle": "Peintre",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 288,
+    "libelle": "Photographe architecture",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 289,
+    "libelle": "Photographe artistique",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 143,
+    "libelle": "Pisciniste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 144,
+    "libelle": "Plaquiste",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 145,
+    "libelle": "Platrier - Plaquiste",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 146,
+    "libelle": "Plombier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 212,
+    "libelle": "Podcasteur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 147,
+    "libelle": "Polisseur ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 198,
+    "libelle": "Poseur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 199,
+    "libelle": "Poseur de Borne",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 148,
+    "libelle": "Poseur de Comopteur d'eau",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 149,
+    "libelle": "Poseur de Compteur Gaz",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 239,
+    "libelle": "Préparateur physique",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 241,
+    "libelle": "Professeur de fitness",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 150,
+    "libelle": "Promoteur",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 151,
+    "libelle": "Quincaillier",
+    "categorie": "COMMERCE"
+  },
+  {
+    "id": 152,
+    "libelle": "Ramoneur",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 153,
+    "libelle": "Ravaleur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 232,
+    "libelle": "Réceptionniste hôtelier",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 290,
+    "libelle": "Recherche et sélection de locataires",
+    "categorie": "IMMOBILIER"
+  },
+  {
+    "id": 154,
+    "libelle": "Récupérateur d'eau",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 155,
+    "libelle": "Récupérateur et traiteur d'aluminium",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 156,
+    "libelle": "Récupérateur et traiteur de boois",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 157,
+    "libelle": "Récupérateur et traiteur de déchets",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 158,
+    "libelle": "Récupérateur et traiteur de fer",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 159,
+    "libelle": "Récupérateur et traiteur plastiques",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 160,
+    "libelle": "Régleur de chaudiere, chauffage",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 161,
+    "libelle": "Réhabilitateur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 291,
+    "libelle": "Relaxologue",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 162,
+    "libelle": "Réparateur d'appareil éléctroménager",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 163,
+    "libelle": "Réparateur de pompe à chaleur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 164,
+    "libelle": "Réparateur et traiteur d'humidité",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 165,
+    "libelle": "Réparateur Toiture ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 233,
+    "libelle": "Responsable d’hébergement",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 243,
+    "libelle": "Responsable de salle de sport",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 166,
+    "libelle": "Sableur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 167,
+    "libelle": "Scieur ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 293,
+    "libelle": "Sculpteur sur bois",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 294,
+    "libelle": "Sculpteur sur pierre",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 292,
+    "libelle": "Serrurier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 168,
+    "libelle": "Sérrurier",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 295,
+    "libelle": "Signature électronique",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 169,
+    "libelle": "Solier",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 170,
+    "libelle": "Sollier Moquetiste",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 171,
+    "libelle": "Sondeur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 172,
+    "libelle": "Soudeur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 227,
+    "libelle": "Sport & Bien-être",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 173,
+    "libelle": "Staffeur ",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 174,
+    "libelle": "Stucateur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 175,
+    "libelle": "Tailleur de Pierre",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 176,
+    "libelle": "Technicien d'équipements Piscine",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 177,
+    "libelle": "Technicien de Maintenance",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 178,
+    "libelle": "Technicien et Traitement de l'air",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 179,
+    "libelle": "Technicien et Traitement de l'eau",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 180,
+    "libelle": "Technicien et Traitement des Sols",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 181,
+    "libelle": "Technicien et Traitement des termites",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 296,
+    "libelle": "Technicien Piscine",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 182,
+    "libelle": "Technicien Planchers",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 183,
+    "libelle": "Technicien Réseau Internet",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 184,
+    "libelle": "Technicien Réseau téléphonique",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 185,
+    "libelle": "Terrasseur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 213,
+    "libelle": "Thérapeute",
+    "categorie": "BIEN_ETRE"
+  },
+  {
+    "id": 186,
+    "libelle": "Topographe",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 226,
+    "libelle": "Tourisme & Loisirs",
+    "categorie": "TOURISME"
+  },
+  {
+    "id": 187,
+    "libelle": "Treillageur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 188,
+    "libelle": "Vendeur - Commercant ",
+    "categorie": "COMMERCE"
+  },
+  {
+    "id": 189,
+    "libelle": "Vendeur de Carrelage",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 190,
+    "libelle": "Vendeur de Ciment",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 191,
+    "libelle": "Vendeur de Matériaux",
+    "categorie": "COMMERCE"
+  },
+  {
+    "id": 192,
+    "libelle": "Ventiliste",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 193,
+    "libelle": "Viabilisateur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 194,
+    "libelle": "Vidangeur",
+    "categorie": "AUTRE"
+  },
+  {
+    "id": 195,
+    "libelle": "Vitrier",
+    "categorie": "ARTISAN"
+  },
+  {
+    "id": 196,
+    "libelle": "Zingueur",
+    "categorie": "ARTISAN"
+  }
+]
