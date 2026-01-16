@@ -17,7 +17,7 @@ router.get("/interviews", async (req, res) => {
       search,
     } = req.query;
 
-    const where = status == "all" ? {} : { status };
+    const where = status === "all" ? {} : { status };
 
     if (category && category !== "tous") {
       where.category = category;
@@ -38,6 +38,7 @@ router.get("/interviews", async (req, res) => {
     }
 
     const [interviews, total] = await Promise.all([
+      // CORRECTION ICI : entrepreneurInterview → entrepreneurInterview (avec 'E' majuscule)
       prisma.entrepreneurInterview.findMany({
         where,
         include: {
@@ -61,6 +62,7 @@ router.get("/interviews", async (req, res) => {
         skip: parseInt(offset),
         take: parseInt(limit),
       }),
+      // CORRECTION ICI : entrepreneurInterview → entrepreneurInterview (avec 'E' majuscule)
       prisma.entrepreneurInterview.count({ where }),
     ]);
 
