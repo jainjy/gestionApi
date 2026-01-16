@@ -378,7 +378,7 @@ router.post("/signup", async (req, res) => {
 // POST /api/auth/signup-pro - Inscription Pro sans paiement (essai gratuit 2 mois)
 router.post("/signup-pro", async (req, res) => {
   try {
-    const { utilisateur, planId } = req.body;
+    const { utilisateur, planId, visibilityOption } = req.body;
     // Validation des données utilisateur
     if (
       !utilisateur ||
@@ -437,11 +437,17 @@ router.post("/signup-pro", async (req, res) => {
         commercialName: utilisateur.commercialName || null,
         metiers: utilisateur.metiers &&
           utilisateur.metiers.length > 0 && {
-            create: utilisateur.metiers.map((metierId) => ({
-              metier: {
-                connect: { id: metierId },
-              },
-            })),
+            create: utilisateur.metiers.map((metierInfo) => {
+              // Gère le cas où on reçoit un simple ID ou un objet complet
+              if (typeof metierInfo === 'object' && metierInfo.metierId) {
+                return {
+                  metier: { connect: { id: metierInfo.metierId } },
+                  descriptionMetierUser: metierInfo.descriptionMetierUser,
+                };
+              }
+              // Cas legacy où on ne reçoit que l'ID
+              return { metier: { connect: { id: metierInfo } } };
+            }),
           },
       },
       include: {
@@ -464,6 +470,7 @@ router.post("/signup-pro", async (req, res) => {
         status: "active",
         autoRenew: false,
         planId: planId,
+        visibilityOption: visibilityOption || "standard",
       },
     });
 
