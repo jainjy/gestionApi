@@ -9,7 +9,7 @@ const oliplusEmailService = require("../services/oliplusEmailService");
 // POST /api/subscription-payments/create-payment-intent
 router.post("/create-payment-intent", authenticateToken, async (req, res) => {
   try {
-    const { planId } = req.body;
+    const { planId, visibilityOption } = req.body;
     const userId = req.user.id;
 
     if (!planId) {
@@ -25,13 +25,39 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Plan non trouvé" });
     }
 
-    // 2️⃣ CALCUL DU MONTANT CÔTÉ SERVEUR
-    const amount = plan.price; // source de vérité
+    // 2️⃣ CALCUL DU MONTANT SELON L'OPTION DE VISIBILITÉ
+    let amount;
+    let selectedVisibilityOption = visibilityOption || "standard";
+
+    if (
+      selectedVisibilityOption === "enhanced" &&
+      plan.enhancedVisibilityPrice
+    ) {
+      amount = plan.enhancedVisibilityPrice;
+    } else {
+      amount = plan.price;
+    }
+
+    // Vérifier si l'option enhanced est valide
+    if (
+      selectedVisibilityOption === "enhanced" &&
+      !plan.enhancedVisibilityPrice
+    ) {
+      return res.status(400).json({
+        error:
+          "L'option de visibilité renforcée n'est pas disponible pour ce plan",
+      });
+    }
 
     // 3️⃣ Récupérer l'utilisateur
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { stripeCustomerId: true, email: true },
+      select: {
+        stripeCustomerId: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+      },
     });
 
     let customerId = user.stripeCustomerId;
@@ -39,6 +65,10 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
+        name:
+          user.firstName && user.lastName
+            ? `${user.firstName} ${user.lastName}`
+            : undefined,
         metadata: { userId },
       });
 
@@ -55,48 +85,58 @@ router.post("/create-payment-intent", authenticateToken, async (req, res) => {
       amount: Math.round(amount * 100),
       currency: "eur",
       customer: customerId,
-      description: `Abonnement: ${plan.name}`,
+      description: `Abonnement: ${plan.name} (${selectedVisibilityOption === "enhanced" ? "Visibilité renforcée" : "Standard"})`,
       metadata: {
         userId,
         planId,
         planName: plan.name,
+        visibilityOption: selectedVisibilityOption,
+        amount: amount.toString(),
         type: "subscription",
       },
       automatic_payment_methods: { enabled: true },
     });
 
-    // 5️⃣ Enregistrer la transaction avec montant serveur
+    // 5️⃣ Enregistrer la transaction avec montant et option de visibilité
     const transaction = await prisma.transaction.create({
       data: {
         userId,
         amount,
         currency: "eur",
         provider: "stripe",
-        providerId: paymentIntent.id, // ⚠️ C'est le paymentIntentId
+        providerId: paymentIntent.id,
         status: "pending",
         referenceType: "subscription",
         metadata: {
           planId,
           planName: plan.name,
           planPrice: plan.price,
+          enhancedVisibilityPrice: plan.enhancedVisibilityPrice,
+          selectedVisibilityOption,
+          amountPaid: amount,
           planInterval: plan.interval,
+          isVisibilityEnhanced: selectedVisibilityOption === "enhanced",
         },
       },
     });
 
     res.json({
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id, // ✅ Ajouter cette ligne
+      paymentIntentId: paymentIntent.id,
       transactionId: transaction.id,
       plan: {
         name: plan.name,
         price: plan.price,
+        enhancedVisibilityPrice: plan.enhancedVisibilityPrice,
         interval: plan.interval,
+        supportsEnhancedVisibility: !!plan.enhancedVisibilityPrice,
       },
+      visibilityOption: selectedVisibilityOption,
+      amount,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erreur paiement" });
+    console.error("Erreur création PaymentIntent:", error);
+    res.status(500).json({ error: "Erreur lors de la création du paiement" });
   }
 });
 
@@ -122,9 +162,12 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
       });
     }
 
-    // Récupérer les métadonnées du plan
+    // Récupérer les métadonnées
     const planId = paymentIntent.metadata.planId;
     const planName = paymentIntent.metadata.planName;
+    const visibilityOption =
+      paymentIntent.metadata.visibilityOption || "standard";
+    const amount = parseFloat(paymentIntent.metadata.amount) || 0;
 
     if (!planId) {
       return res.status(400).json({
@@ -150,6 +193,15 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
 
     let subscription;
 
+    // Calculer la date de fin
+    const endDate = new Date();
+    if (plan.interval === "year") {
+      endDate.setFullYear(endDate.getFullYear() + 1);
+    } else {
+      // Par défaut mois
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
+
     if (currentSubscription) {
       // Mettre à jour l'abonnement existant
       subscription = await prisma.subscription.update({
@@ -158,8 +210,9 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
           planId: parseInt(planId),
           status: "active",
           startDate: new Date(),
-          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // +30 jours
+          endDate: endDate,
           autoRenew: true,
+          visibilityOption: visibilityOption,
         },
         include: { plan: true },
       });
@@ -171,14 +224,15 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
           planId: parseInt(planId),
           status: "active",
           startDate: new Date(),
-          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // +30 jours
+          endDate: endDate,
           autoRenew: true,
+          visibilityOption: visibilityOption,
         },
         include: { plan: true },
       });
     }
 
-    // Mettre à jour la transaction - CORRIGÉ
+    // Mettre à jour la transaction
     const transaction = await prisma.transaction.findFirst({
       where: { providerId: paymentIntentId },
     });
@@ -189,55 +243,112 @@ router.post("/confirm-upgrade", authenticateToken, async (req, res) => {
         data: {
           status: "completed",
           subscriptionId: subscription.id,
+          amount: amount,
           metadata: {
+            ...(transaction.metadata || {}),
             ...paymentIntent.metadata,
             subscriptionId: subscription.id,
             upgraded: true,
             paymentMethod: paymentIntent.payment_method_types[0] || "card",
+            visibilityOption: visibilityOption,
+            finalAmount: amount,
           },
         },
       });
     }
 
-    // 🔥 AJOUT: Envoyer l'email de confirmation de paiement
+    // 🔥 Envoyer l'email de confirmation de paiement
     try {
-      // Récupérer les informations de l'utilisateur
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { email: true, firstName: true, lastName: true }
+        select: { email: true, firstName: true, lastName: true },
       });
 
       if (user) {
         await oliplusEmailService.sendOliplusEmail({
           to: user.email,
-          template: 'payment-confirmation',
+          template: "payment-confirmation",
           data: {
-            userName: `${user.firstName} ${user.lastName}`,
-            serviceName: planName || plan.name,
-            amount: plan.price,
-            date: new Date().toLocaleDateString('fr-FR'),
-            transactionId: paymentIntentId.substring(0, 12) // Format court
-          }
+            userName:
+              `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+              user.email,
+            serviceName: `${planName || plan.name} (${visibilityOption === "enhanced" ? "Visibilité renforcée" : "Standard"})`,
+            amount: amount,
+            date: new Date().toLocaleDateString("fr-FR"),
+            transactionId: paymentIntentId.substring(0, 12),
+            visibilityType:
+              visibilityOption === "enhanced"
+                ? "Visibilité renforcée"
+                : "Standard",
+          },
         });
-        console.log(`✅ Email de confirmation de paiement envoyé à ${user.email}`);
+        console.log(
+          `✅ Email de confirmation de paiement envoyé à ${user.email}`
+        );
       }
     } catch (emailError) {
-      console.error('❌ Erreur lors de l\'envoi de l\'email de confirmation:', emailError);
-      // Ne pas bloquer le processus si l'email échoue
+      console.error(
+        "❌ Erreur lors de l'envoi de l'email de confirmation:",
+        emailError
+      );
     }
 
     res.json({
       success: true,
       message: "Abonnement mis à jour avec succès",
-      subscription: subscription,
+      subscription: {
+        ...subscription,
+        plan,
+      },
+      visibilityOption: visibilityOption,
       paymentMethod: paymentIntent.payment_method_types[0] || "card",
-      emailSent: true
+      amountPaid: amount,
+      emailSent: true,
     });
   } catch (error) {
     console.error("Erreur confirmation upgrade:", error);
     res.status(500).json({
       error: "Erreur lors de la mise à jour de l'abonnement",
     });
+  }
+});
+
+// GET /api/subscription-payments/plan-details/:planId
+router.get("/plan-details/:planId", authenticateToken, async (req, res) => {
+  try {
+    const { planId } = req.params;
+
+    const plan = await prisma.subscriptionPlan.findUnique({
+      where: { id: parseInt(planId) },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        enhancedVisibilityPrice: true,
+        interval: true,
+        features: true,
+        planType: true,
+        professionalCategory: true,
+        userTypes: true,
+        popular: true,
+        color: true,
+        icon: true,
+        isVisibilityEnhanced: true,
+      },
+    });
+
+    if (!plan) {
+      return res.status(404).json({ error: "Plan non trouvé" });
+    }
+
+    res.json({
+      success: true,
+      plan,
+    });
+  } catch (error) {
+    console.error("Erreur récupération plan:", error);
+    res.status(500).json({ error: "Erreur serveur" });
   }
 });
 

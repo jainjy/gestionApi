@@ -528,18 +528,71 @@ router.post("/signup-pro", async (req, res) => {
   }
 });
 
-// GET /api/auth/subscription/status - Récupérer l'état de l'abonnement (nouveau endpoint)
+// routes/auth.js - Mettez à jour la route /subscription/status
 router.get("/subscription/status", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    
     const subscription = await prisma.subscription.findFirst({
       where: { userId },
-      include: { plan: true },
+      include: { 
+        plan: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            enhancedVisibilityPrice: true,
+            interval: true,
+            features: true,
+            planType: true,
+            professionalCategory: true,
+            userTypes: true,
+            popular: true,
+            color: true,
+            icon: true,
+            isVisibilityEnhanced: true,
+          }
+        } 
+      },
     });
-    if (!subscription)
-      return res.status(404).json({ error: "Aucun abonnement trouvé" });
-    res.json(subscription);
+    
+    if (!subscription) {
+      // Retourner un abonnement par défaut si aucun n'existe
+      return res.json({
+        status: "inactive",
+        plan: null,
+        startDate: null,
+        endDate: null,
+        autoRenew: false,
+        visibilityOption: "standard",
+      });
+    }
+    
+    // Calculer les jours restants
+    let daysRemaining = 0;
+    if (subscription.endDate) {
+      const endDate = new Date(subscription.endDate);
+      const today = new Date();
+      const diffTime = endDate.getTime() - today.getTime();
+      daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      // Mettre à jour le statut si l'abonnement a expiré
+      if (daysRemaining <= 0 && subscription.status !== "expired") {
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { status: "expired" }
+        });
+        subscription.status = "expired";
+      }
+    }
+    
+    res.json({
+      ...subscription,
+      daysRemaining: daysRemaining > 0 ? daysRemaining : 0,
+    });
   } catch (error) {
+    console.error("Erreur récupération abonnement:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
