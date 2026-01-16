@@ -379,6 +379,7 @@ router.post("/signup", async (req, res) => {
 router.post("/signup-pro", async (req, res) => {
   try {
     const { utilisateur, planId, visibilityOption } = req.body;
+    
     // Validation des données utilisateur
     if (
       !utilisateur ||
@@ -392,7 +393,7 @@ router.post("/signup-pro", async (req, res) => {
         error: "Tous les champs obligatoires doivent être remplis",
       });
     }
-    // Dans la route
+
     if (!isPasswordStrong(utilisateur.password)) {
       return res.status(400).json({
         success: false,
@@ -400,18 +401,20 @@ router.post("/signup-pro", async (req, res) => {
           "Le mot de passe doit faire 8 caractères min. avec majuscule, minuscule et chiffre.",
       });
     }
-    // Vérifier si l'email existe déjà
+
     const existingUser = await prisma.user.findUnique({
       where: { email: utilisateur.email },
     });
+
     if (existingUser) {
       return res.status(409).json({
         error: "Un utilisateur avec cet email existe déjà",
       });
     }
-    // Hasher le mot de passe
+
     const hashedPassword = await bcrypt.hash(utilisateur.password, 12);
-    // Créer l'utilisateur avec statut "active"
+
+    // 🔥 CORRECTION : Créer l'utilisateur avec les métiers ET descriptionMetierUser
     const user = await prisma.user.create({
       data: {
         email: utilisateur.email,
@@ -421,7 +424,7 @@ router.post("/signup-pro", async (req, res) => {
         phone: utilisateur.phone,
         role: "professional",
         userType: utilisateur.userType,
-        status: "active", // Actif immédiatement
+        status: "active",
         companyName: utilisateur.companyName || null,
         address: utilisateur.address || null,
         addressComplement: utilisateur.addressComplement || null,
@@ -435,20 +438,19 @@ router.post("/signup-pro", async (req, res) => {
           : null,
         siret: utilisateur.siret || null,
         commercialName: utilisateur.commercialName || null,
-        metiers: utilisateur.metiers &&
-          utilisateur.metiers.length > 0 && {
-            create: utilisateur.metiers.map((metierInfo) => {
-              // Gère le cas où on reçoit un simple ID ou un objet complet
-              if (typeof metierInfo === 'object' && metierInfo.metierId) {
-                return {
-                  metier: { connect: { id: metierInfo.metierId } },
-                  descriptionMetierUser: metierInfo.descriptionMetierUser,
-                };
+        // 🔥 CRÉATION DES MÉTIERS AVEC DESCRIPTION PERSONNALISÉE
+        metiers:
+          utilisateur.metiers && utilisateur.metiers.length > 0
+            ? {
+                create: utilisateur.metiers.map((metierId) => ({
+                  metier: {
+                    connect: { id: metierId },
+                  },
+                  // 🔥 AJOUT : Stocker la description personnalisée du métier
+                  descriptionMetierUser: utilisateur.descriptionMetierUser || null,
+                })),
               }
-              // Cas legacy où on ne reçoit que l'ID
-              return { metier: { connect: { id: metierInfo } } };
-            }),
-          },
+            : undefined,
       },
       include: {
         metiers: {
@@ -462,6 +464,7 @@ router.post("/signup-pro", async (req, res) => {
     const startDate = new Date();
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + 2);
+    
     await prisma.subscription.create({
       data: {
         userId: user.id,
@@ -514,8 +517,8 @@ router.post("/signup-pro", async (req, res) => {
         siret: user.siret,
         city: user.city,
       },
-      token: accessToken, // Access Token pour le header Authorization
-      refreshToken: refreshToken, // À stocker côté client (localStorage ou Cookie)
+      token: accessToken,
+      refreshToken: refreshToken,
     });
   } catch (error) {
     console.error("Pro signup error:", error);
@@ -929,4 +932,4 @@ router.post("/logout", async (req, res) => {
 
 
 
-module.exports = router;  
+module.exports = router;
