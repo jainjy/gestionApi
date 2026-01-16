@@ -2,6 +2,216 @@ const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const { prisma } = require("../lib/db");
+// POST /api/demandes/immobilier - Créer une nouvelle demande
+// router.post("/", authenticateToken, async (req, res) => {
+//   try {
+//     const {
+//       contactNom,
+//       contactPrenom,
+//       contactEmail,
+//       contactTel,
+//       lieuAdresse,
+//       lieuAdresseCp,
+//       lieuAdresseVille,
+//       optionAssurance,
+//       description,
+//       serviceId,
+//       nombreArtisans,
+//       createdById,
+//       propertyId,
+//       dateSouhaitee,
+//       heureSouhaitee,
+//       artisanId,
+//     } = req.body;
+
+//     // Validation de base
+//     if (!serviceId || !createdById) {
+//       return res
+//         .status(400)
+//         .json({ error: "serviceId et createdById sont requis" });
+//     }
+
+//     if (!contactNom || !contactPrenom || !contactEmail || !contactTel) {
+//       return res
+//         .status(400)
+//         .json({ error: "Les informations de contact sont obligatoires" });
+//     }
+
+//     // Vérifier si c'est une demande de service (propertyId est null pour les services)
+//     const isDemandeService = !propertyId;
+
+//     let service = null;
+//     if (isDemandeService) {
+//       service = await prisma.service.findUnique({
+//         where: { id: parseInt(serviceId) },
+//         select: {
+//           libelle: true,
+//           metiers: {
+//             include: {
+//               metier: {
+//                 select: {
+//                   libelle: true,
+//                 },
+//               },
+//             },
+//           },
+//         },
+//       });
+
+//       if (!service) {
+//         return res.status(404).json({ error: "Service non trouvé" });
+//       }
+//     }
+
+//     // Créer la demande
+//     const nouvelleDemande = await prisma.demande.create({
+//       data: {
+//         contactNom,
+//         contactPrenom,
+//         contactEmail,
+//         contactTel,
+//         lieuAdresse: lieuAdresse || "",
+//         lieuAdresseCp: lieuAdresseCp || "",
+//         lieuAdresseVille: lieuAdresseVille || "",
+//         optionAssurance: optionAssurance || false,
+//         description,
+//         serviceId: parseInt(serviceId),
+//         statut: "en attente",
+//         nombreArtisans: nombreArtisans || "UNIQUE",
+//         createdById,
+//         propertyId,
+//         artisanId,
+//         dateSouhaitee:
+//           dateSouhaitee && heureSouhaitee
+//             ? new Date(dateSouhaitee + "T" + heureSouhaitee + ":00.000Z")
+//             : dateSouhaitee
+//               ? new Date(dateSouhaitee + "T00:00:00.000Z")
+//               : null,
+//         heureSouhaitee: heureSouhaitee || null,
+//       },
+//       include: {
+//         property: {
+//           include: {
+//             owner: {
+//               select: {
+//                 id: true,
+//                 firstName: true,
+//                 lastName: true,
+//                 email: true,
+//                 phone: true,
+//                 companyName: true,
+//               },
+//             },
+//           },
+//         },
+//         service: {
+//           select: {
+//             id: true,
+//             libelle: true,
+//             description: true,
+//             images: true,
+//             price: true,
+//             duration: true,
+//             metiers: {
+//               include: {
+//                 metier: true,
+//               },
+//             },
+//           },
+//         },
+//         artisan: {
+//           select: {
+//             id: true,
+//             firstName: true,
+//             lastName: true,
+//             email: true,
+//             phone: true,
+//             companyName: true,
+//             commercialName: true,
+//           },
+//         },
+//       },
+//     });
+
+//     let conversation = null;
+
+//     if (isDemandeService) {
+//       const participants = [{ userId: createdById }];
+
+//       if (artisanId) {
+//         participants.push({ userId: artisanId });
+//       }
+
+//       conversation = await prisma.conversation.create({
+//         data: {
+//           titre: `Demande ${service.libelle}`,
+//           demandeId: nouvelleDemande.id,
+//           createurId: createdById,
+//           participants: {
+//             create: participants,
+//           },
+//         },
+//         include: {
+//           participants: {
+//             include: {
+//               user: {
+//                 select: {
+//                   id: true,
+//                   firstName: true,
+//                   lastName: true,
+//                   companyName: true,
+//                   email: true,
+//                 },
+//               },
+//             },
+//           },
+//         },
+//       });
+
+//       await prisma.message.create({
+//         data: {
+//           conversationId: conversation.id,
+//           expediteurId: createdById,
+//           contenu: `Nouvelle demande de ${service.libelle} créée. ${description ? `Description : ${description}` : ""}`,
+//           type: "SYSTEM",
+//           evenementType: "DEMANDE_ENVOYEE",
+//         },
+//       });
+
+//       if (artisanId) {
+//         await prisma.message.create({
+//           data: {
+//             conversationId: conversation.id,
+//             expediteurId: createdById,
+//             contenu: `Cette demande vous est spécialement adressée. Merci de prendre contact avec le client dans les plus brefs délais.`,
+//             type: "SYSTEM",
+//             evenementType: "GENERIC",
+//           },
+//         });
+//       }
+//     }
+
+//     const response = {
+//       message: "Demande créée avec succès",
+//       demande: nouvelleDemande,
+//     };
+
+//     if (isDemandeService && conversation) {
+//       response.conversation = {
+//         id: conversation.id,
+//         titre: conversation.titre,
+//         participants: conversation.participants,
+//       };
+//     }
+
+//     res.status(201).json(response);
+//   } catch (error) {
+//     console.error("Erreur lors de la création de la demande:", error);
+//     res.status(500).json({ error: "Erreur serveur" });
+//   }
+// });
+
+// GET /api/demandes/immobilier/user/:userId - Récupérer les demandes de visite envoyées par un utilisateur
 
 // POST /api/demandes/immobilier - Créer une nouvelle demande
 router.post("/", authenticateToken, async (req, res) => {
@@ -26,10 +236,10 @@ router.post("/", authenticateToken, async (req, res) => {
     } = req.body;
 
     // Validation de base
-    if (!serviceId || !createdById) {
+    if (!createdById) {
       return res
         .status(400)
-        .json({ error: "serviceId et createdById sont requis" });
+        .json({ error: "createdById est requis" });
     }
 
     if (!contactNom || !contactPrenom || !contactEmail || !contactTel) {
@@ -42,7 +252,35 @@ router.post("/", authenticateToken, async (req, res) => {
     const isDemandeService = !propertyId;
 
     let service = null;
-    if (isDemandeService) {
+    let chosenServiceId = serviceId;
+    let serviceLibelle = "Demande de visite";
+    let createurId = createdById;
+    
+    // RÉCUPÉRER LE PROPRIÉTAIRE DU BIEN SI propertyId EXISTE
+    let propertyOwnerId = createdById; // Par défaut, utiliser createdById
+    
+    if (propertyId) {
+      // Chercher le bien pour obtenir le propriétaire
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: {
+          ownerId: true,
+        },
+      });
+      
+      if (property && property.ownerId) {
+        propertyOwnerId = property.ownerId;
+      }
+    }
+    
+    // Si c'est une demande de service OU si le serviceId n'est pas fourni
+    if (isDemandeService || !serviceId) {
+      // Si pas de serviceId, utiliser l'ID du créateur/propriétaire
+      chosenServiceId = propertyOwnerId;
+      serviceLibelle = `Demande de ${propertyId ? 'visite' : 'service'} par ${contactPrenom} ${contactNom}`;
+      createurId = propertyOwnerId;
+    } else {
+      // Sinon, chercher le service normalement
       service = await prisma.service.findUnique({
         where: { id: parseInt(serviceId) },
         select: {
@@ -59,8 +297,8 @@ router.post("/", authenticateToken, async (req, res) => {
         },
       });
 
-      if (!service) {
-        return res.status(404).json({ error: "Service non trouvé" });
+      if (service) {
+        serviceLibelle = service.libelle;
       }
     }
 
@@ -76,10 +314,10 @@ router.post("/", authenticateToken, async (req, res) => {
         lieuAdresseVille: lieuAdresseVille || "",
         optionAssurance: optionAssurance || false,
         description,
-        serviceId: parseInt(serviceId),
+        serviceId: chosenServiceId ? parseInt(chosenServiceId) : null,
         statut: "en attente",
         nombreArtisans: nombreArtisans || "UNIQUE",
-        createdById,
+        createdById: createurId, // Utiliser l'ID du propriétaire
         propertyId,
         artisanId,
         dateSouhaitee:
@@ -136,8 +374,13 @@ router.post("/", authenticateToken, async (req, res) => {
 
     let conversation = null;
 
-    if (isDemandeService) {
+    if (isDemandeService || !serviceId) {
       const participants = [{ userId: createdById }];
+
+      // Ajouter le propriétaire du bien comme participant
+      if (propertyOwnerId && propertyOwnerId !== createdById) {
+        participants.push({ userId: propertyOwnerId });
+      }
 
       if (artisanId) {
         participants.push({ userId: artisanId });
@@ -145,7 +388,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
       conversation = await prisma.conversation.create({
         data: {
-          titre: `Demande ${service.libelle}`,
+          titre: `Demande ${serviceLibelle}`,
           demandeId: nouvelleDemande.id,
           createurId: createdById,
           participants: {
@@ -173,7 +416,7 @@ router.post("/", authenticateToken, async (req, res) => {
         data: {
           conversationId: conversation.id,
           expediteurId: createdById,
-          contenu: `Nouvelle demande de ${service.libelle} créée. ${description ? `Description : ${description}` : ""}`,
+          contenu: `Nouvelle demande ${propertyId ? 'de visite' : 'de service'} créée. ${description ? `Description : ${description}` : ""}`,
           type: "SYSTEM",
           evenementType: "DEMANDE_ENVOYEE",
         },
@@ -197,7 +440,7 @@ router.post("/", authenticateToken, async (req, res) => {
       demande: nouvelleDemande,
     };
 
-    if (isDemandeService && conversation) {
+    if ((isDemandeService || !serviceId) && conversation) {
       response.conversation = {
         id: conversation.id,
         titre: conversation.titre,
@@ -212,7 +455,6 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/demandes/immobilier/user/:userId - Récupérer les demandes de visite envoyées par un utilisateur
 router.get("/user/:userId", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
