@@ -1,80 +1,84 @@
-const nodemailer = require('nodemailer');
-require('dotenv').config();
+const nodemailer = require("nodemailer");
+require("dotenv").config();
 
 class OliplusEmailService {
-    constructor() {
-        // Gestion correcte de la variable secure
-        let secureValue = false;
-        if (process.env.SMTP_SECURE) {
-            secureValue = process.env.SMTP_SECURE === 'true' || 
-                         process.env.SMTP_SECURE === '1' || 
-                         process.env.SMTP_SECURE === true;
-        }
-        
-        this.transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: secureValue,
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD,
-            },
-            tls: {
-                rejectUnauthorized: false
-            }
-        });
-
-        this.emailConfigs = {
-            'user-welcome': {
-                from: process.env.SMTP_NOREPLY || process.env.SMTP_USER,
-                subject: 'Création de votre compte Oliplus - Informations sur vos données personnelles'
-            },
-            'rgpd-confirmation': {
-                from: process.env.SMTP_NOREPLY || process.env.SMTP_USER,
-                subject: 'Confirmation de votre demande concernant vos données personnelles'
-            },
-            'payment-confirmation': {
-                from: process.env.SMTP_NOREPLY || process.env.SMTP_USER,
-                subject: 'Confirmation de paiement - Oliplus'
-            },
-            'security-alert': {
-                from: process.env.SMTP_SECURITY || process.env.SMTP_USER,
-                subject: 'Alerte de sécurité - Activité inhabituelle détectée'
-            },
-            'cgu-update': {
-                from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
-                subject: 'Mise à jour des Conditions Générales – Oliplus'
-            },
-            'provider-welcome': {
-                from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
-                subject: 'Création de votre compte prestataire Oliplus – Données personnelles'
-            },
-            'provider-rgpd': {
-                from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
-                subject: 'Traitement de votre demande - Données prestataire Oliplus'
-            },
-            'provider-billing': {
-                from: process.env.SMTP_NOREPLY || process.env.SMTP_USER,
-                subject: 'Confirmation de facturation - Compte prestataire Oliplus'
-            },
-            'provider-security': {
-                from: process.env.SMTP_SECURITY || process.env.SMTP_USER,
-                subject: 'Alerte de sécurité - Compte prestataire Oliplus'
-            },
-            'provider-cgu': {
-                from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
-                subject: 'Mise à jour des conditions prestataires - Oliplus'
-            },
-            'provider-onboarding': {
-                from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
-                subject: 'Validation de votre compte prestataire Oliplus'
-            }
-        };
+  constructor() {
+    // Gestion correcte de la variable secure
+    let secureValue = false;
+    if (process.env.SMTP_SECURE) {
+      secureValue =
+        process.env.SMTP_SECURE === "true" ||
+        process.env.SMTP_SECURE === "1" ||
+        process.env.SMTP_SECURE === true;
     }
 
-    getTemplate(templateName, data) {
-        const templates = {
-            'user-welcome': `
+    this.transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || "587"),
+      secure: secureValue,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
+
+    this.emailConfigs = {
+      "user-welcome": {
+        from: process.env.SMTP_NOREPLY || process.env.SMTP_USER,
+        subject:
+          "Création de votre compte Oliplus - Informations sur vos données personnelles",
+      },
+      "rgpd-confirmation": {
+        from: process.env.SMTP_NOREPLY || process.env.SMTP_USER,
+        subject:
+          "Confirmation de votre demande concernant vos données personnelles",
+      },
+      "payment-confirmation": {
+        from: process.env.SMTP_NOREPLY || process.env.SMTP_USER,
+        subject: "Confirmation de paiement - Oliplus",
+      },
+      "security-alert": {
+        from: process.env.SMTP_SECURITY || process.env.SMTP_USER,
+        subject: "Alerte de sécurité - Activité inhabituelle détectée",
+      },
+      "cgu-update": {
+        from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
+        subject: "Mise à jour des Conditions Générales – Oliplus",
+      },
+      "provider-welcome": {
+        from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
+        subject:
+          "Création de votre compte prestataire Oliplus – Données personnelles",
+      },
+      "provider-rgpd": {
+        from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
+        subject: "Traitement de votre demande - Données prestataire Oliplus",
+      },
+      "provider-billing": {
+        from: process.env.SMTP_NOREPLY || process.env.SMTP_USER,
+        subject: "Confirmation de facturation - Compte prestataire Oliplus",
+      },
+      "provider-security": {
+        from: process.env.SMTP_SECURITY || process.env.SMTP_USER,
+        subject: "Alerte de sécurité - Compte prestataire Oliplus",
+      },
+      "provider-cgu": {
+        from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
+        subject: "Mise à jour des conditions prestataires - Oliplus",
+      },
+      "provider-onboarding": {
+        from: process.env.SMTP_COMMUNICATION || process.env.SMTP_USER,
+        subject: "Validation de votre compte prestataire Oliplus",
+      },
+    };
+  }
+
+  getTemplate(templateName, data) {
+    const templates = {
+      "user-welcome": `
         <!DOCTYPE html>
         <html>
         <head>
@@ -93,7 +97,7 @@ class OliplusEmailService {
               <h1>Bienvenue sur Oliplus</h1>
             </div>
             <div class="content">
-              <p>Bonjour${data.userName ? ` ${data.userName}` : ''},</p>
+              <p>Bonjour${data.userName ? ` ${data.userName}` : ""},</p>
               <p>Votre compte Oliplus a bien été créé.</p>
               <p>Dans le cadre de l'utilisation de la plateforme Oliplus, certaines données personnelles sont collectées et traitées (identité, coordonnées, informations de connexion), uniquement dans le but de fournir les services proposés.</p>
               <p>Vos données sont :</p>
@@ -124,7 +128,7 @@ class OliplusEmailService {
         </html>
         `,
 
-            'rgpd-confirmation': `
+      "rgpd-confirmation": `
         <!DOCTYPE html>
             <html>
                 <head>
@@ -141,7 +145,7 @@ class OliplusEmailService {
                 <body>
                     <div class="container">
                         <div class="content">
-                        <p>Bonjour${data.userName ? ` ${data.userName}` : ''},</p>
+                        <p>Bonjour${data.userName ? ` ${data.userName}` : ""},</p>
                         <p>Nous accusons réception de votre demande relative à vos données personnelles.</p>
                         <p>Conformément au RGPD, votre demande est prise en charge et sera traitée dans un délai maximum de 30 jours à compter de la réception de ce message.</p>
                         <p>Si des informations complémentaires sont nécessaires pour confirmer votre identité, nous vous contacterons.</p>
@@ -161,7 +165,7 @@ class OliplusEmailService {
             </html>
         `,
 
-            'payment-confirmation': `
+      "payment-confirmation": `
         <!DOCTYPE html>
         <html>
         <body>
@@ -170,14 +174,14 @@ class OliplusEmailService {
               <h1>Confirmation de Paiement</h1>
             </div>
             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-              <p>Bonjour${data.userName ? ` ${data.userName}` : ''},</p>
+              <p>Bonjour${data.userName ? ` ${data.userName}` : ""},</p>
               <p>Nous vous confirmons la bonne réception de votre paiement sur la plateforme Oliplus.</p>
               <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0;">
                 <h3>Récapitulatif :</h3>
-                <p><strong>Service :</strong> ${data.serviceName || '[Nom du service / abonnement]'}</p>
-                <p><strong>Montant :</strong> ${data.amount ? `${data.amount} €` : '[Montant] €'}</p>
-                <p><strong>Date :</strong> ${data.date || '[Date]'}</p>
-                <p><strong>Référence :</strong> ${data.transactionId || '[ID transaction]'}</p>
+                <p><strong>Service :</strong> ${data.serviceName || "[Nom du service / abonnement]"}</p>
+                <p><strong>Montant :</strong> ${data.amount ? `${data.amount} €` : "[Montant] €"}</p>
+                <p><strong>Date :</strong> ${data.date || "[Date]"}</p>
+                <p><strong>Référence :</strong> ${data.transactionId || "[ID transaction]"}</p>
               </div>
               <p>Votre facture est disponible dans votre espace personnel.</p>
               <p>En cas de question relative à la facturation ou à votre abonnement, vous pouvez contacter notre service dédié à l'adresse suivante : <a href="mailto:support@oliplus.re">support@oliplus.re</a></p>
@@ -190,7 +194,7 @@ class OliplusEmailService {
         </html>
         `,
 
-            'security-alert': `
+      "security-alert": `
         <!DOCTYPE html>
         <html>
         <body>
@@ -199,13 +203,13 @@ class OliplusEmailService {
               <h1>⚠️ Alerte de Sécurité</h1>
             </div>
             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-              <p>Bonjour${data.userName ? ` ${data.userName}` : ''},</p>
+              <p>Bonjour${data.userName ? ` ${data.userName}` : ""},</p>
               <p>Une activité inhabituelle a été détectée sur votre compte Oliplus.</p>
               <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ff416c;">
                 <h3>Détails :</h3>
-                <p><strong>Date et heure :</strong> ${data.date || '[Date / Heure]'}</p>
-                <p><strong>Localisation approximative :</strong> ${data.location || '[Pays / Ville]'}</p>
-                <p><strong>Action :</strong> ${data.action || 'Connexion ou tentative d\'accès'}</p>
+                <p><strong>Date et heure :</strong> ${data.date || "[Date / Heure]"}</p>
+                <p><strong>Localisation approximative :</strong> ${data.location || "[Pays / Ville]"}</p>
+                <p><strong>Action :</strong> ${data.action || "Connexion ou tentative d'accès"}</p>
               </div>
               <p>Si vous êtes à l'origine de cette action, aucune démarche n'est nécessaire.</p>
               <p>Dans le cas contraire, nous vous recommandons :</p>
@@ -224,7 +228,7 @@ class OliplusEmailService {
         </html>
         `,
 
-            'cgu-update': `
+      "cgu-update": `
             <!DOCTYPE html>
                 <html>
                     <body>
@@ -233,9 +237,9 @@ class OliplusEmailService {
                             <h1>Mise à jour des Conditions Générales</h1>
                             </div>
                             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-                            <p>Bonjour${data.userName ? ` ${data.userName}` : ''},</p>
+                            <p>Bonjour${data.userName ? ` ${data.userName}` : ""},</p>
                             <p>Nous vous informons qu'une mise à jour des Conditions Générales d'Utilisation et/ou de Vente de la plateforme Oliplus a été effectuée.</p>
-                            <p>Ces modifications entrent en vigueur à compter du : ${data.effectiveDate || '[Date]'}</p>
+                            <p>Ces modifications entrent en vigueur à compter du : ${data.effectiveDate || "[Date]"}</p>
                             <p>Nous vous invitons à consulter les nouvelles conditions depuis votre espace personnel ou directement sur la plateforme.</p>
                             <p>L'utilisation continue de la plateforme vaut acceptation des nouvelles conditions.</p>
                             <p>Pour toute question juridique, vous pouvez nous contacter à : <a href="mailto:direction@oliplus.re">direction@oliplus.re</a></p>
@@ -248,8 +252,8 @@ class OliplusEmailService {
                 </html>
         `,
 
-        // Envoyer confirmation RGPD prestataire
-            'provider-welcome': `
+      // Envoyer confirmation RGPD prestataire
+      "provider-welcome": `
             <!DOCTYPE html>
                 <html>
                     <body>
@@ -258,7 +262,7 @@ class OliplusEmailService {
                             <h1>Création de votre compte prestataire Oliplus</h1>
                             </div>
                             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ''},</p>
+                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ""},</p>
                             <p>Votre compte prestataire sur la plateforme Oliplus a bien été créé.</p>
                             
                             <p>Dans le cadre de votre référencement et de la mise en relation avec les utilisateurs, Oliplus collecte et traite certaines données professionnelles et personnelles, notamment :</p>
@@ -288,8 +292,8 @@ class OliplusEmailService {
                     </body>
                 </html>
         `,
-            
-        'provider-rgpd': `
+
+      "provider-rgpd": `
             <!DOCTYPE html>
                 <html>
                     <body>
@@ -298,7 +302,7 @@ class OliplusEmailService {
                             <h1>Traitement de votre demande – Données prestataire Oliplus</h1>
                             </div>
                             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ''},</p>
+                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ""},</p>
                             <p>Nous accusons réception de votre demande relative aux données associées à votre compte prestataire Oliplus.</p>
                     
                             <p>Votre demande sera traitée dans un délai maximal de 30 jours, conformément au RGPD.</p>
@@ -318,8 +322,7 @@ class OliplusEmailService {
                 </html>
         `,
 
-
-            'provider-billing': `
+      "provider-billing": `
             <!DOCTYPE html>
                 <html>
                     <body>
@@ -328,15 +331,15 @@ class OliplusEmailService {
                             <h1>Confirmation de facturation – Compte prestataire Oliplus</h1>
                             </div>
                             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ''},</p>
+                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ""},</p>
                             <p>Nous vous confirmons la prise en compte de votre paiement sur la plateforme Oliplus.</p>
                             
                             <p>Détails de la transaction :</p>
                             <ul>
                                 <li>Type de service : Abonnement / commission prestataire</li>
-                                <li>Montant : ${data.amount ? `${data.amount} €` : '[Montant] €'}</li>
-                                <li>Période concernée : ${data.period || '[Mensuelle / Annuelle]'}</li>
-                                <li>Référence : ${data.transactionId || '[ID transaction]'}</li>
+                                <li>Montant : ${data.amount ? `${data.amount} €` : "[Montant] €"}</li>
+                                <li>Période concernée : ${data.period || "[Mensuelle / Annuelle]"}</li>
+                                <li>Référence : ${data.transactionId || "[ID transaction]"}</li>
                             </ul>
 
                             <p>La facture correspondante est disponible dans votre espace prestataire.</p>
@@ -350,9 +353,8 @@ class OliplusEmailService {
                     </body>
                 </html>
         `,
-          
-        
-        'provider-security': `
+
+      "provider-security": `
             <!DOCTYPE html>
                 <html>
                     <body>
@@ -361,14 +363,14 @@ class OliplusEmailService {
                             <h1>Alerte de sécurité – Compte prestataire Oliplus</h1>
                             </div>
                             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ''},</p>
+                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ""},</p>
                             <p>Une action sensible ou une tentative de connexion inhabituelle a été détectée sur votre compte prestataire Oliplus.</p>
                             
                             <p>Informations disponibles :</p>
                             <ul>
-                                <li>Date et heure : ${data.date || '[Date / Heure]'}</li>
-                                <li>Type d'action : ${data.action || 'Connexion / modification de données / changement de coordonnées'}</li>
-                                <li>Localisation approximative : ${data.location || '[Pays / Ville]'}</li>
+                                <li>Date et heure : ${data.date || "[Date / Heure]"}</li>
+                                <li>Type d'action : ${data.action || "Connexion / modification de données / changement de coordonnées"}</li>
+                                <li>Localisation approximative : ${data.location || "[Pays / Ville]"}</li>
                             </ul>
 
                             <p>Si vous êtes à l'origine de cette action, aucune démarche n'est requise.</p>
@@ -390,8 +392,7 @@ class OliplusEmailService {
                 </html>
         `,
 
-
-            'provider-cgu': `
+      "provider-cgu": `
             <!DOCTYPE html>
                 <html>
                     <body>
@@ -400,7 +401,7 @@ class OliplusEmailService {
                             <h1>Mise à jour des conditions prestataires – Oliplus</h1>
                             </div>
                             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ''},</p>
+                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ""},</p>
                             <p>Nous vous informons qu'une mise à jour des Conditions Générales applicables aux prestataires de la plateforme Oliplus a été effectuée.</p>
                             
                             <p>Ces conditions encadrent notamment :</p>
@@ -411,7 +412,7 @@ class OliplusEmailService {
                                 <li>les responsabilités respectives des parties</li>
                             </ul>
 
-                            <p>Les nouvelles conditions entrent en vigueur à compter du : ${data.effectiveDate || '[Date]'}</p>
+                            <p>Les nouvelles conditions entrent en vigueur à compter du : ${data.effectiveDate || "[Date]"}</p>
 
                             <p>L'utilisation continue de votre compte prestataire vaut acceptation pleine et entière des nouvelles conditions.</p>
                             
@@ -425,8 +426,7 @@ class OliplusEmailService {
                 </html>
         `,
 
-        
-            'provider-onboarding': `
+      "provider-onboarding": `
                 <!DOCTYPE html>
                 <html>
                     <body>
@@ -435,16 +435,17 @@ class OliplusEmailService {
                             <h1>Validation de Compte Prestataire</h1>
                             </div>
                             <div style="padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
-                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ''},</p>
+                            <p>Bonjour${data.providerName ? ` ${data.providerName}` : ""},</p>
                             <p>Votre dossier prestataire a été examiné par nos équipes.</p>
                             <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                                 <h3>Statut :</h3>
-                                <p><strong>${data.status === 'validated' ? '✅ Compte validé' : '📝 Informations complémentaires requises'}</strong></p>
+                                <p><strong>${data.status === "validated" ? "✅ Compte validé" : "📝 Informations complémentaires requises"}</strong></p>
                             </div>
-                            ${data.status === 'validated' ?
-                '<p>Une fois validé, votre profil sera visible auprès des utilisateurs de la plateforme Oliplus.</p>' :
-                '<p>Veuillez fournir les informations supplémentaires demandées pour finaliser la validation de votre compte.</p>'
-            }
+                            ${
+                              data.status === "validated"
+                                ? "<p>Une fois validé, votre profil sera visible auprès des utilisateurs de la plateforme Oliplus.</p>"
+                                : "<p>Veuillez fournir les informations supplémentaires demandées pour finaliser la validation de votre compte.</p>"
+                            }
                             <p>Nous vous rappelons que vous êtes seul responsable :</p>
                             <ul>
                                 <li>des informations publiées,</li>
@@ -459,71 +460,110 @@ class OliplusEmailService {
                         </div>
                     </body>
                 </html>
-        `
-        };
+        `,
+    };
 
-        return templates[templateName] || `<p>Template ${templateName} non trouvé</p>`;
+    return (
+      templates[templateName] || `<p>Template ${templateName} non trouvé</p>`
+    );
+  }
+
+  async sendOliplusEmail(emailData) {
+    console.log("=== SERVICE EMAIL APPELÉ ===");
+    console.log("Template demandé:", emailData.template);
+    console.log("Destinataire:", emailData.to);
+    console.log("Données:", emailData.data);
+
+    try {
+      const config = this.emailConfigs[emailData.template];
+      if (!config) {
+        console.error(`❌ Template ${emailData.template} non configuré`);
+        console.log("Templates disponibles:", Object.keys(this.emailConfigs));
+        throw new Error(`Template ${emailData.template} non configuré`);
+      }
+
+      console.log("✅ Template trouvé:", config);
+      console.log("From email:", config.from);
+
+      const htmlContent = this.getTemplate(emailData.template, emailData.data);
+      console.log(
+        "HTML généré (premiers 200 chars):",
+        htmlContent?.substring(0, 200)
+      );
+
+      const mailOptions = {
+        from: `Oliplus <${config.from}>`,
+        to: emailData.to,
+        subject: config.subject,
+        html: htmlContent,
+      };
+
+      console.log("Options mail:", mailOptions);
+
+      console.log("Envoi en cours...");
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log(
+        `✅ Email ${emailData.template} envoyé à ${emailData.to}:`,
+        info.messageId
+      );
+      console.log("Réponse:", info.response);
+
+      return {
+        success: true,
+        messageId: info.messageId,
+        to: emailData.to,
+        template: emailData.template,
+      };
+    } catch (error) {
+      console.error(`❌ ERREUR CRITIQUE dans sendOliplusEmail:`);
+      console.error("Template:", emailData.template);
+      console.error("À:", emailData.to);
+      console.error("Message:", error.message);
+      console.error("Stack:", error.stack);
+
+      // Détails SMTP
+      if (error.responseCode) {
+        console.error("Code réponse SMTP:", error.responseCode);
+      }
+      if (error.response) {
+        console.error("Réponse SMTP:", error.response);
+      }
+
+      throw error;
+    }
+  }
+
+  async sendProviderWelcomePack(providerEmail, providerName) {
+    const emails = [
+      {
+        to: providerEmail,
+        template: "provider-welcome",
+        data: { providerName },
+      },
+      {
+        to: providerEmail,
+        template: "provider-onboarding",
+        data: { providerName, status: "validated" },
+      },
+    ];
+
+    const results = [];
+    for (const email of emails) {
+      try {
+        const result = await this.sendOliplusEmail(email);
+        results.push({ email: email.template, success: true, result });
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } catch (error) {
+        results.push({
+          email: email.template,
+          success: false,
+          error: error.message,
+        });
+      }
     }
 
-    async sendOliplusEmail(emailData) {
-        try {
-            const config = this.emailConfigs[emailData.template];
-            if (!config) {
-                throw new Error(`Template ${emailData.template} non configuré`);
-            }
-
-            const htmlContent = this.getTemplate(emailData.template, emailData.data);
-
-            const mailOptions = {
-                from: `Oliplus <${config.from}>`,
-                to: emailData.to,
-                subject: config.subject,
-                html: htmlContent,
-            };
-
-            const info = await this.transporter.sendMail(mailOptions);
-            console.log(`Email ${emailData.template} envoyé à ${emailData.to}:`, info.messageId);
-
-            return { 
-                success: true, 
-                messageId: info.messageId,
-                to: emailData.to,
-                template: emailData.template
-            };
-
-        } catch (error) {
-            console.error(`Erreur lors de l'envoi de l'email ${emailData.template}:`, error);
-            throw error;
-        }
-    }
-
-    async sendProviderWelcomePack(providerEmail, providerName) {
-        const emails = [
-            {
-                to: providerEmail,
-                template: 'provider-welcome',
-                data: { providerName }
-            },
-            {
-                to: providerEmail,
-                template: 'provider-onboarding',
-                data: { providerName, status: 'validated' }
-            }
-        ];
-
-        const results = [];
-        for (const email of emails) {
-            try {
-                const result = await this.sendOliplusEmail(email);
-                results.push({ email: email.template, success: true, result });
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            } catch (error) {
-                results.push({ email: email.template, success: false, error: error.message });
-            }
-        }
-        
-        return results;
-    }
+    return results;
+  }
 }
 
 module.exports = new OliplusEmailService();
