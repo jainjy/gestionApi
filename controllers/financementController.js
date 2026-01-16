@@ -33,9 +33,16 @@ exports.getPartenaires = async (req, res) => {
 
 exports.getPartenairesPro = async (req, res) => {
   try {
-    const userId = req.user.id;
+    console.log('User ID:', req.user?.id);
+    console.log('User:', req.user);
+    
+    const userId = req.user?.id;
+    
     const partenaires = await prisma.financementPartenaire.findMany({
-      where: { isActive: true, userId: userId },
+      where: { 
+        isActive: true,
+        userId: userId 
+      },
       include: {
         ServiceFinancier: {
           where: { isActive: true },
@@ -43,12 +50,14 @@ exports.getPartenairesPro = async (req, res) => {
         },
       },
     });
+    
+    console.log('Partenaires trouvés:', partenaires.length);
+    console.log('Query where clause:', { isActive: true, userId: userId });
+    
     res.json(partenaires);
   } catch (error) {
     console.error("Erreur getPartenaires:", error);
-    res
-      .status(500)
-      .json({ error: "Erreur lors de la récupération des partenaires" });
+    res.status(500).json({ error: "Erreur lors de la récupération des partenaires" });
   }
 };
 
