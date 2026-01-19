@@ -109,7 +109,6 @@ router.get('/pro', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 50, status, productType } = req.query;
 
-    // Validation des paramètres
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = Math.min(Math.max(1, parseInt(limit) || 50), 100);
     const skip = (pageNum - 1) * limitNum;
@@ -123,7 +122,6 @@ router.get('/pro', authenticateToken, async (req, res) => {
 
     let whereClause = {};
 
-    // 🔐 FILTRAGE PAR RÔLE
     if (req.user.role === 'admin') {
       whereClause = {};
     } else if (req.user.role === 'professional') {
@@ -135,12 +133,10 @@ router.get('/pro', authenticateToken, async (req, res) => {
       });
     }
 
-    // 🎯 Filtre par statut
     if (status && status !== 'all') {
       whereClause.status = status;
     }
 
-    // 🎯 Filtre productType dans la requête SQL
     if (productType && productType !== 'all') {
       whereClause.items = {
         some: {
@@ -149,56 +145,21 @@ router.get('/pro', authenticateToken, async (req, res) => {
       };
     }
 
-    // 📊 Récupération paginée SANS données personnelles
+    // ✅ CORRIGÉ : Suppression de contactInfo
     const [orders, totalOrders] = await Promise.all([
       prisma.order.findMany({
         where: whereClause,
         select: {
-          // Informations de la commande (non personnelles)
           id: true,
           orderNumber: true,
           totalAmount: true,
           status: true,
           createdAt: true,
           updatedAt: true,
-
-          // Informations nécessaires au prestataire (limitées)
-          deliveryAddress: {
-            select: {
-              // Données minimales pour la livraison
-              firstName: true,      // ⚠️ Nécessaire pour la livraison
-              lastName: true,       // ⚠️ Nécessaire pour la livraison
-              addressLine1: true,   // ⚠️ Nécessaire pour la livraison
-              city: true,
-              postalCode: true,
-              country: true,
-              // ❌ NE PAS inclure: email, phone, coordinates
-            }
-          },
-
-          // Items de la commande
-          items: {
-            select: {
-              id: true,
-              productType: true,
-              productName: true,
-              quantity: true,
-              price: true,
-              specifications: true, // Si nécessaire pour la prestation
-            }
-          },
-
-          // ❌ SUPPRIMER l'accès direct aux données user
-          // user: { ... } // 🚨 RETIRÉ - trop d'informations
-
-          // Informations de contact MINIMALES si absolument nécessaires
-          contactInfo: {
-            select: {
-              phone: true,          // Pour contacter le client
-              email: true,          // Pour les confirmations
-              // Pas de nom, pas d'adresse complète ici
-            }
-          }
+          deliveryAddress: true,
+          items: true,
+          paymentMethod: true,
+          paymentStatus: true
         },
         orderBy: {
           createdAt: 'desc',
@@ -211,29 +172,9 @@ router.get('/pro', authenticateToken, async (req, res) => {
       })
     ]);
 
-    // 🛡️ Optionnel: Masquer encore plus selon le besoin
-    const sanitizedOrders = orders.map(order => ({
-      ...order,
-      // Si vous voulez masquer l'email partiellement
-      contactInfo: order.contactInfo ? {
-        ...order.contactInfo,
-        email: maskEmail(order.contactInfo.email) // Fonction de masquage
-      } : null
-    }));
-
-    // Helper function pour masquer l'email
-    function maskEmail(email) {
-      if (!email) return '';
-      const [name, domain] = email.split('@');
-      const maskedName = name.length > 2
-        ? name.substring(0, 2) + '***'
-        : '***';
-      return `${maskedName}@${domain}`;
-    }
-
     res.json({
       success: true,
-      orders: sanitizedOrders,
+      orders,
       pagination: {
         page: pageNum,
         limit: limitNum,
