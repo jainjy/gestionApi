@@ -3431,3 +3431,14 @@ model InterviewInteraction {
   @@index([action])
   @@index([createdAt])
 }
+
+// Prix de livraison pour chaque categorie
+model DeliveryPrice {
+  id        String   @id @default(uuid())
+  category  String   @unique
+  price     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([category])
+}
