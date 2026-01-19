@@ -32,7 +32,7 @@ async function main() {
       commercialName: "Crédit Réunion",
       role: "professional", // tu peux changer en "admin" si nécessaire
       status: "active",
-      userType: "bank", // si tu veux catégoriser
+      userType: "PRESTATAIRE", // si tu veux catégoriser
       providerName: "creditreunion",
       address: "Réunion",
       city: "Saint-Denis",
