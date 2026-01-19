@@ -67,6 +67,11 @@ router.post("/", authenticateToken, async (req, res) => {
 router.get("/all", authenticateToken, async (req, res) => {
   try {
     const audits = await prisma.audit.findMany({
+      where: {
+        user: {  // ✅ Filtre pour n'inclure que les audits avec user non-null
+          is: {}  // Ceci signifie "où user existe" (non-null)
+        }
+      },
       orderBy: { createdAt: "desc" },
       include: {
         user: {
