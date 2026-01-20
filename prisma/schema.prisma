@@ -240,6 +240,7 @@ model User {
   conseilSaves     ConseilSave[]     @relation("UserSaves") // Conseils sauvegardés par l'utilisateur
   conseilViews     ConseilView[]     @relation("UserViews") // Conseils vus par l'utilisateur
   conseilBookmarks ConseilBookmark[] @relation("UserBookmarks") // Conseils bookmarkés par l'utilisateur
+  parapentes Parapente[]
 
   //vehicules
   vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
@@ -3442,3 +3443,23 @@ model DeliveryPrice {
   
   @@index([category])
 }
+model Parapente {
+  id          String   @id @default(uuid())
+
+  title       String
+  description String
+  price       Float
+  location    String
+  images      String[] // base64 ou URLs
+
+  // 🔗 Relation User
+  idUser      String
+  user        User     @relation(fields: [idUser], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([idUser])
+}
+ 
+ 

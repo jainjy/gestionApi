@@ -249,6 +249,7 @@ app.use('/api/courses', require("./routes/courses"));
 app.use('/api/reservation-cours', require("./routes/reservationCours"));
 app.use("/api/digitalisation-services", require("./routes/digitalisation-services"));
 app.use("/api/investissement", require("./routes/investment"));
+app.use("/api/parapente", require("./routes/parapente"));
 // Ajouter dans server.js, avec les autres routes
 app.use("/api/contact-messages", require("./routes/contact-messages"));
 //rapport 
