@@ -58,7 +58,7 @@ async function main() {
       passwordHash: hashedAdminPassword,
       firstName: "Admin",
       lastName: "OliPlus",
-      phone: "+33 6 92 66 77 55",
+      phone: "+262 692 66 77 55",
       role: "admin",
       userType: "ADMIN",
       status: "active",
