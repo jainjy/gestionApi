@@ -31,7 +31,6 @@ function calculateTextScore(item, prompt, tableType) {
   let score = 0;
   let maxScore = 0;
 
-  // Pondération selon la table (basé sur les champs du code original)
   const fieldWeights = {
     Property: {
       title: 50,
@@ -49,6 +48,11 @@ function calculateTextScore(item, prompt, tableType) {
     },
     Metier: {
       libelle: 100
+    },
+    Professional: {
+      companyName: 40,
+      commercialName: 40,
+      city: 20
     }
   };
 
@@ -60,12 +64,9 @@ function calculateTextScore(item, prompt, tableType) {
       const weight = weights[field];
       maxScore += weight;
 
-      // Recherche exacte
       if (fieldValue.includes(promptLower)) {
         score += weight;
-      }
-      // Recherche par mots
-      else {
+      } else {
         const promptWords = promptLower.split(/\s+/).filter(w => w.length > 2);
         promptWords.forEach(word => {
           if (fieldValue.includes(word)) {
@@ -76,9 +77,7 @@ function calculateTextScore(item, prompt, tableType) {
     }
   });
 
-  // Normalisation du score (0-100%)
   const normalizedScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
-  
   return Math.min(100, normalizedScore);
 }
 
@@ -91,12 +90,13 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    /* 1️⃣ CHARGER LES DONNÉES AVEC LES CHAMPS EXISTANTS */
-  const client = await pool.connect();
+    /* 1️⃣ CHARGER LES DONNÉES */
+    const client = await pool.connect();
 
-    let properties, services, products, metiers;
+    let properties, services, products, metiers, professionals;
 
     try {
+      // Récupérer les données existantes
       properties = await client.query(`
         SELECT id, title, type, price, city, description, "ownerId"
         FROM "Property"
@@ -117,15 +117,81 @@ router.post("/", async (req, res) => {
         FROM "Metier"
       `);
 
+      // Récupérer les professionnels (uniquement role='professional')
+      professionals = await client.query(`
+        SELECT 
+          u.id,
+          u."firstName",
+          u."lastName",
+          u."companyName",
+          u."commercialName",
+          u.city,
+          u."userType",
+          u."professionalCategory",
+          u."createdAt"
+        FROM "User" u
+        WHERE u.role = 'professional'
+        AND u.status = 'active'
+      `);
+
+      // Récupérer les relations UtilisateurService pour savoir quels services les pros offrent
+      const userServices = await client.query(`
+        SELECT us."userId", us."serviceId", s.libelle as "serviceName"
+        FROM "UtilisateurService" us
+        INNER JOIN "Service" s ON s.id = us."serviceId"
+        WHERE us."isAvailable" = true
+      `);
+
+      // Récupérer les relations UtilisateurMetier pour savoir quels métiers les pros ont
+      const userMetiers = await client.query(`
+        SELECT um."userId", um."metierId", m.libelle as "metierName"
+        FROM "UtilisateurMetier" um
+        INNER JOIN "Metier" m ON m.id = um."metierId"
+      `);
+
+      // Attacher les services et métiers aux professionnels
+      professionals.rows = professionals.rows.map(pro => {
+        const proServices = userServices.rows
+          .filter(us => us.userId === pro.id)
+          .map(us => ({
+            id: us.serviceId,
+            name: us.serviceName
+          }));
+        
+        const proMetiers = userMetiers.rows
+          .filter(um => um.userId === pro.id)
+          .map(um => ({
+            id: um.metierId,
+            name: um.metierName
+          }));
+        
+        return {
+          ...pro,
+          services: proServices,
+          metiers: proMetiers,
+          // Créer un texte de recherche combiné pour faciliter la recherche
+          searchText: [
+            pro.firstName,
+            pro.lastName,
+            pro.companyName,
+            pro.commercialName,
+            pro.city,
+            pro.userType,
+            pro.professionalCategory,
+            ...proServices.map(s => s.name),
+            ...proMetiers.map(m => m.name)
+          ].filter(Boolean).join(' ').toLowerCase()
+        };
+      });
+
     } finally {
-      client.release(); // ⬅️ OBLIGATOIRE
+      client.release();
     }
 
-
-    /* 2️⃣ FILTRAGE TEXTUEL LOCAL (backup si l'IA échoue) */
+    /* 2️⃣ FILTRAGE TEXTUEL LOCAL */
     const localFilterResults = [];
 
-    // Filtrer les propriétés (basé sur les champs existants)
+    // Filtrer les propriétés
     properties.rows.forEach(property => {
       const searchableText = [
         property.title,
@@ -143,7 +209,7 @@ router.post("/", async (req, res) => {
       }
     });
 
-    // Filtrer les services (basé sur les champs existants)
+    // Filtrer les services
     services.rows.forEach(service => {
       const searchableText = [
         service.libelle,
@@ -159,7 +225,7 @@ router.post("/", async (req, res) => {
       }
     });
 
-    // Filtrer les produits (basé sur les champs existants)
+    // Filtrer les produits
     products.rows.forEach(product => {
       const searchableText = [
         product.name,
@@ -175,7 +241,7 @@ router.post("/", async (req, res) => {
       }
     });
 
-    // Filtrer les métiers (basé sur les champs existants)
+    // Filtrer les métiers
     metiers.rows.forEach(metier => {
       if (metier.libelle.toLowerCase().includes(prompt.toLowerCase())) {
         localFilterResults.push({
@@ -186,7 +252,41 @@ router.post("/", async (req, res) => {
       }
     });
 
-    /* 3️⃣ CONTEXTE POUR L'IA (uniquement les champs existants) */
+    // Filtrer les professionnels (Nouveau)
+    professionals.rows.forEach(professional => {
+      // Vérifier si le prompt correspond au professionnel directement
+      const directMatch = [
+        professional.firstName,
+        professional.lastName,
+        professional.companyName,
+        professional.commercialName,
+        professional.city,
+        professional.userType,
+        professional.professionalCategory
+      ].some(field => 
+        field && field.toLowerCase().includes(prompt.toLowerCase())
+      );
+
+      // Vérifier si le prompt correspond à un de ses services/métiers
+      const serviceMatch = professional.services.some(service =>
+        service.name.toLowerCase().includes(prompt.toLowerCase())
+      );
+
+      const metierMatch = professional.metiers.some(metier =>
+        metier.name.toLowerCase().includes(prompt.toLowerCase())
+      );
+
+      if (directMatch || serviceMatch || metierMatch) {
+        localFilterResults.push({
+          table: "Professional",
+          item: professional,
+          score: calculateTextScore(professional, prompt, "Professional"),
+          matchType: serviceMatch ? "service" : metierMatch ? "metier" : "direct"
+        });
+      }
+    });
+
+    /* 3️⃣ CONTEXTE POUR L'IA */
     const context = {
       Property: properties.rows.map(p => ({
         id: p.id,
@@ -210,39 +310,46 @@ router.post("/", async (req, res) => {
       Metier: metiers.rows.map(m => ({
         id: m.id,
         libelle: m.libelle
+      })),
+      Professional: professionals.rows.map(p => ({
+        id: p.id,
+        name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+        companyName: p.companyName || p.commercialName,
+        city: p.city,
+        type: p.userType,
+        category: p.professionalCategory,
+        services: p.services.map(s => s.name),
+        metiers: p.metiers.map(m => m.name)
       }))
     };
 
-    /* 4️⃣ PROMPT IA SIMPLIFIÉ */
+    /* 4️⃣ PROMPT IA AMÉLIORÉ */
     const iaPrompt = `
 Tu es un moteur de recherche pour une plateforme d'agence immobilière et services.
 
-Si la demande utilisateur contient :
-- une faute d’orthographe
-- un mot mal écrit
-- un mot partiellement écrit
+Tu dois analyser la demande et retourner les éléments pertinents, y compris les professionnels qui proposent des services ou métiers correspondants.
 
+Règles importantes :
+1. Si la recherche correspond à un métier (ex: "plombier", "électricien"), inclure les professionnels ayant ce métier
+2. Si la recherche correspond à un service (ex: "réparation", "nettoyage"), inclure les professionnels offrant ce service
+3. Les professionnels sont identifiés par table="Professional"
+4. Pour les professionnels, spécifier le type de correspondance : "direct", "service" ou "metier"
 
-  Tu dois automatiquement :
-  - identifier le mot corrigé le plus proche
-  - privilégier la similarité de sens plutôt que la similarité exacte du mot
-  - ne jamais rejeter une demande uniquement à cause d’une faute
+Demande utilisateur : "${prompt}"
 
-  Analyse cette demande et retourne les éléments pertinents sous forme de tableau JSON.
+Format requis (tableau d'objets) :
+[
+  { "table": "Property", "id": "id_value", "relevanceScore": 85 },
+  { "table": "Service", "id": "id_value", "relevanceScore": 70 },
+  { "table": "Professional", "id": "id_value", "relevanceScore": 90, "matchType": "service" }
+]
 
-  Demande utilisateur : "${prompt}"
-
-  Format requis (tableau d'objets) :
-  [
-    { "table": "Property", "id": "id_value", "relevanceScore": 85 },
-    { "table": "Service", "id": "id_value", "relevanceScore": 70 }
-  ]
-
-  Tables disponibles et leurs champs :
-  1. Property : title, type, price, city, description
-  2. Service : libelle, description
-  3. Product : name, category, price
-  4. Metier : libelle
+Tables disponibles :
+1. Property : title, type, price, city, description
+2. Service : libelle, description
+3. Product : name, category, price
+4. Metier : libelle
+5. Professional : nom, entreprise, ville, services, métiers
 
 Données disponibles :
 ${JSON.stringify(context, null, 2)}
@@ -253,7 +360,6 @@ ${JSON.stringify(context, null, 2)}
       const result = await model.generateContent(iaPrompt);
       let responseText = result.response.text().trim();
 
-      // Nettoyage de la réponse
       responseText = responseText
         .replace(/```json/gi, "")
         .replace(/```/g, "")
@@ -261,19 +367,18 @@ ${JSON.stringify(context, null, 2)}
         .replace(/\]$/, ']')
         .trim();
 
-      // Parsing sécurisé
       const parsedResults = JSON.parse(responseText);
       if (Array.isArray(parsedResults)) {
-        aiResults = parsedResults.slice(0, 30); // Limite à 30
+        aiResults = parsedResults.slice(0, 40); // Augmenté pour inclure plus de résultats
       }
     } catch (iaError) {
       console.warn("IA fallback, utilisation du filtrage local:", iaError.message);
-      // Fallback : utiliser les résultats du filtrage local
       aiResults = localFilterResults.map(r => ({
         table: r.table,
         id: r.item.id,
-        relevanceScore: r.score
-      })).slice(0, 30);
+        relevanceScore: r.score,
+        matchType: r.matchType || "direct"
+      })).slice(0, 40);
     }
 
     /* 5️⃣ RÉCUPÉRATION DES DONNÉES COMPLÈTES */
@@ -283,8 +388,9 @@ ${JSON.stringify(context, null, 2)}
     for (const aiItem of aiResults) {
       let item;
       let ownerField;
+      let tableType = aiItem.table;
 
-      switch (aiItem.table) {
+      switch (tableType) {
         case "Property":
           item = properties.rows.find(p => p.id === aiItem.id);
           ownerField = item?.ownerId;
@@ -301,57 +407,107 @@ ${JSON.stringify(context, null, 2)}
           item = metiers.rows.find(m => m.id === aiItem.id);
           ownerField = null;
           break;
+        case "Professional":
+          item = professionals.rows.find(p => p.id === aiItem.id);
+          ownerField = item?.id; // Pour un pro, l'owner c'est lui-même
+          break;
       }
 
       if (!item) continue;
 
-      // Calculer le score textuel (reprise de la logique originale)
+      // Calculer le score textuel
       const textScore = aiItem.relevanceScore || 
-                       calculateTextScore(item, prompt, aiItem.table);
+                       calculateTextScore(item, prompt, tableType);
       
-      // Utiliser clickScore = 0 par défaut (comme dans l'original si pas de viewcount/clickcount)
       const clickScore = 0;
 
-      results.push({
-        table: aiItem.table,
+      // Construire l'objet résultat
+      const resultItem = {
+        table: tableType,
         ...item,
-        similarity: Math.round(textScore), // Même champ que l'original
+        similarity: Math.round(textScore),
         isPremiumOwner: ownerField ? premiumUsers.includes(ownerField) : false,
-        clickScore: clickScore // Valeur par défaut
-      });
+        clickScore: clickScore
+      };
+
+      // Ajouter des informations spécifiques selon le type
+      if (tableType === "Professional") {
+        resultItem.matchType = aiItem.matchType || "direct";
+        resultItem.professionalType = item.userType || item.professionalCategory;
+        resultItem.associatedServices = item.services;
+        resultItem.associatedMetiers = item.metiers;
+      } else if (tableType === "Service" && item.createdById) {
+        // Pour les services, on peut aussi inclure le pro qui l'a créé
+        const serviceCreator = professionals.rows.find(p => p.id === item.createdById);
+        if (serviceCreator) {
+          resultItem.creatorInfo = {
+            id: serviceCreator.id,
+            name: `${serviceCreator.firstName || ''} ${serviceCreator.lastName || ''}`.trim(),
+            companyName: serviceCreator.companyName
+          };
+        }
+      } else if (tableType === "Metier") {
+        // Pour les métiers, trouver les pros qui ont ce métier
+        const prosWithThisMetier = professionals.rows.filter(p => 
+          p.metiers.some(m => m.id === item.id)
+        );
+        if (prosWithThisMetier.length > 0) {
+          resultItem.associatedProfessionals = prosWithThisMetier.map(p => ({
+            id: p.id,
+            name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+            companyName: p.companyName
+          })).slice(0, 3); // Limiter à 3 pros pour ne pas surcharger
+        }
+      }
+
+      results.push(resultItem);
     }
 
-    /* 6️⃣ TRI MULTI-CRITÈRES (identique à la logique vectorielle originale) */
+    /* 6️⃣ TRI MULTI-CRITÈRES */
     results.sort((a, b) => {
-      // 1. Premium first (identique)
+      // 1. Premium first
       if (a.isPremiumOwner !== b.isPremiumOwner) {
         return b.isPremiumOwner - a.isPremiumOwner;
       }
 
-      // 2. Popularité (clickScore - identique à l'original)
+      // 2. Popularité
       if (a.clickScore !== b.clickScore) {
         return b.clickScore - a.clickScore;
       }
 
-      // 3. Pertinence (similarity - remplace la distance vectorielle)
+      // 3. Pertinence
       return b.similarity - a.similarity;
     });
 
-    /* 7️⃣ FORMATAGE DE LA RÉPONSE (identique au format original) */
-    const formattedResults = results.map(r => ({
-      id: r.id,
-      source_table: r.table,
-      similarity: r.similarity,
-      isPremiumOwner: r.isPremiumOwner,
-      clickScore: r.clickScore,
-      // Inclure tous les champs originaux selon la table
-      ...r
-    })).map(({ table, ...rest }) => rest); // Retirer le champ table dupliqué
+    /* 7️⃣ FORMATAGE FINAL */
+    const formattedResults = results.map(r => {
+      const baseItem = {
+        id: r.id,
+        source_table: r.table,
+        similarity: r.similarity,
+        isPremiumOwner: r.isPremiumOwner,
+        clickScore: r.clickScore,
+        ...r
+      };
+
+      // Nettoyer l'objet
+      delete baseItem.table;
+      delete baseItem.searchText;
+      
+      return baseItem;
+    });
 
     res.json({
       success: true,
       count: formattedResults.length,
-      results: formattedResults
+      results: formattedResults,
+      summary: {
+        properties: formattedResults.filter(r => r.source_table === "Property").length,
+        services: formattedResults.filter(r => r.source_table === "Service").length,
+        products: formattedResults.filter(r => r.source_table === "Product").length,
+        metiers: formattedResults.filter(r => r.source_table === "Metier").length,
+        professionals: formattedResults.filter(r => r.source_table === "Professional").length
+      }
     });
 
   } catch (error) {
@@ -364,149 +520,3 @@ ${JSON.stringify(context, null, 2)}
 });
 
 module.exports = router;
-
-// const express = require('express');
-// const router = express.Router();
-// const { pool } = require('../lib/db');
-// const { GoogleGenerativeAI } = require('@google/generative-ai');
-// require('dotenv').config();
-
-// /* GEMINI SETUP */
-// let embedModel;
-// try {
-//   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-//   embedModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
-// } catch (err) {
-//   console.error("Erreur Gemini:", err);
-// }
-
-// async function generateEmbeddingsForAllTables() {
-//   console.log('⚡ Génération automatique des embeddings pour toutes les tables...');
-//   for (const table of tables) {
-//     try {
-//       const colConcat = table.columns.map(c => `"${c}"`).join(` || ' ' || `);
-//       const querySelect = `
-//         SELECT id, ${colConcat} AS text
-//         FROM "${table.name}"
-//         WHERE embedding IS NULL
-//       `;
-//       const rows = (await pool.query(querySelect)).rows;
-
-//       for (const row of rows) {
-//         const text = row.text || '';
-//         if (!text) continue;
-//         const embedding = await generateEmbedding(text);
-//         const embeddingArray = `[${embedding.join(',')}]`;
-
-//         await pool.query(
-//           `UPDATE "${table.name}" SET embedding = $1 WHERE id = $2`,
-//           [embeddingArray, row.id]
-//         );
-//         console.log(`✅ Embedding généré pour ${table.name} id=${row.id}`);
-//       }
-//     } catch (err) {
-//       console.error(`❌ Erreur génération embeddings pour ${table.name}:`, err.message);
-//     }
-//   }
-//   console.log('🎉 Tous les embeddings ont été générés !');
-// }
-
-// /* EMBEDDINGS */
-// async function generateEmbedding(text) {
-//   const result = await embedModel.embedContent(text);
-//   return result.embedding.values;
-// }
-
-// /* PROFESSIONNELS PREMIUM */
-// async function getPremiumUsers() {
-//   const query = `
-//     SELECT u.id
-//     FROM "User" u
-//     LEFT JOIN "Subscription" s ON s."userId" = u.id
-//     LEFT JOIN "Transaction" t ON t."userId" = u.id
-//     WHERE u.role = 'professional'
-//     AND s.status = 'active'
-//     AND t.status = 'paid'
-//   `;
-//   const rows = (await pool.query(query)).rows;
-//   return rows.map(r => r.id);
-// }
-
-// /* TABLES A RECHERCHER */
-// const tables = [
-//   { name: "Metier", columns: ["libelle"], ownerField: null },
-//   { name: "Product", columns: ["name", "category", "price", "quantity"], ownerField: "userId" },
-//   { name: "Property", columns: ["title", "type", "price"], ownerField: "ownerId" },
-//   { name: "Service", columns: ["libelle"], ownerField: "createdById" },
-// ];
-
-// /* ROUTE PRINCIPALE */
-// router.post("/", async (req, res) => {
-//   const { prompt } = req.body;
-
-//   if (!prompt)
-//     return res.status(400).json({ error: "Prompt manquant" });
-
-//   try {
-//     const embedding = await generateEmbedding(prompt);
-//     const vector = `[${embedding.join(',')}]`;
-
-//     const premiumUsers = await getPremiumUsers();
-//     let allResults = [];
-
-//     /* RECHERCHE DANS CHAQUE TABLE */
-//     for (const table of tables) {
-//       const colConcat = table.columns.map(c => `"${c}"`).join(` || ' ' || `);
-
-//       const query = `
-//         SELECT
-//           *,
-//           embedding::text AS embedding,
-//           (embedding <=> '${vector}'::vector) AS distance,
-//           '${table.name}' AS source_table,
-//           ${table.ownerField ? `"${table.ownerField}"` : "NULL"} AS ownerId
-//         FROM "${table.name}"
-//         WHERE embedding IS NOT NULL
-//         ORDER BY embedding <=> '${vector}'::vector
-//         LIMIT 10
-//       `;
-
-//       const rows = (await pool.query(query)).rows;
-
-//       const mapped = rows.map(r => ({
-//         ...r,
-//         similarity: (1 - r.distance) * 100,
-//         isPremiumOwner: table.ownerField
-//           ? premiumUsers.includes(r.ownerid || r.ownerId)
-//           : false,
-//         clickScore: r.clickcount || r.viewcount || 0
-//       }));
-
-//       allResults.push(...mapped);
-//     }
-
-//     /* TRIS BOOSTÉS */
-//     allResults.sort((a, b) => {
-//       if (a.isPremiumOwner !== b.isPremiumOwner)
-//         return b.isPremiumOwner - a.isPremiumOwner;
-
-//       if (a.clickScore !== b.clickScore)
-//         return b.clickScore - a.clickScore;
-
-//       return b.similarity - a.similarity;
-//     });
-
-//     res.json({
-//       success: true,
-//       count: allResults.length,
-//       results: allResults
-//     });
-
-//   } catch (error) {
-//     console.error("Erreur recherche premium:", error);
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-// generateEmbeddingsForAllTables();
-
-// module.exports = router;
