@@ -195,7 +195,7 @@ router.get("/metiers/disponibles", async (req, res) => {
 });
 
 // ROUTES SPÉCIFIQUES PAR CATÉGORIE
-async function getProfessionalsByMetiers(res, req, metierFilters, category) {
+async function getProfessionalsByMetiers(res, req, metierFilters, category, userTypeFilter) {
   try {
     const { page = 1, limit = 1000, city, sort = "newest" } = req.query;
     const skip = (page - 1) * limit;
@@ -215,12 +215,12 @@ async function getProfessionalsByMetiers(res, req, metierFilters, category) {
 
     // Construire la condition WHERE
     const where = {
-      OR: [{ role: "professional" }, { userType: "PRESTATAIRE" }],
+      OR: [
+        userTypeFilter ? { userType: { contains: userTypeFilter, mode: "insensitive" } } : {},
+        metierIds.length > 0 ? { metiers: { some: { metierId: { in: metierIds } } } } : {},
+      ],
       ...(city && {
         city: { contains: city, mode: "insensitive" },
-      }),
-      ...(metierIds.length > 0 && {
-        metiers: { some: { metierId: { in: metierIds } } },
       }),
     };
 
@@ -290,9 +290,15 @@ async function getProfessionalsByMetiers(res, req, metierFilters, category) {
   }
 }
 
-// Routes spécifiques
+// Route spécifique pour les agences
 router.get("/agences", (req, res) =>
-  getProfessionalsByMetiers(res, req, ["agenc", "agence"], "agences")
+  getProfessionalsByMetiers(
+    res,
+    req,
+    ["immobilier"], // métiers à filtrer
+    "agences",      // catégorie
+    "agence"        // userType à filtrer
+  )
 );
 
 router.get("/constructeurs", (req, res) =>
