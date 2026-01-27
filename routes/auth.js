@@ -37,7 +37,6 @@ const passwordResetLimiter = rateLimit({
 });
 
 // Création du limiteur pour le login
-// Création du limiteur pour le login
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 tentatives maximum
@@ -132,6 +131,7 @@ const verifyTokenLimiter = rateLimit({
     error: "Trop de tentatives de vérification.",
   },
 });
+
 // POST /api/auth/login - Connexion
 router.post("/login",loginLimiter, async (req, res) => {
   try {

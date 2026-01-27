@@ -225,6 +225,7 @@ require('dotenv').config({ path: '.env' });
 
 console.log('Token chargé:', process.env.DELIVERY_PLATFORM_TOKEN);
 
+app.use('/api/chatbot', require('./routes/chatbot'));
 app.use('/api/delivery', require('./routes/deliveryApi'));
 //entreprenariat
 app.use("/api/entrepreneuriat", require("./routes/entrepreneuriat"));
