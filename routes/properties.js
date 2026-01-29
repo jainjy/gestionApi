@@ -216,6 +216,96 @@ router.get('/', async (req, res) => {
   }
 })
 
+
+//sans filtre 
+router.get('/sansfiltre', async (req, res) => {
+  try {
+
+    // 🔥 Aucun filtre dynamique
+    const properties = await prisma.property.findMany({
+      where: {
+        isActive: true   // (tu peux enlever aussi si tu veux VRAIMENT tout)
+      },
+      include: { 
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            companyName: true
+          }
+        }, 
+        favorites: true 
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Fonction pour créer un identifiant anonyme
+    const createAnonymousId = (uuid) => {
+      const crypto = require('crypto');
+      const salt = process.env.ANON_SALT || 'default-salt-change-in-production';
+      return 'owner_' + crypto
+        .createHash('sha256')
+        .update(uuid + salt)
+        .digest('hex')
+        .substring(0, 8)
+        .toUpperCase();
+    };
+
+    const mappedProperties = properties.map(property => {
+      const mapped = mapPropertyFields(property);
+
+      let safeOwnerInfo = null;
+
+      if (property.owner) {
+        safeOwnerInfo = {
+          refId: createAnonymousId(property.owner.id),
+          initials: `${property.owner.firstName?.charAt(0) || ''}${property.owner.lastName?.charAt(0) || ''}`,
+          isProfessional: property.owner.role === 'admin' || property.owner.role === 'agent',
+          isVerified: true
+        };
+
+        // Nom visible seulement pour pros/agences
+        if (property.owner.role === 'agent' || property.owner.role === 'agency') {
+          safeOwnerInfo.fullName = `${property.owner.firstName} ${property.owner.lastName}`;
+          safeOwnerInfo.company = property.owner.companyName || null;
+        }
+      }
+
+      const safeProperty = {
+        ...mapped,
+        ownerId: undefined,
+        socialType: determineSocialType(property),
+        socialTypeLabel: SOCIAL_TYPE_LABELS[determineSocialType(property)] || null,
+        owner: safeOwnerInfo
+      };
+
+      delete safeProperty.ownerEmail;
+      delete safeProperty.ownerPhone;
+      delete safeProperty.contactEmail;
+      delete safeProperty.contactPhone;
+
+      return safeProperty;
+    });
+
+    console.log(`[AUDIT] ALL properties fetched: ${mappedProperties.length}, User: ${req.user?.id || 'anonymous'}, IP: ${req.ip}`);
+
+    res.json(mappedProperties);
+
+  } catch (error) {
+    console.error('Failed to fetch properties:', error);
+
+    const errorMessage = process.env.NODE_ENV === 'production' 
+      ? 'Failed to fetch properties' 
+      : error.message;
+
+    res.status(500).json({ error: errorMessage });
+  }
+});
+
+
+
 // GET /api/properties/social - ROUTE NOUVELLE - Récupérer tous les logements sociaux
 router.get('/social', async (req, res) => {
   try {
