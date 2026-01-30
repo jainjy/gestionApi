@@ -225,6 +225,10 @@ require('dotenv').config({ path: '.env' });
 
 console.log('Token chargé:', process.env.DELIVERY_PLATFORM_TOKEN);
 
+//Synchonisation olimmo et oliplus
+app.use("/synchronisation", require("./routes/syncOlimmoToOliplus"));
+
+
 app.use('/api/chatbot', require('./routes/chatbot'));
 app.use('/api/delivery', require('./routes/deliveryApi'));
 //entreprenariat
@@ -281,7 +285,7 @@ app.use(
 );
 app.use('/api/suggestions', require('./routes/Recherchesuggestions'));
 app.use('/test',require('./routes/user'))
-app.use("/api/sync", require("./routes/syncOlimmoProperties"));
+
 
 // AJOUTEZ ICI les nouvelles routes ↓
 app.use("/api/pro/formations", require("./routes/formations")); // <-- AJOUTEZ CETTE LIGNE

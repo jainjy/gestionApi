@@ -497,7 +497,8 @@ model Property {
   rentType             String?                @default("longue_duree")
   embedding            Unsupported("vector")?
   locationSaisonnieres LocationSaisonniere[]
-
+  externalSource String?
+  externalId     Int?      @unique
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   favorites Favorite[]
   demandes  Demande[]
