@@ -59,5 +59,6 @@ module.exports = function mapOlimmoToOliplus(olimmo, ownerId) {
     externalId: olimmo.id,
 
     publishedAt: olimmo.created_at,
+    updatedAt: olimmo.updated_at ? new Date(olimmo.updated_at) : new Date(),
   };
 };
