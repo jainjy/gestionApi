@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const { authenticateToken } = require("../middleware/auth");
-const { upload } = require("../middleware/upload");
+const { uploadMixed, uploadToSupabase } = require("../middleware/upload");
 
 const prisma = new PrismaClient();
 
@@ -261,7 +261,7 @@ router.get("/categories/list", async (req, res) => {
 router.post(
   "/",
   authenticateToken,
-  upload.array("images", 10),
+  uploadMixed,
   async (req, res) => {
     try {
       const {
@@ -303,9 +303,34 @@ router.post(
         });
       }
 
-      const mainImage = req.files?.[0]?.path || req.body.mainImage;
+      // ✅ Gérer les fichiers uploadés
+      let mainImage = req.body.mainImage || null;
+      let images = [];
 
-      // Créer l'activité directement avec l'ID utilisateur
+      // Si fichier mainImage uploadé
+      if (req.files?.mainImage?.[0]) {
+        const mainImageFile = req.files.mainImage[0];
+        try {
+          const uploadResult = await uploadToSupabase(mainImageFile, "activities");
+          mainImage = uploadResult.url;
+        } catch (error) {
+          console.error("Erreur upload mainImage:", error);
+        }
+      }
+
+      // Si fichiers images supplémentaires uploadés
+      if (req.files?.images && req.files.images.length > 0) {
+        for (const imageFile of req.files.images) {
+          try {
+            const uploadResult = await uploadToSupabase(imageFile, "activities");
+            images.push(uploadResult.url);
+          } catch (error) {
+            console.error("Erreur upload image supplémentaire:", error);
+          }
+        }
+      }
+
+      // Créer l'activité
       const activity = await prisma.activity.create({
         data: {
           title: title.trim(),
@@ -332,7 +357,7 @@ router.post(
 
           // Images
           mainImage,
-          images: req.files?.map((file) => file.path) || [],
+          images,
 
           // Informations supplémentaires
           includedItems: includedItems ? JSON.parse(includedItems) : [],
@@ -387,18 +412,16 @@ router.post(
 router.put(
   "/:id",
   authenticateToken,
-  upload.array("images", 10),
+  uploadMixed,
   async (req, res) => {
     try {
       const { id } = req.params;
       const updateData = { ...req.body };
 
-      // Vérifier que l'utilisateur est le propriétaire de l'activité
+      // Vérifier que l'utilisateur est le propriétaire
       const activity = await prisma.activity.findUnique({
         where: { id },
-        include: {
-          category: true,
-        },
+        include: { category: true },
       });
 
       if (!activity) {
@@ -408,7 +431,6 @@ router.put(
         });
       }
 
-      // Autoriser les propriétaires OU les admins
       if (activity.userId !== req.user.id && req.user.role !== "admin") {
         return res.status(403).json({
           success: false,
@@ -416,19 +438,38 @@ router.put(
         });
       }
 
-      // Gérer l'upload d'image principale
-      if (req.files?.[0]) {
-        updateData.mainImage = req.files[0].path;
-        // Ajouter toutes les images
-        if (req.files.length > 0) {
-          updateData.images = req.files.map((file) => file.path);
+      // ✅ Gérer les fichiers uploadés
+      if (req.files?.mainImage?.[0]) {
+        const mainImageFile = req.files.mainImage[0];
+        try {
+          const uploadResult = await uploadToSupabase(mainImageFile, "activities");
+          updateData.mainImage = uploadResult.url;
+        } catch (error) {
+          console.error("Erreur upload mainImage:", error);
         }
+      }
+
+      if (req.files?.images && req.files.images.length > 0) {
+        const newImages = [];
+        for (const imageFile of req.files.images) {
+          try {
+            const uploadResult = await uploadToSupabase(imageFile, "activities");
+            newImages.push(uploadResult.url);
+          } catch (error) {
+            console.error("Erreur upload image:", error);
+          }
+        }
+        // Ajouter aux images existantes
+        updateData.images = [
+          ...(activity.images || []),
+          ...newImages,
+        ];
       }
 
       // Parser les tableaux JSON
       const arrayFields = ["includedItems", "requirements", "highlights"];
       arrayFields.forEach((field) => {
-        if (updateData[field]) {
+        if (updateData[field] && typeof updateData[field] === "string") {
           try {
             updateData[field] = JSON.parse(updateData[field]);
           } catch (e) {

@@ -353,7 +353,6 @@ app.use('/api/medecines-bienetre', require('./routes/medecines.routes'));
 app.use('/api/conseils', require('./routes/conseils'));
  
 app.use("/api/Vol", require("./routes/Vol"));
-app.use("/api/ActivityCategory", require("./routes/ActivityCategory"));
 app.use("/api/notificationadmin", require("./routes/AllNotifications"));
 
 app.use("/api/demandes-history", require("./routes/demandes-history"));
@@ -462,6 +461,7 @@ app.use("/api/avis-vehicules", require("./routes/avis-vehicules"));
 app.use("/api/activities", require("./routes/activities"));
 app.use("/api/activity-bookings", require("./routes/activity-bookings"));
 app.use("/api/activity-actions", require("./routes/activity-actions"));
+app.use("/api/ActivityCategory", require("./routes/ActivityCategory"));
 
 //Route event & dicovery
 app.use("/api/event", require("./routes/eventRoutes.js"));

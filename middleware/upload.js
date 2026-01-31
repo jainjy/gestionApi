@@ -14,10 +14,10 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max pour l'audio et les fichiers
+    fileSize: 50 * 1024 * 1024, // 50MB max
   },
   fileFilter: (req, file, cb) => {
-    // ✅ CORRECTION: Accepter les images, fichiers audio ET les PDF
+    // ✅ CORRIGÉ: Accepter les images, fichiers audio ET les PDF
     const acceptedTypes = [
       // Images
       "image/jpeg",
@@ -43,6 +43,68 @@ const upload = multer({
     }
   },
 });
+
+// ✅ NOUVEAU: Créer des instances spécialisées pour chaque route
+const uploadMainImage = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB pour image principale
+  fileFilter: (req, file, cb) => {
+    const imageTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Type d'image non supporté: ${file.mimetype}`), false);
+    }
+  },
+}).single("mainImage"); // ✅ Un seul fichier pour mainImage
+
+const uploadImages = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const imageTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Type d'image non supporté: ${file.mimetype}`), false);
+    }
+  },
+}).array("images", 10); // ✅ Plusieurs fichiers pour images
+
+const uploadMixed = multer({
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const acceptedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "audio/mpeg",
+      "audio/wav",
+      "audio/ogg",
+      "application/pdf",
+    ];
+    if (acceptedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Type de fichier non supporté: ${file.mimetype}`), false);
+    }
+  },
+}).fields([
+  { name: "mainImage", maxCount: 1 },
+  { name: "images", maxCount: 10 },
+]); // ✅ Pour les deux champs ensemble
 
 // Fonction pour uploader vers Supabase
 const uploadToSupabase = async (file, folder = "blog-images") => {
@@ -84,5 +146,8 @@ const uploadToSupabase = async (file, folder = "blog-images") => {
 
 module.exports = {
   upload,
+  uploadMainImage,
+  uploadImages,
+  uploadMixed,
   uploadToSupabase,
 };
