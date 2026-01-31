@@ -95,7 +95,168 @@ model BlogCommentLike {
   @@index([userId])
 }
 
-s
+//===================
+//UTILISATEUR - VERSION CORRIGÉE
+//===================
+model User {
+  id                        String                    @id @default(uuid())
+  email                     String                    @unique
+  passwordHash              String?
+  provider                  Json?
+  firstName                 String?
+  lastName                  String?
+  phone                     String?
+  role                      String                    @default("user")
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  resetToken                String?
+  resetTokenExpiry          DateTime?
+  status                    String                    @default("active")
+  companyName               String?
+  address                   String?
+  addressComplement         String?
+  city                      String?
+  commercialName            String?
+  demandType                String?
+  latitude                  Float?
+  longitude                 Float?
+  siren                     String?
+  siret                     String?
+  zipCode                   String?
+  avatar                    String?
+  userType                  String?
+  providerId                String?
+  providerName              String?
+  stripeCustomerId          String?
+  DevisClientToUser         String?                   @map("_DevisClientToUser")
+  DevisProviderToUser       String?                   @map("_DevisProviderToUser")
+  demandesFinancement       FinancementDemande[]
+  websiteUrl                String?
+  deletionRequestedAt       DateTime? // Date de la demande de suppression
+  deletionReason            String? // Raison de la suppression (optionnel)
+  // Relations existantes
+  blogArticles              BlogArticle[]             @relation("BlogArticleAuthor")
+  blogArticleLikes          BlogArticleLike[]         @relation("BlogArticleLikeUser")
+  blogComments              BlogComment[]             @relation("BlogCommentUser")
+  blogCommentLikes          BlogCommentLike[]         @relation("BlogCommentLikeUser")
+  properties                Property[]
+  favorites                 Favorite[]
+  metiers                   UtilisateurMetier[]
+  services                  UtilisateurService[]
+  demandesCrees             Demande[]                 @relation("DemandeCreePar")
+  demandesArtisan           DemandeArtisan[]          @relation("DemandeArtisanUser")
+  Product                   Product[]
+  Transaction               Transaction[]
+  Review                    Review[]
+  Appointment               Appointment[]
+  professionalCategory      String? // "real-estate", "artisan", "tourism", "sports", etc.
+  // RELATIONS ORDER CORRIGÉES
+  ordersClient              Order[]                   @relation("OrderClient") // Commandes passées en tant que client
+  ordersPrestataire         Order[]                   @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
+  locationsClient           LocationSaisonniere[]     @relation("clientLocations")
+  patrimoines               Patrimoine[]
+  messagesEnvoyes           Message[]                 @relation("MessageExpediteur")
+  messagesRecus             Message[]                 @relation("MessageReceiver")
+  conversationsCrees        Conversation[]            @relation("ConversationCreateur")
+  conversationsParticipees  ConversationParticipant[]
+  devisRecus                Devis[]                   @relation("DevisClient")
+  devisEnvoyes              Devis[]                   @relation("DevisPrestataire")
+  subscriptions             Subscription[]
+  tourismeBookings          TourismeBooking[]
+  advertisements            Advertisement[]
+  demandesRecues            Demande[]                 @relation("DemandeArtisanSpecifique")
+  activities                UserActivity[]
+  preferences               UserPreference[]
+  events                    UserEvent[]
+  audits                    Audit[]
+  notifications             Notification[]
+  notificationsProprietaire Notification[]            @relation("UserProprietaireRelation")
+  refreshTokens             RefreshToken[] // Relation pour la gestion sécurisée des sessions
+  // RELATION POUR PODCAST 
+  podcasts                  Podcast[] // Podcasts créés par l'utilisateur
+  videos                    Video[] // Vidéos créées par l'utilisateur
+  mediaFavorites            UserMediaFavorite[] // Favoris médias de l'utilisateur
+  wellBeingStats            WellBeingStats? // Statistiques bien-être
+  ProfessionalSettings      ProfessionalSettings?
+  Document                  Document[]
+  ContratType               ContratType[]
+  DocumentArchive           DocumentArchive[]
+  reservationsCours         ReservationCours[]
+
+  // relation pour coursdomicil
+  courses            Course[]            @relation("UserCourses")
+  investmentRequests InvestmentRequest[]
+
+  tourismes              Tourisme[]
+  volsCrees              Flight[]                @relation("PrestataireVol")
+  volsReserves           Flight[]                @relation("ReservationVol")
+  touristicPlaceBookings TouristicPlaceBooking[]
+  flightReservations     ReservationFlight[]     @relation("ReservationVol")
+
+  flightReservationsReceived ReservationFlight[] @relation("PrestataireVolReservation")
+
+  // Nouvelle relation avec FinancementPartenaire
+  financementPartenaires FinancementPartenaire[]
+
+  rendezvousEntreprise RendezvousEntreprise[] // Liste des rendez-vous demandés pour l'entreprise
+
+  // RELATIONS POUR EVENTS ET DISCOVERIES
+  eventsDisco            Event[] // Événements créés par l'utilisateur dans di
+  activitiesCreated      Activity[]         @relation("ActivityCreator") // Activités créées par l'utilisateur pro
+  activityBookings       ActivityBooking[]
+  activityFavorites      ActivityFavorite[]
+  activityReviews        ActivityReview[]
+  messagesRecusContact   ContactMessage[]   @relation("ContactMessageRecipient")
+  messagesEnvoyesContact ContactMessage[]   @relation("ContactMessageSender")
+  servicesCrees          Service[] // ✅ AJOUT: Relation avec les services créés par le professionnel
+  demandesDroitFamille   DroitFamille[]
+  //relation pour le demande de conseil
+  demandesConseil        DemandeConseil[]   @relation("UserDemandesConseil")
+  expertDemandesConseil  DemandeConseil[]   @relation("ExpertDemandesConseil")
+  suivisConseil          SuiviConseil[]
+
+  portraitsCreated PortraitLocal[] // Portraits créés par l'utilisateur
+  portraitShares   PortraitShare[] // Partages effectués
+  portraitListens  PortraitListen[] // Écoutes des portraits
+  portraitComments PortraitComment[] // Commentaires sur les portraits
+
+  // AJOUTEZ CES RELATIONS À LA FIN DU MODÈLE USER :
+  formations       Formation[]
+  emplois          Emploi[]
+  alternanceStages AlternanceStage[]
+  candidatures     Candidature[] // Si c'est l'utilisateur qui candidate
+
+  projets Projet[]
+
+  //relatio pour bon plan et conseil
+  conseilsCrees    Conseil[]         @relation("UserConseils") // Conseils créés par l'utilisateur
+  conseilSaves     ConseilSave[]     @relation("UserSaves") // Conseils sauvegardés par l'utilisateur
+  conseilViews     ConseilView[]     @relation("UserViews") // Conseils vus par l'utilisateur
+  conseilBookmarks ConseilBookmark[] @relation("UserBookmarks") // Conseils bookmarkés par l'utilisateur
+  parapentes       Parapente[]
+
+  //vehicules
+  vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
+  reservationsVehiculesClient      ReservationVehicule[]   @relation("ReservationVehiculeClient")
+  reservationsVehiculesPrestataire ReservationVehicule[]   @relation("ReservationVehiculePrestataire")
+  avisVehicules                    AvisVehicule[] // Avis laissés sur les véhicules
+  experiencesCreated               Experience[]            @relation("ExperienceCreatedBy")
+  experiencesGuided                Experience[]            @relation("ExperienceGuide")
+  experienceBookings               ExperienceBooking[]
+  experienceReviews                ExperienceReview[]
+  experienceFavorites              ExperienceFavorite[]
+  // interviews       EntrepreneurInterview[] // Interviews créées par l'utilisateur
+  resources                        EntrepreneurResource[] // Ressources créées par l'utilisateur
+  eventsEntrepreneurs              EntrepreneurEvent[] // Événements créés par l'utilisateur
+  interviewInteractions            InterviewInteraction[] // Interactions avec les interviews
+  entrepreneurInterviews           EntrepreneurInterview[]
+  discoveries                      Discovery[]
+
+  @@index([userType]) // Pour filtrer facilement les professionnels
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
 
 //===================
 //REQUETES DE MOT DE PASSE OUBLIER
@@ -1673,9 +1834,9 @@ model ActivityBooking {
   participants Int @default(1)
 
   // 💰 Paiement
-  totalAmount    Float
-  status         String @default("pending") // pending | confirmed | cancelled | completed
-  paymentStatus  String @default("pending") // pending | paid | refunded | failed
+  totalAmount   Float
+  status        String @default("pending") // pending | confirmed | cancelled | completed
+  paymentStatus String @default("pending") // pending | paid | refunded | failed
 
   // 🧑 Infos participants
   participantNames  String[]
