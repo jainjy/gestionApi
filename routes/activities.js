@@ -662,5 +662,171 @@ router.get("/guide/:userId", async (req, res) => {
     });
   }
 });
+// Dans vos routes d'activités (activities.js), ajoutez :
+
+// GET activités favorites d'un utilisateur
+router.get("/favorites", authenticateToken, async (req, res) => {
+  try {
+    const favorites = await prisma.activityFavorite.findMany({
+      where: { userId: req.user.id },
+      include: {
+        activity: {
+          include: {
+            guide: {
+              include: {
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    avatar: true,
+                  },
+                },
+              },
+            },
+            category: true,
+            availability: {
+              where: {
+                date: { gte: new Date() },
+                status: "available",
+              },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: favorites.map(fav => ({
+        ...fav.activity,
+        isFavorite: true,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching favorites:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des favoris",
+    });
+  }
+});
+
+// POST ajouter aux favoris
+router.post("/:id/favorite", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existing = await prisma.activityFavorite.findUnique({
+      where: {
+        userId_activityId: {
+          userId: req.user.id,
+          activityId: id,
+        },
+      },
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        error: "Déjà dans les favoris",
+      });
+    }
+
+    const favorite = await prisma.activityFavorite.create({
+      data: {
+        userId: req.user.id,
+        activityId: id,
+      },
+      include: {
+        activity: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: favorite,
+      message: "Ajouté aux favoris",
+    });
+  } catch (error) {
+    console.error("Error adding favorite:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de l'ajout aux favoris",
+    });
+  }
+});
+
+// DELETE retirer des favoris
+router.delete("/:id/favorite", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.activityFavorite.delete({
+      where: {
+        userId_activityId: {
+          userId: req.user.id,
+          activityId: id,
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Retiré des favoris",
+    });
+  } catch (error) {
+    console.error("Error removing favorite:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors du retrait des favoris",
+    });
+  }
+});
+
+// Dans vos routes de disponibilités (availability.js), ajoutez cette route au début :
+
+// GET disponibilités pour une activité (version publique améliorée)
+router.get("/activity/:activityId", async (req, res) => {
+  try {
+    const { activityId } = req.params;
+    const { startDate, endDate, availableOnly = "true" } = req.query;
+
+    const where = { 
+      activityId,
+      status: "available"
+    };
+
+    if (startDate && endDate) {
+      where.date = {
+        gte: new Date(startDate),
+        lte: new Date(endDate),
+      };
+    } else {
+      where.date = { gte: new Date() };
+    }
+
+    // Filtrer par disponibilité
+    if (availableOnly === "true") {
+      where.bookedSlots = { lt: prisma.activityAvailability.fields.slots };
+    }
+
+    const availability = await prisma.activityAvailability.findMany({
+      where,
+      orderBy: { date: "asc" },
+    });
+
+    res.json({
+      success: true,
+      data: availability,
+    });
+  } catch (error) {
+    console.error("Error fetching availability:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des disponibilités",
+    });
+  }
+});
 
 module.exports = router;

@@ -459,11 +459,15 @@ app.use("/api/avis-vehicules", require("./routes/avis-vehicules"));
 // ======================
 // 🆕 NOUVELLES ROUTES ACTIVITÉS ET LOISIRS
 // ======================
+app.use(
+  "/api/activity-availability",
+  require("./routes/activity-availability"),
+);
 app.use("/api/activities", require("./routes/activities"));
 app.use("/api/activity-bookings", require("./routes/activity-bookings"));
 app.use("/api/activity-actions", require("./routes/activity-actions"));
 app.use("/api/guide-contact", require("./routes/guide-contact"));
-app.use("/api/activity-availability", require("./routes/activity-availability"));
+
 
 //Route event & dicovery
 app.use("/api/event", require("./routes/eventRoutes.js"));
