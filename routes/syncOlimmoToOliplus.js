@@ -11,13 +11,12 @@ const mapOliplusToOlimmo = require("../utils/mapOliplusToOlimmo");
  */
 router.post("/olimmo-to-oliplus", async (req, res) => {
   try {
-    const owner=await prisma.user.findFirst({
+
+     const owner=await prisma.user.findFirst({
       where:{email:"olimmoreunion@gmail.com"}
     })
-    
-    //1️⃣ récupérer OLIMMO
     const { data: olimmoProperties, error } = await supabaseolimmo
-      .from("properties_duplicate")
+      .from("properties")
       .select("*");
 
     if (error) throw error;
@@ -25,8 +24,20 @@ router.post("/olimmo-to-oliplus", async (req, res) => {
     let created = 0;
     let skipped = 0;
 
-    // 2️⃣ boucle de synchronisation
     for (const olimmo of olimmoProperties) {
+      // 🔹 Récupération des images OLIMMO
+      const { data: images, error: imagesError } = await supabaseolimmo
+        .from("property_images")
+        .select("image_url")
+        .eq("property_id", olimmo.id)
+        .order("image_order", { ascending: true });
+
+      if (imagesError) {
+        console.error("❌ Images error:", imagesError);
+      }
+
+      // 🔹 Injection des images dans l’objet olimmo
+      olimmo.images = images ? images.map(img => img.image_url) : [];
       const exists = await prisma.property.findUnique({
         where: { externalId: olimmo.id },
       });
@@ -35,6 +46,7 @@ router.post("/olimmo-to-oliplus", async (req, res) => {
         skipped++;
         continue;
       }
+
       const mapped = mapOlimmoToOliplus(olimmo,owner.id);
       await prisma.property.create({ data: mapped });
       created++;
@@ -43,7 +55,7 @@ router.post("/olimmo-to-oliplus", async (req, res) => {
     res.json({
       success: true,
       source: "OLIMMO → OLIPLUS",
-      totalFetched: olimmoProperties.length,
+      fetched: olimmoProperties.length,
       created,
       skipped,
     });
