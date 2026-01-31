@@ -17,7 +17,7 @@ router.get("/", async (req, res) => {
       maxPrice,
       location,
       featured,
-      guideId,
+      userId,
       limit = 12,
       page = 1,
     } = req.query;
@@ -38,6 +38,9 @@ router.get("/", async (req, res) => {
       }
     }
 
+    // Filtre par utilisateur pro
+    if (userId) where.userId = userId;
+
     // Filtre par recherche
     if (search) {
       where.OR = [
@@ -48,7 +51,6 @@ router.get("/", async (req, res) => {
     }
 
     if (level) where.level = level;
-    if (guideId) where.guideId = guideId;
     if (featured === "true") where.featured = true;
 
     // Filtre par prix
@@ -62,49 +64,26 @@ router.get("/", async (req, res) => {
       where.location = { contains: location, mode: "insensitive" };
     }
 
-    // Fonction pour anonymiser les données
-    const createAnonymousId = (uuid) => {
-      const crypto = require('crypto');
-      const salt = process.env.ANON_SALT || 'default-salt-change-in-production';
-      return 'guide_' + crypto
-        .createHash('sha256')
-        .update(uuid + salt)
-        .digest('hex')
-        .substring(0, 8)
-        .toUpperCase();
-    };
-
     const activities = await prisma.activity.findMany({
       where,
       include: {
-        guide: {
-          include: {
-            user: {
-              select: {
-                id: true, // Nécessaire pour l'anonymisation
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                email: false, // NE PAS exposer
-                phone: false, // NE PAS exposer
-              },
-            },
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            email: false,
+            phone: false,
           },
         },
         category: true,
-        availability: {
-          where: {
-            date: { gte: new Date() },
-            status: "available",
-            bookedSlots: { lt: prisma.activityAvailability.fields.slots },
+        // REMOVED: availabilities relation since it doesn't exist in new schema
+        // Les disponibilités sont maintenant gérées directement dans ActivityBooking
+        reviews: {
+          select: {
+            rating: true,
           },
-          orderBy: { date: "asc" },
-          take: 1,
-        },
-        statistics: true,
-        media: {
-          orderBy: { sortOrder: "asc" },
-          take: 3,
         },
         _count: {
           select: {
@@ -121,60 +100,28 @@ router.get("/", async (req, res) => {
 
     const total = await prisma.activity.count({ where });
 
-    // Anonymiser les données sensibles des guides
-    const securedActivities = activities.map(activity => {
-      const { guide, ...activityData } = activity;
-      
-      let securedGuide = null;
-      if (guide && guide.user) {
-        // Anonymiser les données du guide
-        securedGuide = {
-          id: guide.id, // ID du guide (peut rester si nécessaire pour les réservations)
-          user: {
-            // Anonymiser l'ID utilisateur
-            refId: createAnonymousId(guide.user.id),
-            // Limiter les informations personnelles
-            firstName: guide.user.firstName,
-            lastName: guide.user.lastName,
-            // Initiales pour les cas où le nom complet n'est pas nécessaire
-            initials: `${guide.user.firstName?.charAt(0) || ''}${guide.user.lastName?.charAt(0) || ''}`,
-            avatar: guide.user.avatar, // Avatar peut rester (donnée publique)
-            // NE PAS inclure: email, phone, etc.
-          },
-          // Inclure les informations professionnelles du guide
-          bio: guide.bio,
-          rating: guide.rating,
-          experienceYears: guide.experienceYears,
-          certifications: guide.certifications,
-          languages: guide.languages,
-          // Supprimer les données sensibles
-          userId: undefined,
-          createdAt: undefined,
-          updatedAt: undefined,
-        };
-      }
+    // Formater les données
+    const formattedActivities = activities.map((activity) => {
+      const { reviews, _count, ...activityData } = activity;
 
-      // Nettoyer les données sensibles de l'activité elle-même
-      const securedActivity = {
+      // Calculer la note moyenne
+      const averageRating =
+        reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+          : 0;
+
+      return {
         ...activityData,
-        guide: securedGuide,
-        // Supprimer les IDs sensibles si non nécessaires
-        guideId: undefined, // Ou garder si nécessaire pour le frontend
-        // Nettoyer d'autres données potentiellement sensibles
-        contactEmail: undefined,
-        contactPhone: undefined,
-        internalNotes: undefined,
+        rating: averageRating,
+        reviewCount: _count.reviews,
+        favoriteCount: _count.favorites,
+        bookingCount: _count.bookings,
       };
-
-      return securedActivity;
     });
-
-    // Logger l'accès pour audit
-    console.log(`[AUDIT] Activities fetched: ${securedActivities.length} activities, User: ${req.user?.id || 'anonymous'}, IP: ${req.ip}`);
 
     res.json({
       success: true,
-      data: securedActivities,
+      data: formattedActivities,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -184,14 +131,9 @@ router.get("/", async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching activities:", error);
-    // Ne pas exposer les détails de l'erreur en production
-    const errorMessage = process.env.NODE_ENV === 'production' 
-      ? "Erreur lors de la récupération des activités"
-      : error.message;
-    
     res.status(500).json({
       success: false,
-      error: errorMessage,
+      error: "Erreur lors de la récupération des activités",
     });
   }
 });
@@ -205,28 +147,20 @@ router.get("/:id", async (req, res) => {
     const activity = await prisma.activity.findUnique({
       where: { id },
       include: {
-        guide: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                phone: true,
-                email: true,
-              },
-            },
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            phone: true,
+            email: true,
+            professionalCategory: true,
+            companyName: true,
           },
         },
         category: true,
-        availability: {
-          where: {
-            date: { gte: new Date() },
-            status: "available",
-          },
-          orderBy: { date: "asc" },
-        },
+        // REMOVED: availabilities relation
         reviews: {
           include: {
             user: {
@@ -239,14 +173,6 @@ router.get("/:id", async (req, res) => {
           },
           orderBy: { createdAt: "desc" },
         },
-        media: {
-          orderBy: { sortOrder: "asc" },
-        },
-        faqs: {
-          where: { isActive: true },
-          orderBy: { order: "asc" },
-        },
-        statistics: true,
         _count: {
           select: {
             favorites: true,
@@ -342,72 +268,34 @@ router.post(
         title,
         description,
         categoryId,
-        icon,
+        shortDescription,
         price,
+        priceType,
         duration,
+        durationType,
         level,
         maxParticipants,
         minParticipants,
         location,
+        address,
         latitude,
         longitude,
         meetingPoint,
-        included,
+        includedItems,
         requirements,
         highlights,
         featured,
-        faqs,
       } = req.body;
 
-      // 🔥 MODIFICATION : Vérifier que l'utilisateur est un professionnel
-      if (req.user.role !== "professional") {
+      // Vérifier que l'utilisateur est un professionnel
+      if (req.user.role !== "professional" && req.user.role !== "admin") {
         return res.status(403).json({
           success: false,
           error: "Vous devez être un professionnel pour créer des activités",
         });
       }
 
-      // 🔄 NOUVELLE APPROCHE : Création automatique et robuste du profil guide
-      let guide;
-      try {
-        // Essayer de trouver un guide existant
-        guide = await prisma.activityGuide.findUnique({
-          where: { userId: req.user.id },
-        });
-
-        // Si pas de guide, en créer un automatiquement avec des valeurs par défaut
-        if (!guide) {
-          console.log(
-            `🆕 Création automatique du profil guide pour l'utilisateur: ${req.user.id}`
-          );
-
-          guide = await prisma.activityGuide.create({
-            data: {
-              userId: req.user.id,
-              bio: `Professionnel ${req.user.firstName} ${req.user.lastName}`,
-              specialties: ["Activités diverses"],
-              languages: ["Français"],
-              experience: 1,
-              certifications: ["Professionnel certifié"],
-              isVerified: false, // Non vérifié par défaut
-              hourlyRate: null, // Pas de tarif horaire par défaut
-              rating: 0,
-              reviewCount: 0,
-            },
-          });
-          console.log(`✅ Profil guide créé avec ID: ${guide.id}`);
-        }
-      } catch (guideError) {
-        console.error("❌ Erreur lors de la création du guide:", guideError);
-        return res.status(500).json({
-          success: false,
-          error: "Erreur lors de la configuration du profil guide",
-        });
-      }
-
-      const mainImage = req.files?.[0]?.path || req.body.image;
-
-      // 🔄 AMÉLIORATION : Validation des données avant création
+      // Validation des données
       if (!title || !description || !categoryId) {
         return res.status(400).json({
           success: false,
@@ -415,108 +303,74 @@ router.post(
         });
       }
 
-      // Créer l'activité
+      const mainImage = req.files?.[0]?.path || req.body.mainImage;
+
+      // Créer l'activité directement avec l'ID utilisateur
       const activity = await prisma.activity.create({
         data: {
           title: title.trim(),
           description: description.trim(),
+          shortDescription: shortDescription?.trim() || null,
           categoryId,
-          icon: icon || null,
-          image: mainImage,
+          userId: req.user.id,
+
+          // Informations pratiques
           price: price ? parseFloat(price) : null,
-          duration: duration || "2 heures",
-          level: level || "Tous niveaux",
-          maxParticipants: parseInt(maxParticipants) || 10,
+          priceType: priceType || null,
+          duration: duration ? parseInt(duration) : null,
+          durationType: durationType || null,
+          level: level || null,
+          maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
           minParticipants: parseInt(minParticipants) || 1,
-          location: location || "Non spécifié",
+
+          // Localisation
+          location: location || null,
+          address: address || null,
           latitude: latitude ? parseFloat(latitude) : null,
           longitude: longitude ? parseFloat(longitude) : null,
-          meetingPoint: meetingPoint || "À définir",
-          included: included ? JSON.parse(included) : [],
+          meetingPoint: meetingPoint || null,
+
+          // Images
+          mainImage,
+          images: req.files?.map((file) => file.path) || [],
+
+          // Informations supplémentaires
+          includedItems: includedItems ? JSON.parse(includedItems) : [],
           requirements: requirements ? JSON.parse(requirements) : [],
           highlights: highlights ? JSON.parse(highlights) : [],
+
+          // Statut
           featured: featured === "true",
-          guideId: guide.id,
-          statistics: {
-            create: {},
-          },
+          status: "draft",
         },
         include: {
-          guide: {
-            include: {
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                  email: true,
-                  phone: true,
-                },
-              },
+          creator: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              professionalCategory: true,
+              companyName: true,
             },
           },
           category: true,
         },
       });
 
-      // Gérer les médias supplémentaires
-      if (req.files && req.files.length > 1) {
-        const mediaData = req.files.slice(1).map((file, index) => ({
-          activityId: activity.id,
-          url: file.path,
-          type: "image",
-          sortOrder: index,
-          isPrimary: false,
-        }));
-
-        await prisma.activityMedia.createMany({
-          data: mediaData,
-        });
-      }
-
-      // Gérer les FAQ
-      if (faqs) {
-        try {
-          const faqData = JSON.parse(faqs).map((faq, index) => ({
-            activityId: activity.id,
-            question: faq.question,
-            answer: faq.answer,
-            order: index,
-            isActive: true,
-          }));
-
-          await prisma.activityFAQ.createMany({
-            data: faqData,
-          });
-        } catch (faqError) {
-          console.warn("⚠️ Erreur lors de la création des FAQ:", faqError);
-        }
-      }
-
-      // Notifier via WebSocket
-      if (req.io) {
-        req.io.emit("new-activity", {
-          type: "NEW_ACTIVITY",
-          activity,
-          message: `Nouvelle activité créée: ${title}`,
-        });
-      }
-
-      console.log(`🎉 Activité créée avec succès: ${activity.id}`);
       res.status(201).json({
         success: true,
         data: activity,
         message: "Activité créée avec succès",
       });
     } catch (error) {
-      console.error("❌ Error creating activity:", error);
+      console.error("Error creating activity:", error);
 
-      // 🔄 AMÉLIORATION : Message d'erreur plus détaillé
       let errorMessage = "Erreur lors de la création de l'activité";
       if (error.code === "P2002") {
         errorMessage = "Une activité avec ce titre existe déjà";
       } else if (error.code === "P2003") {
-        errorMessage = "Catégorie ou guide invalide";
+        errorMessage = "Catégorie invalide";
       }
 
       res.status(500).json({
@@ -526,7 +380,7 @@ router.post(
           process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
-  }
+  },
 );
 
 // PUT mettre à jour une activité
@@ -543,7 +397,6 @@ router.put(
       const activity = await prisma.activity.findUnique({
         where: { id },
         include: {
-          guide: true,
           category: true,
         },
       });
@@ -555,8 +408,8 @@ router.put(
         });
       }
 
-      // 🔥 MODIFICATION : Autoriser les professionnels propriétaires OU les admins
-      if (activity.guide.userId !== req.user.id && req.user.role !== "admin") {
+      // Autoriser les propriétaires OU les admins
+      if (activity.userId !== req.user.id && req.user.role !== "admin") {
         return res.status(403).json({
           success: false,
           error: "Non autorisé à modifier cette activité",
@@ -565,16 +418,24 @@ router.put(
 
       // Gérer l'upload d'image principale
       if (req.files?.[0]) {
-        updateData.image = req.files[0].path;
+        updateData.mainImage = req.files[0].path;
+        // Ajouter toutes les images
+        if (req.files.length > 0) {
+          updateData.images = req.files.map((file) => file.path);
+        }
       }
 
       // Parser les tableaux JSON
-      if (updateData.included)
-        updateData.included = JSON.parse(updateData.included);
-      if (updateData.requirements)
-        updateData.requirements = JSON.parse(updateData.requirements);
-      if (updateData.highlights)
-        updateData.highlights = JSON.parse(updateData.highlights);
+      const arrayFields = ["includedItems", "requirements", "highlights"];
+      arrayFields.forEach((field) => {
+        if (updateData[field]) {
+          try {
+            updateData[field] = JSON.parse(updateData[field]);
+          } catch (e) {
+            console.warn(`Failed to parse ${field}:`, e);
+          }
+        }
+      });
 
       const updatedActivity = await prisma.activity.update({
         where: { id },
@@ -583,15 +444,12 @@ router.put(
           updatedAt: new Date(),
         },
         include: {
-          guide: {
-            include: {
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                },
-              },
+          creator: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
             },
           },
           category: true,
@@ -610,35 +468,35 @@ router.put(
         error: "Erreur lors de la mise à jour de l'activité",
       });
     }
-  }
+  },
 );
 
-// 🔄 NOUVELLE ROUTE : Activités d'un guide spécifique
-router.get("/guide/:userId", async (req, res) => {
+// GET activités d'un utilisateur professionnel spécifique
+router.get("/user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
     const activities = await prisma.activity.findMany({
       where: {
-        guide: {
-          userId: userId,
-        },
+        userId: userId,
         status: "active",
       },
       include: {
-        guide: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            professionalCategory: true,
           },
         },
         category: true,
-        statistics: true,
+        reviews: {
+          select: {
+            rating: true,
+          },
+        },
         _count: {
           select: {
             reviews: true,
@@ -650,58 +508,126 @@ router.get("/guide/:userId", async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
+    // Formater avec la note moyenne
+    const formattedActivities = activities.map((activity) => {
+      const { reviews, _count, ...activityData } = activity;
+      const averageRating =
+        reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+          : 0;
+
+      return {
+        ...activityData,
+        rating: averageRating,
+        reviewCount: _count.reviews,
+        favoriteCount: _count.favorites,
+        bookingCount: _count.bookings,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: formattedActivities,
+    });
+  } catch (error) {
+    console.error("Error fetching user activities:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des activités",
+    });
+  }
+});
+
+// GET mes activités (pour le professionnel connecté)
+router.get("/my/activities", authenticateToken, async (req, res) => {
+  try {
+    const activities = await prisma.activity.findMany({
+      where: {
+        userId: req.user.id,
+      },
+      include: {
+        category: true,
+        // REMOVED: availabilities relation
+        _count: {
+          select: {
+            bookings: {
+              where: { status: { in: ["confirmed", "completed"] } },
+            },
+            reviews: true,
+            favorites: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
     res.json({
       success: true,
       data: activities,
     });
   } catch (error) {
-    console.error("Error fetching guide activities:", error);
+    console.error("Error fetching my activities:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la récupération des activités du guide",
+      error: "Erreur lors de la récupération de vos activités",
     });
   }
 });
-// Dans vos routes d'activités (activities.js), ajoutez :
 
 // GET activités favorites d'un utilisateur
-router.get("/favorites", authenticateToken, async (req, res) => {
+router.get("/favorites/my-favorites", authenticateToken, async (req, res) => {
   try {
     const favorites = await prisma.activityFavorite.findMany({
       where: { userId: req.user.id },
       include: {
         activity: {
           include: {
-            guide: {
-              include: {
-                user: {
-                  select: {
-                    firstName: true,
-                    lastName: true,
-                    avatar: true,
-                  },
-                },
+            creator: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
               },
             },
             category: true,
-            availability: {
-              where: {
-                date: { gte: new Date() },
-                status: "available",
+            // REMOVED: availabilities relation
+            reviews: {
+              select: {
+                rating: true,
               },
-              take: 1,
+            },
+            _count: {
+              select: {
+                reviews: true,
+              },
             },
           },
         },
       },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const formattedFavorites = favorites.map((fav) => {
+      const activity = fav.activity;
+      const reviews = activity.reviews || [];
+      const averageRating =
+        reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+          : 0;
+
+      return {
+        ...activity,
+        rating: averageRating,
+        reviewCount: activity._count.reviews,
+        isFavorite: true,
+        favoritedAt: fav.createdAt,
+      };
     });
 
     res.json({
       success: true,
-      data: favorites.map(fav => ({
-        ...fav.activity,
-        isFavorite: true,
-      })),
+      data: formattedFavorites,
     });
   } catch (error) {
     console.error("Error fetching favorites:", error);
@@ -712,119 +638,192 @@ router.get("/favorites", authenticateToken, async (req, res) => {
   }
 });
 
-// POST ajouter aux favoris
-router.post("/:id/favorite", authenticateToken, async (req, res) => {
+// POST ajouter/supprimer des favoris
+router.post("/:activityId/favorite", authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { activityId } = req.params;
 
-    const existing = await prisma.activityFavorite.findUnique({
+    const existingFavorite = await prisma.activityFavorite.findUnique({
       where: {
         userId_activityId: {
           userId: req.user.id,
-          activityId: id,
+          activityId,
         },
       },
     });
 
-    if (existing) {
-      return res.status(400).json({
+    if (existingFavorite) {
+      // Supprimer des favoris
+      await prisma.activityFavorite.delete({
+        where: {
+          userId_activityId: {
+            userId: req.user.id,
+            activityId,
+          },
+        },
+      });
+
+      res.json({
+        success: true,
+        action: "removed",
+        message: "Activité retirée des favoris",
+      });
+    } else {
+      // Ajouter aux favoris
+      await prisma.activityFavorite.create({
+        data: {
+          userId: req.user.id,
+          activityId,
+        },
+      });
+
+      res.json({
+        success: true,
+        action: "added",
+        message: "Activité ajoutée aux favoris",
+      });
+    }
+  } catch (error) {
+    console.error("Error toggling favorite:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la modification des favoris",
+    });
+  }
+});
+
+// POST ajouter un avis
+router.post("/:activityId/review", authenticateToken, async (req, res) => {
+  try {
+    const { activityId } = req.params;
+    const { bookingId, rating, comment, images } = req.body;
+
+    // Vérifier que l'utilisateur a bien réservé cette activité
+    const booking = await prisma.activityBooking.findFirst({
+      where: {
+        id: bookingId,
+        activityId,
+        userId: req.user.id,
+        status: "completed",
+      },
+    });
+
+    if (!booking) {
+      return res.status(403).json({
         success: false,
-        error: "Déjà dans les favoris",
+        error:
+          "Vous ne pouvez noter que les activités que vous avez réservées et terminées",
       });
     }
 
-    const favorite = await prisma.activityFavorite.create({
+    // Vérifier si un avis existe déjà pour cette réservation
+    const existingReview = await prisma.activityReview.findUnique({
+      where: { bookingId },
+    });
+
+    if (existingReview) {
+      return res.status(400).json({
+        success: false,
+        error: "Vous avez déjà noté cette réservation",
+      });
+    }
+
+    const review = await prisma.activityReview.create({
       data: {
+        activityId,
+        bookingId,
         userId: req.user.id,
-        activityId: id,
+        rating: parseInt(rating),
+        comment,
+        images: images || [],
+        verified: true,
       },
       include: {
-        activity: true,
-      },
-    });
-
-    res.json({
-      success: true,
-      data: favorite,
-      message: "Ajouté aux favoris",
-    });
-  } catch (error) {
-    console.error("Error adding favorite:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors de l'ajout aux favoris",
-    });
-  }
-});
-
-// DELETE retirer des favoris
-router.delete("/:id/favorite", authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await prisma.activityFavorite.delete({
-      where: {
-        userId_activityId: {
-          userId: req.user.id,
-          activityId: id,
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });
 
+    // Mettre à jour la note moyenne de l'activité
+    const activityReviews = await prisma.activityReview.findMany({
+      where: { activityId },
+    });
+
+    const averageRating =
+      activityReviews.reduce((sum, review) => sum + review.rating, 0) /
+      activityReviews.length;
+
+    await prisma.activity.update({
+      where: { id: activityId },
+      data: {
+        rating: averageRating,
+        reviewCount: activityReviews.length,
+      },
+    });
+
     res.json({
       success: true,
-      message: "Retiré des favoris",
+      data: review,
+      message: "Avis ajouté avec succès",
     });
   } catch (error) {
-    console.error("Error removing favorite:", error);
+    console.error("Error creating review:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors du retrait des favoris",
+      error: "Erreur lors de l'ajout de l'avis",
     });
   }
 });
 
-// Dans vos routes de disponibilités (availability.js), ajoutez cette route au début :
-
-// GET disponibilités pour une activité (version publique améliorée)
-router.get("/activity/:activityId", async (req, res) => {
+// PUT publier/dépublier une activité
+router.put("/:id/publish", authenticateToken, async (req, res) => {
   try {
-    const { activityId } = req.params;
-    const { startDate, endDate, availableOnly = "true" } = req.query;
+    const { id } = req.params;
+    const { publish } = req.body;
 
-    const where = { 
-      activityId,
-      status: "available"
-    };
+    const activity = await prisma.activity.findUnique({
+      where: { id },
+    });
 
-    if (startDate && endDate) {
-      where.date = {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
-      };
-    } else {
-      where.date = { gte: new Date() };
+    if (!activity) {
+      return res.status(404).json({
+        success: false,
+        error: "Activité non trouvée",
+      });
     }
 
-    // Filtrer par disponibilité
-    if (availableOnly === "true") {
-      where.bookedSlots = { lt: prisma.activityAvailability.fields.slots };
+    if (activity.userId !== req.user.id && req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé",
+      });
     }
 
-    const availability = await prisma.activityAvailability.findMany({
-      where,
-      orderBy: { date: "asc" },
+    const updatedActivity = await prisma.activity.update({
+      where: { id },
+      data: {
+        status: publish ? "active" : "draft",
+        publishedAt: publish ? new Date() : null,
+      },
     });
 
     res.json({
       success: true,
-      data: availability,
+      data: updatedActivity,
+      message: publish
+        ? "Activité publiée avec succès"
+        : "Activité mise en brouillon",
     });
   } catch (error) {
-    console.error("Error fetching availability:", error);
+    console.error("Error publishing activity:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la récupération des disponibilités",
+      error: "Erreur lors de la modification du statut",
     });
   }
 });

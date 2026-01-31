@@ -30,12 +30,6 @@ router.post("/:activityId/favorite", authenticateToken, async (req, res) => {
         },
       });
 
-      // Mettre à jour les statistiques
-      await prisma.activityStatistics.update({
-        where: { activityId },
-        data: { totalFavorites: { decrement: 1 } },
-      });
-
       res.json({
         success: true,
         action: "removed",
@@ -50,12 +44,6 @@ router.post("/:activityId/favorite", authenticateToken, async (req, res) => {
         },
       });
 
-      // Mettre à jour les statistiques
-      await prisma.activityStatistics.update({
-        where: { activityId },
-        data: { totalFavorites: { increment: 1 } },
-      });
-
       res.json({
         success: true,
         action: "added",
@@ -67,41 +55,6 @@ router.post("/:activityId/favorite", authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Erreur lors de la modification des favoris",
-    });
-  }
-});
-
-// POST partager une activité
-router.post("/:activityId/share", authenticateToken, async (req, res) => {
-  try {
-    const { activityId } = req.params;
-    const { platform, sharedWith } = req.body;
-
-    const share = await prisma.activityShare.create({
-      data: {
-        activityId,
-        userId: req.user.id,
-        platform,
-        sharedWith,
-      },
-    });
-
-    // Mettre à jour les statistiques
-    await prisma.activityStatistics.update({
-      where: { activityId },
-      data: { totalShares: { increment: 1 } },
-    });
-
-    res.json({
-      success: true,
-      data: share,
-      message: "Activité partagée avec succès",
-    });
-  } catch (error) {
-    console.error("Error sharing activity:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur lors du partage de l'activité",
     });
   }
 });
@@ -202,26 +155,21 @@ router.get("/favorites/my-favorites", authenticateToken, async (req, res) => {
       include: {
         activity: {
           include: {
-            guide: {
-              include: {
-                user: {
-                  select: {
-                    firstName: true,
-                    lastName: true,
-                    avatar: true,
-                  },
-                },
+            creator: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
               },
             },
             category: true,
-            availability: {
-              where: {
-                date: { gte: new Date() },
-                status: "available",
+            // REMOVED: availability relation
+            reviews: {
+              select: {
+                rating: true,
               },
-              take: 1,
             },
-            statistics: true,
             _count: {
               select: {
                 reviews: true,
@@ -233,12 +181,26 @@ router.get("/favorites/my-favorites", authenticateToken, async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
+    const formattedFavorites = favorites.map((fav) => {
+      const activity = fav.activity;
+      const reviews = activity.reviews || [];
+      const averageRating =
+        reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+          : 0;
+
+      return {
+        ...activity,
+        rating: averageRating,
+        reviewCount: activity._count.reviews,
+        isFavorite: true,
+        favoritedAt: fav.createdAt,
+      };
+    });
+
     res.json({
       success: true,
-      data: favorites.map((fav) => ({
-        ...fav.activity,
-        favoritedAt: fav.createdAt,
-      })),
+      data: formattedFavorites,
     });
   } catch (error) {
     console.error("Error fetching favorites:", error);

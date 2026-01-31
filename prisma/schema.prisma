@@ -95,174 +95,7 @@ model BlogCommentLike {
   @@index([userId])
 }
 
-//===================
-//UTILISATEUR - VERSION CORRIGÉE
-//===================
-model User {
-  id                        String                    @id @default(uuid())
-  email                     String                    @unique
-  passwordHash              String?
-  provider                  Json?
-  firstName                 String?
-  lastName                  String?
-  phone                     String?
-  role                      String                    @default("user")
-  createdAt                 DateTime                  @default(now())
-  updatedAt                 DateTime                  @updatedAt
-  resetToken                String?
-  resetTokenExpiry          DateTime?
-  status                    String                    @default("active")
-  companyName               String?
-  address                   String?
-  addressComplement         String?
-  city                      String?
-  commercialName            String?
-  demandType                String?
-  latitude                  Float?
-  longitude                 Float?
-  siren                     String?
-  siret                     String?
-  zipCode                   String?
-  avatar                    String?
-  userType                  String?
-  providerId                String?
-  providerName              String?
-  stripeCustomerId          String?
-  DevisClientToUser         String?                   @map("_DevisClientToUser")
-  DevisProviderToUser       String?                   @map("_DevisProviderToUser")
-  demandesFinancement       FinancementDemande[]
-  websiteUrl                String?
-  deletionRequestedAt       DateTime? // Date de la demande de suppression
-  deletionReason            String? // Raison de la suppression (optionnel)
-  // Relations existantes
-  blogArticles              BlogArticle[]             @relation("BlogArticleAuthor")
-  blogArticleLikes          BlogArticleLike[]         @relation("BlogArticleLikeUser")
-  blogComments              BlogComment[]             @relation("BlogCommentUser")
-  blogCommentLikes          BlogCommentLike[]         @relation("BlogCommentLikeUser")
-  properties                Property[]
-  favorites                 Favorite[]
-  metiers                   UtilisateurMetier[]
-  services                  UtilisateurService[]
-  demandesCrees             Demande[]                 @relation("DemandeCreePar")
-  demandesArtisan           DemandeArtisan[]          @relation("DemandeArtisanUser")
-  Product                   Product[]
-  Transaction               Transaction[]
-  Review                    Review[]
-  Appointment               Appointment[]
-  professionalCategory      String? // "real-estate", "artisan", "tourism", "sports", etc.
-  // RELATIONS ORDER CORRIGÉES
-  ordersClient              Order[]                   @relation("OrderClient") // Commandes passées en tant que client
-  ordersPrestataire         Order[]                   @relation("OrderPrestataire") // Commandes reçues en tant que prestataire
-  locationsClient           LocationSaisonniere[]     @relation("clientLocations")
-  patrimoines               Patrimoine[]
-  messagesEnvoyes           Message[]                 @relation("MessageExpediteur")
-  messagesRecus             Message[]                 @relation("MessageReceiver")
-  conversationsCrees        Conversation[]            @relation("ConversationCreateur")
-  conversationsParticipees  ConversationParticipant[]
-  devisRecus                Devis[]                   @relation("DevisClient")
-  devisEnvoyes              Devis[]                   @relation("DevisPrestataire")
-  subscriptions             Subscription[]
-  tourismeBookings          TourismeBooking[]
-  advertisements            Advertisement[]
-  demandesRecues            Demande[]                 @relation("DemandeArtisanSpecifique")
-  activities                UserActivity[]
-  preferences               UserPreference[]
-  events                    UserEvent[]
-  audits                    Audit[]
-  notifications             Notification[]
-  notificationsProprietaire Notification[]            @relation("UserProprietaireRelation")
-  refreshTokens             RefreshToken[] // Relation pour la gestion sécurisée des sessions
-  // RELATION POUR PODCAST 
-  podcasts                  Podcast[] // Podcasts créés par l'utilisateur
-  videos                    Video[] // Vidéos créées par l'utilisateur
-  mediaFavorites            UserMediaFavorite[] // Favoris médias de l'utilisateur
-  wellBeingStats            WellBeingStats? // Statistiques bien-être
-  ProfessionalSettings      ProfessionalSettings?
-  Document                  Document[]
-  ContratType               ContratType[]
-  DocumentArchive           DocumentArchive[]
-  reservationsCours         ReservationCours[]
-
-  // relation pour coursdomicil
-  courses            Course[]            @relation("UserCourses")
-  investmentRequests InvestmentRequest[]
-
-  tourismes              Tourisme[]
-  volsCrees              Flight[]                @relation("PrestataireVol")
-  volsReserves           Flight[]                @relation("ReservationVol")
-  touristicPlaceBookings TouristicPlaceBooking[]
-  flightReservations     ReservationFlight[]     @relation("ReservationVol")
-
-  flightReservationsReceived ReservationFlight[] @relation("PrestataireVolReservation")
-
-  // Nouvelle relation avec FinancementPartenaire
-  financementPartenaires FinancementPartenaire[]
-
-  rendezvousEntreprise RendezvousEntreprise[] // Liste des rendez-vous demandés pour l'entreprise
-
-  // RELATIONS POUR EVENTS ET DISCOVERIES
-  eventsDisco Event[] // Événements créés par l'utilisateur dans discovery et dans event
-  discoveries Discovery[] // Découvertes créées par l'utilisateur
-
-  // ======================
-  // NOUVELLES RELATIONS POUR ACTIVITÉS - VERSION CORRIGÉE
-  // ======================
-  activityBookings       ActivityBooking[]
-  activityFavorites      ActivityFavorite[]
-  activityShares         ActivityShare[]
-  activityReviews        ActivityReview[]
-  activityGuide          ActivityGuide?
-  guideContacts          GuideContact[] // AJOUT: Relation manquante
-  messagesRecusContact   ContactMessage[]   @relation("ContactMessageRecipient")
-  messagesEnvoyesContact ContactMessage[]   @relation("ContactMessageSender")
-  servicesCrees          Service[] // ✅ AJOUT: Relation avec les services créés par le professionnel
-  demandesDroitFamille   DroitFamille[]
-  //relation pour le demande de conseil
-  demandesConseil        DemandeConseil[]   @relation("UserDemandesConseil")
-  expertDemandesConseil  DemandeConseil[]   @relation("ExpertDemandesConseil")
-  suivisConseil          SuiviConseil[]
-
-  portraitsCreated PortraitLocal[] // Portraits créés par l'utilisateur
-  portraitShares   PortraitShare[] // Partages effectués
-  portraitListens  PortraitListen[] // Écoutes des portraits
-  portraitComments PortraitComment[] // Commentaires sur les portraits
-
-  // AJOUTEZ CES RELATIONS À LA FIN DU MODÈLE USER :
-  formations       Formation[]
-  emplois          Emploi[]
-  alternanceStages AlternanceStage[]
-  candidatures     Candidature[] // Si c'est l'utilisateur qui candidate
-
-  projets Projet[]
-
-  //relatio pour bon plan et conseil
-  conseilsCrees    Conseil[]         @relation("UserConseils") // Conseils créés par l'utilisateur
-  conseilSaves     ConseilSave[]     @relation("UserSaves") // Conseils sauvegardés par l'utilisateur
-  conseilViews     ConseilView[]     @relation("UserViews") // Conseils vus par l'utilisateur
-  conseilBookmarks ConseilBookmark[] @relation("UserBookmarks") // Conseils bookmarkés par l'utilisateur
-  parapentes Parapente[]
-
-  //vehicules
-  vehiculesProprietaire            Vehicule[] // Véhicules que l'utilisateur propose à la location
-  reservationsVehiculesClient      ReservationVehicule[]   @relation("ReservationVehiculeClient")
-  reservationsVehiculesPrestataire ReservationVehicule[]   @relation("ReservationVehiculePrestataire")
-  avisVehicules                    AvisVehicule[] // Avis laissés sur les véhicules
-  experiencesCreated               Experience[]            @relation("ExperienceCreatedBy")
-  experiencesGuided                Experience[]            @relation("ExperienceGuide")
-  experienceBookings               ExperienceBooking[]
-  experienceReviews                ExperienceReview[]
-  experienceFavorites              ExperienceFavorite[]
-  // interviews       EntrepreneurInterview[] // Interviews créées par l'utilisateur
-  resources                        EntrepreneurResource[] // Ressources créées par l'utilisateur
-  eventsEntrepreneurs              EntrepreneurEvent[] // Événements créés par l'utilisateur
-  interviewInteractions            InterviewInteraction[] // Interactions avec les interviews
-  entrepreneurInterviews           EntrepreneurInterview[]
-
-  @@index([userType]) // Pour filtrer facilement les professionnels
-  @@index([email])
-  @@index([role])
-  @@index([status])
-}
+s
 
 //===================
 //REQUETES DE MOT DE PASSE OUBLIER
@@ -497,11 +330,11 @@ model Property {
   rentType             String?                @default("longue_duree")
   embedding            Unsupported("vector")?
   locationSaisonnieres LocationSaisonniere[]
-  externalSource String?
-  externalId     Int?      @unique
-  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  favorites Favorite[]
-  demandes  Demande[]
+  externalSource       String?
+  externalId           Int?                   @unique
+  owner                User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  favorites            Favorite[]
+  demandes             Demande[]
 
   @@index([city])
   @@index([type])
@@ -675,11 +508,12 @@ model MetierService {
 //METIER D'UN UTILISATEUR
 //===================
 model UtilisateurMetier {
-  userId   String
-  metierId Int
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  metier   Metier @relation(fields: [metierId], references: [id])
+  userId                String
+  metierId              Int
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metier                Metier  @relation(fields: [metierId], references: [id])
   descriptionMetierUser String? // ✅ Description personnalisée du métier par l'utilisateur
+
   @@id([userId, metierId])
 }
 
@@ -1745,7 +1579,7 @@ model ReservationFlight {
 }
 
 // ======================
-// ACTIVITÉS ET LOISIRS - NOUVEAUX MODÈLES
+// ACTIVITÉS ET LOISIRS - MODÈLES MIS A JOUR
 // ======================
 
 // Catégories organisées
@@ -1765,195 +1599,122 @@ model ActivityCategory {
   @@index([sortOrder])
 }
 
-// Guides spécialisés
-model ActivityGuide {
-  id             String   @id @default(uuid())
-  userId         String   @unique
-  bio            String?
-  specialties    String[]
-  languages      String[]
-  experience     Int? // années d'expérience
-  certifications String[]
-  rating         Float    @default(0)
-  reviewCount    Int      @default(0)
-  isVerified     Boolean  @default(false)
-  hourlyRate     Float?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activities    Activity[]
-  availability  RecurringAvailability[]
-  guideContacts GuideContact[]
-
-  @@index([isVerified])
-  @@index([rating])
-}
-
-// Activités principales
+// Activité principale (table essentielle)
 model Activity {
-  id              String   @id @default(uuid())
-  title           String
-  description     String
-  categoryId      String
-  icon            String?
-  image           String
+  id               String  @id @default(uuid())
+  title            String
+  description      String
+  shortDescription String? // Pour les aperçus
+  categoryId       String
+  userId           String // ID de l'utilisateur pro qui a créé l'activité
+
+  // Informations pratiques
   price           Float?
-  duration        String
-  level           String
-  maxParticipants Int
-  minParticipants Int
-  location        String?
-  latitude        Float?
-  longitude       Float?
-  meetingPoint    String?
-  included        String[]
-  requirements    String[]
-  highlights      String[]
-  status          String   @default("active")
-  featured        Boolean  @default(false)
-  rating          Float    @default(0)
-  reviewCount     Int      @default(0)
-  viewCount       Int      @default(0)
-  guideId         String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  priceType       String? // "per_person", "per_group", "per_hour"
+  duration        Int? // Durée en minutes
+  durationType    String? // "minutes", "hours", "days"
+  level           String? // "beginner", "intermediate", "advanced", "all"
+  maxParticipants Int?
+  minParticipants Int     @default(1)
+
+  // Localisation
+  location     String?
+  address      String?
+  latitude     Float?
+  longitude    Float?
+  meetingPoint String?
+
+  // Images
+  mainImage String?
+  images    String[] // Tableau d'URLs d'images
+
+  // Informations supplémentaires
+  includedItems String[] // Éléments inclus
+  requirements  String[] // Prérequis/équipement
+  highlights    String[] // Points forts
+
+  // Statut et métriques
+  status       String  @default("draft") // draft, active, inactive, archived
+  featured     Boolean @default(false)
+  rating       Float   @default(0)
+  reviewCount  Int     @default(0)
+  viewCount    Int     @default(0)
+  bookingCount Int     @default(0)
+
+  // Dates
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
 
   // Relations
-  guide         ActivityGuide          @relation(fields: [guideId], references: [id], onDelete: Cascade)
-  category      ActivityCategory       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  bookings      ActivityBooking[]
-  reviews       ActivityReview[]
-  availability  ActivityAvailability[]
-  favorites     ActivityFavorite[]
-  shares        ActivityShare[]
-  statistics    ActivityStatistics?
-  media         ActivityMedia[]
-  faqs          ActivityFAQ[]
-  promotions    ActivityPromotion[]
-  guideContacts GuideContact[]
+  category  ActivityCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  creator   User               @relation("ActivityCreator", fields: [userId], references: [id], onDelete: Cascade)
+  bookings  ActivityBooking[]
+  reviews   ActivityReview[]
+  favorites ActivityFavorite[]
 
-  @@index([guideId])
+  // Index
+  @@index([userId])
   @@index([categoryId])
   @@index([status])
   @@index([featured])
   @@index([createdAt])
+  @@index([rating])
+  @@index([location])
 }
 
-// Médias supplémentaires
-model ActivityMedia {
-  id         String   @id @default(uuid())
-  activityId String
-  url        String
-  type       String // "image", "video"
-  caption    String?
-  sortOrder  Int      @default(0)
-  isPrimary  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-
-  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-
-  @@index([activityId])
-  @@index([sortOrder])
-}
-
-// FAQ dynamique
-model ActivityFAQ {
-  id         String   @id @default(uuid())
-  activityId String
-  question   String
-  answer     String
-  order      Int      @default(0)
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-
-  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-
-  @@index([activityId])
-  @@index([isActive])
-  @@index([order])
-}
-
-// Disponibilités récurrentes
-model RecurringAvailability {
-  id        String   @id @default(uuid())
-  guideId   String
-  dayOfWeek Int // 0: Dimanche, 1: Lundi, etc.
-  startTime String // "09:00"
-  endTime   String // "18:00"
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  guide ActivityGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
-
-  @@unique([guideId, dayOfWeek])
-  @@index([guideId])
-  @@index([dayOfWeek])
-}
-
-// Disponibilités spécifiques
-model ActivityAvailability {
-  id          String   @id @default(uuid())
-  activityId  String
-  date        DateTime
-  startTime   String
-  endTime     String
-  slots       Int
-  bookedSlots Int      @default(0)
-  price       Float?
-  status      String   @default("available")
-  createdAt   DateTime @default(now())
-
-  activity Activity          @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  bookings ActivityBooking[]
-
-  @@index([activityId])
-  @@index([date])
-  @@index([status])
-}
-
-// Réservations
 model ActivityBooking {
-  id                  String    @id @default(uuid())
-  activityId          String
-  availabilityId      String
-  userId              String
-  participants        Int
-  totalAmount         Float
-  status              String    @default("pending")
-  paymentStatus       String    @default("pending")
-  paymentMethod       String?
-  stripePaymentIntent String?
-  specialRequests     String?
-  cancellationReason  String?
-  bookedAt            DateTime  @default(now())
-  cancelledAt         DateTime?
-  confirmedAt         DateTime?
-  completedAt         DateTime?
+  id         String @id @default(uuid())
+  activityId String
+  userId     String
+
+  // 📅 Date choisie par le client
+  bookingDate DateTime
+  startTime   String? // "08:00"
+  endTime     String? // "10:00"
+
+  // Réservation
+  participants  Int    @default(1)
+  totalAmount   Float
+  status        String @default("pending")
+  paymentStatus String @default("pending")
+
+  // Infos client
+  participantNames  String[]
+  participantEmails String[]
+  specialRequests   String?
+
+  bookedAt    DateTime  @default(now())
+  confirmedAt DateTime?
+  cancelledAt DateTime?
 
   // Relations
-  activity     Activity             @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  availability ActivityAvailability @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
-  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  review       ActivityReview?
+  activity Activity        @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  review   ActivityReview?
 
   @@index([activityId])
   @@index([userId])
-  @@index([status])
-  @@index([paymentStatus])
-  @@index([bookedAt])
+  @@index([bookingDate])
 }
 
-// Avis
+// Avis (table essentielle)
 model ActivityReview {
   id         String   @id @default(uuid())
   activityId String
   bookingId  String   @unique
   userId     String
   rating     Int // 1-5
+  title    
+  @@index([activityId, bookingDate, startTime, endTime])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([bookedAt])
+  String?
   comment    String?
   images     String[]
-  verified   Boolean  @default(false)
+  verified   Boolean  @default(false) // Vérifié si provenant d'une réservation réelle
+  helpful    Int      @default(0) // Nombre de "utile"
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -1965,9 +1726,10 @@ model ActivityReview {
   @@index([userId])
   @@index([rating])
   @@index([createdAt])
+  @@index([verified])
 }
 
-// Favoris
+// Favoris (table essentielle)
 model ActivityFavorite {
   id         String   @id @default(uuid())
   activityId String
@@ -1980,89 +1742,6 @@ model ActivityFavorite {
   @@unique([userId, activityId])
   @@index([userId])
   @@index([activityId])
-}
-
-// Partages
-model ActivityShare {
-  id         String   @id @default(uuid())
-  activityId String
-  userId     String
-  platform   String // facebook, twitter, whatsapp, email, etc.
-  sharedWith String? // email ou identifiant de la personne
-  createdAt  DateTime @default(now())
-
-  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([activityId])
-  @@index([platform])
-}
-
-// Promotions
-model ActivityPromotion {
-  id              String   @id @default(uuid())
-  activityId      String
-  code            String   @unique
-  discountType    String // "percentage", "fixed"
-  discountValue   Float
-  minParticipants Int?
-  validFrom       DateTime
-  validUntil      DateTime
-  usageLimit      Int?
-  usedCount       Int      @default(0)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-
-  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-
-  @@index([activityId])
-  @@index([code])
-  @@index([isActive])
-  @@index([validFrom, validUntil])
-}
-
-// Statistiques
-model ActivityStatistics {
-  id                String   @id @default(uuid())
-  activityId        String   @unique
-  totalBookings     Int      @default(0)
-  completedBookings Int      @default(0)
-  cancelledBookings Int      @default(0)
-  totalRevenue      Float    @default(0)
-  averageRating     Float    @default(0)
-  totalShares       Int      @default(0)
-  totalFavorites    Int      @default(0)
-  lastUpdated       DateTime @default(now())
-
-  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-
-  @@index([activityId])
-}
-
-// Contact guides
-model GuideContact {
-  id          String    @id @default(uuid())
-  guideId     String
-  userId      String?
-  name        String
-  email       String
-  phone       String?
-  message     String
-  activityId  String?
-  status      String    @default("new")
-  respondedAt DateTime?
-  createdAt   DateTime  @default(now())
-
-  guide    ActivityGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
-  user     User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activity Activity?     @relation(fields: [activityId], references: [id], onDelete: Cascade)
-
-  @@index([guideId])
-  @@index([userId])
-  @@index([activityId])
-  @@index([status])
-  @@index([createdAt])
 }
 
 // ======================
@@ -3345,6 +3024,125 @@ model EntrepreneurResource {
   fileUrl      String
   fileSize     String?
   fileType     String? // pdf, doc, xlsx, etc.
+  thumbnailUrl String?
+
+  // Métadonnées
+  tags      String[]
+  downloads Int      @default(0)
+  isFree    Boolean  @default(true)
+
+  // Relations
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  // Statut
+  status     String  @default("draft") // draft, published, archived
+  isFeatured Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([category])
+  @@index([status])
+  @@index([isFeatured])
+  @@index([authorId])
+}
+
+// Table pour les événements (webinars, workshops)
+model EntrepreneurEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  format      String // webinar, workshop, networking, conference
+  date        DateTime
+  time        String // "18:30"
+  duration    String? // "2h"
+
+  // Information sur le/les intervenants
+  speakers     String[] // Noms des intervenants
+  speakerRoles String[] // Rôles des intervenants
+
+  // Inscriptions
+  registered         Int     @default(0)
+  maxParticipants    Int?
+  isRegistrationOpen Boolean @default(true)
+
+  // Informations pratiques
+  location     String? // Pour les événements physiques
+  onlineLink   String? // Lien Zoom/Teams/etc.
+  recordingUrl String? // Enregistrement après l'événement
+
+  // Relations
+  organizerId String?
+  organizer   User?   @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+
+  // Statut
+  status String @default("upcoming") // upcoming, live, completed, cancelled
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([format])
+  @@index([date])
+  @@index([status])
+  @@index([organizerId])
+}
+
+// Table pour les statistiques d'interaction (optionnelle mais utile)
+model InterviewInteraction {
+  id          String  @id @default(uuid())
+  interviewId String
+  userId      String?
+  action      String // view, listen, share, like, bookmark
+  duration    Int? // Durée d'écoute/visionnage en secondes
+  completed   Boolean @default(false) // Écoute/visionnage complet
+  platform    String? // web, mobile, app
+
+  ipAddress String?
+  userAgent String?
+
+  interview EntrepreneurInterview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  user      User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([interviewId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// Prix de livraison pour chaque categorie
+model DeliveryPrice {
+  id        String   @id @default(uuid())
+  category  String   @unique
+  price     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+model Parapente {
+  id String @id @default(uuid())
+
+  title       String
+  description String
+  price       Float
+  location    String
+  images      String[] // base64 ou URLs
+
+  // 🔗 Relation User
+  idUser String
+  user   User   @relation(fields: [idUser], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([idUser])
+}
+leType     String? // pdf, doc, xlsx, etc.
   thumbnailUrl String?
 
   // Métadonnées

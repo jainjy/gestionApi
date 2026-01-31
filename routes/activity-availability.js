@@ -5,13 +5,16 @@ const { authenticateToken } = require("../middleware/auth");
 
 const prisma = new PrismaClient();
 
-// GET disponibilités d'une activité
+// GET disponibilités d'une activité (publique)
 router.get("/activity/:activityId", async (req, res) => {
   try {
     const { activityId } = req.params;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, availableOnly = "true" } = req.query;
 
-    const where = { activityId };
+    const where = {
+      activityId,
+      status: "available",
+    };
 
     if (startDate && endDate) {
       where.date = {
@@ -20,6 +23,11 @@ router.get("/activity/:activityId", async (req, res) => {
       };
     } else {
       where.date = { gte: new Date() };
+    }
+
+    // Filtrer par disponibilité
+    if (availableOnly === "true") {
+      where.bookedSlots = { lt: prisma.activityAvailability.fields.slots };
     }
 
     const availability = await prisma.activityAvailability.findMany({
@@ -40,15 +48,14 @@ router.get("/activity/:activityId", async (req, res) => {
   }
 });
 
-// POST créer une disponibilité (pour les guides)
+// POST créer une disponibilité (pour les propriétaires d'activités)
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const { activityId, date, startTime, endTime, slots, price } = req.body;
 
-    // Vérifier que l'utilisateur est le guide de cette activité
+    // Vérifier que l'utilisateur est le propriétaire de cette activité
     const activity = await prisma.activity.findUnique({
       where: { id: activityId },
-      include: { guide: true },
     });
 
     if (!activity) {
@@ -58,7 +65,7 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    if (activity.guide.userId !== req.user.id) {
+    if (activity.userId !== req.user.id && req.user.role !== "admin") {
       return res.status(403).json({
         success: false,
         error: "Non autorisé à modifier les disponibilités de cette activité",
@@ -99,9 +106,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
     const availability = await prisma.activityAvailability.findUnique({
       where: { id },
       include: {
-        activity: {
-          include: { guide: true },
-        },
+        activity: true,
       },
     });
 
@@ -112,7 +117,10 @@ router.put("/:id", authenticateToken, async (req, res) => {
       });
     }
 
-    if (availability.activity.guide.userId !== req.user.id) {
+    if (
+      availability.activity.userId !== req.user.id &&
+      req.user.role !== "admin"
+    ) {
       return res.status(403).json({
         success: false,
         error: "Non autorisé à modifier cette disponibilité",
@@ -146,9 +154,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     const availability = await prisma.activityAvailability.findUnique({
       where: { id },
       include: {
-        activity: {
-          include: { guide: true },
-        },
+        activity: true,
         bookings: {
           where: {
             status: { not: "cancelled" },
@@ -164,7 +170,10 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       });
     }
 
-    if (availability.activity.guide.userId !== req.user.id) {
+    if (
+      availability.activity.userId !== req.user.id &&
+      req.user.role !== "admin"
+    ) {
       return res.status(403).json({
         success: false,
         error: "Non autorisé à supprimer cette disponibilité",
@@ -193,6 +202,60 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Erreur lors de la suppression de la disponibilité",
+    });
+  }
+});
+
+// POST créer plusieurs disponibilités (batch)
+router.post("/batch", authenticateToken, async (req, res) => {
+  try {
+    const { activityId, availabilities } = req.body;
+
+    // Vérifier que l'utilisateur est le propriétaire
+    const activity = await prisma.activity.findUnique({
+      where: { id: activityId },
+    });
+
+    if (!activity) {
+      return res.status(404).json({
+        success: false,
+        error: "Activité non trouvée",
+      });
+    }
+
+    if (activity.userId !== req.user.id && req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        error: "Non autorisé",
+      });
+    }
+
+    // Créer toutes les disponibilités
+    const createdAvailabilities = await prisma.$transaction(
+      availabilities.map((avail) =>
+        prisma.activityAvailability.create({
+          data: {
+            activityId,
+            date: new Date(avail.date),
+            startTime: avail.startTime,
+            endTime: avail.endTime,
+            slots: parseInt(avail.slots),
+            price: avail.price ? parseFloat(avail.price) : null,
+          },
+        }),
+      ),
+    );
+
+    res.status(201).json({
+      success: true,
+      data: createdAvailabilities,
+      message: `${createdAvailabilities.length} disponibilités créées`,
+    });
+  } catch (error) {
+    console.error("Error creating batch availability:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la création des disponibilités",
     });
   }
 });
