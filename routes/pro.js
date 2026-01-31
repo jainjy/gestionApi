@@ -5,7 +5,7 @@ const { prisma } = require("../lib/db");
 
 // ROUTE PRINCIPALE - AVEC NOTES ET TRI
 router.get("/", async (req, res) => {
-  console.log("Requête /api/pro reçue avec query:", req.query);
+  console.log("Requête /api/professionnels reçue avec query:", req.query);
 
   try {
     const {
@@ -20,9 +20,21 @@ router.get("/", async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
-    // Construire les filtres
+    // Construire les filtres - SEULEMENT pour prestataires/professionnels
     const where = {
-      OR: [{ role: "professional" }, { userType: "PRESTATAIRE" }],
+      OR: [
+        { role: "professional" },
+        { userType: "PRESTATAIRE" },
+        { userType: "PROFESSIONAL" }
+      ],
+      // EXCLURE les propriétaires
+      NOT: {
+        OR: [
+          { userType: "PROPRIETARY" },
+          { role: "property" },
+          { userType: { contains: "PROPERTY", mode: "insensitive" } }
+        ]
+      }
     };
 
     // Filtre par recherche
@@ -37,7 +49,6 @@ router.get("/", async (req, res) => {
       ];
 
       where.AND = [{ OR: where.OR }, { OR: searchConditions }];
-
       delete where.OR;
     }
 
@@ -62,7 +73,7 @@ router.get("/", async (req, res) => {
     const orderBy = {};
     switch (sort) {
       case "rating":
-        // Note: vous devrez ajuster selon votre structure de données
+        // Si vous avez une relation Review, utilisez-la ici
         // Pour l'instant, on trie par date
         orderBy.createdAt = "desc";
         break;
@@ -76,7 +87,7 @@ router.get("/", async (req, res) => {
         break;
     }
 
-    // Récupérer les professionnels AVEC LES NOTES (si elles existent)
+    // Récupérer les professionnels AVEC LES CHAMPS DE LOCALISATION (champs existants)
     const professionals = await prisma.user.findMany({
       where,
       skip,
@@ -96,7 +107,13 @@ router.get("/", async (req, res) => {
         city: true,
         zipCode: true,
         createdAt: true,
-
+        // CHAMPS DE LOCALISATION DISPONIBLES DANS VOTRE SCHEMA
+        latitude: true,
+        longitude: true,
+        addressComplement: true, // Alternative à description
+        websiteUrl: true, // Utiliser websiteUrl au lieu de website
+        professionalCategory: true, // Alternative à specialty
+        
         // Note: Vous devrez ajouter une relation Review pour calculer les notes
         // Pour l'instant, nous simulons les notes
 
@@ -120,6 +137,10 @@ router.get("/", async (req, res) => {
       ...pro,
       rating: Math.random() * 2 + 3, // 3-5 étoiles
       reviewCount: Math.floor(Math.random() * 50),
+      // Ajouter des champs pour la compatibilité avec la carte
+      description: pro.addressComplement || pro.companyName || pro.professionalCategory || "",
+      website: pro.websiteUrl || "",
+      specialty: pro.professionalCategory || pro.companyName || "",
     }));
 
     // Compter le total
@@ -144,7 +165,6 @@ router.get("/", async (req, res) => {
     });
   }
 });
-
 // ROUTE POUR LES MÉTIERS DISPONIBLES
 router.get("/metiers/disponibles", async (req, res) => {
   try {

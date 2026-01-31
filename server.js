@@ -393,7 +393,6 @@ app.use("/api/services-ibr", require("./routes/services-ibr"));
 app.use("/api/locations-saisonnieres", require("./routes/locations-saisonniere"));
 app.use("/api/portraits", require("./routes/portraits"));
 app.use("/api/pro", require("./routes/pro"));
-
 app.use("/api/oliplus-email", require("./routes/oliplusEmailRoutes"));
 // Route pour upload multiple
 app.post(
