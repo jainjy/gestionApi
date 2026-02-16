@@ -786,6 +786,15 @@ model Demande {
   devis         String?
   devis_demande Devis[]
 
+  // Champs IA de qualification
+  aiSummary      String?   @db.Text
+  aiClass        String?   // "urgent" | "devis" | "simple info"
+  aiScore        String?   // "chaud" | "tiède" | "froid"
+  aiBudget       String?   // Budget estimé par l'IA
+  aiInterventionTime String? // Délai d'intervention estimé
+  aiProcessedAt  DateTime? // Date de traitement par l'IA
+  aiConfidence   Float?    // Niveau de confiance de l'IA (0-1)
+
   @@index([propertyId])
   @@index([createdById])
   @@index([serviceId])
