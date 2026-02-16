@@ -1,6 +1,6 @@
 const express = require("express");
 const { prisma } = require("../lib/db");
-const { uploadAudio, uploadVideo, manualCleanup } = require("../middleware/uploadMedia");
+const { uploadAudio, uploadVideo, manualCleanup, uploadImage } = require("../middleware/uploadMedia");
 const { supabase } = require("../lib/supabase");
 const fs = require('fs');
 const router = express.Router();
@@ -259,69 +259,40 @@ router.get("/categories", async (req, res) => {
 });
 
 // POST /api/admin/media/podcasts - Créer un podcast
-router.post("/podcasts", uploadAudio, async (req, res) => {
+router.post("/podcasts", async (req, res) => {  // ← Enlever uploadAudio
   try {
-    const { title, description, category, isActive = true, duration } = req.body;
+    const { title, description, category, isActive = true, duration, mediaUrl } = req.body;
     
-    console.log('🎧 [CREATE PODCAST] Données reçues:', { title, description, category, isActive, duration });
+    console.log('🎧 [CREATE PODCAST] Données reçues:', { title, description, category, isActive, duration, mediaUrl });
 
     if (!title) {
-      console.log('❌ [CREATE PODCAST] Titre manquant');
-      manualCleanup(req.files);
       return res.status(400).json({
         success: false,
         message: "Le titre est requis"
       });
     }
 
-    // Upload vers Supabase
-    const audioFile = req.files.audio[0];
-    const thumbnailFile = req.files.thumbnail ? req.files.thumbnail[0] : null;
-
-    let audioUrl = null;
-    let thumbnailUrl = null;
-    let fileSize = null;
-    let mimeType = null;
-    let storagePath = null;
-
-    console.log('📁 [CREATE PODCAST] Début upload vers Supabase...');
-
-    // Upload audio avec BUFFER
-    if (audioFile) {
-      console.log('📤 [CREATE PODCAST] Upload audio:', audioFile.originalname, `(${(audioFile.size / (1024 * 1024)).toFixed(2)} MB)`);
-      
-      const audioBuffer = fs.readFileSync(audioFile.path);
-      const fileName = `podcasts/audio/${Date.now()}-${audioFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      
-      const { data: audioData, error: audioError } = await supabase.storage
-        .from('media')
-        .upload(fileName, audioBuffer, {
-          contentType: audioFile.mimetype,
-          cacheControl: '3600'
-        });
-
-      if (audioError) {
-        console.error('❌ [CREATE PODCAST] Erreur upload audio:', audioError);
-        manualCleanup(req.files);
-        return res.status(500).json({
-          success: false,
-          message: "Erreur lors de l'upload de l'audio: " + audioError.message
-        });
-      }
-
-      console.log('✅ [CREATE PODCAST] Audio uploadé avec succès:', audioData.path);
-      const { data: urlData } = supabase.storage.from('media').getPublicUrl(audioData.path);
-      audioUrl = urlData.publicUrl;
-      fileSize = audioFile.size;
-      mimeType = audioFile.mimetype;
-      storagePath = audioData.path;
-      console.log('🔗 [CREATE PODCAST] URL audio:', audioUrl);
+    if (!mediaUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "L'URL du média est requise"
+      });
     }
 
-    // Upload thumbnail avec BUFFER
-    if (thumbnailFile) {
-      console.log('📤 [CREATE PODCAST] Upload thumbnail:', thumbnailFile.originalname);
-      
+    // Validation optionnelle de l'URL
+    try {
+      new URL(mediaUrl);
+    } catch {
+      return res.status(400).json({
+        success: false,
+        message: "URL invalide"
+      });
+    }
+
+    // Upload de la miniature si présente (optionnel)
+    let thumbnailUrl = null;
+    if (req.files?.thumbnail) {
+      const thumbnailFile = req.files.thumbnail[0];
       const thumbnailBuffer = fs.readFileSync(thumbnailFile.path);
       const thumbnailName = `podcasts/thumbnails/${Date.now()}-${thumbnailFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       
@@ -332,36 +303,27 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
           cacheControl: '3600'
         });
 
-      if (thumbnailError) {
-        console.error('❌ [CREATE PODCAST] Erreur upload thumbnail:', thumbnailError);
-        manualCleanup(req.files);
-        return res.status(500).json({
-          success: false,
-          message: "Erreur lors de l'upload de la miniature: " + thumbnailError.message
-        });
+      if (!thumbnailError) {
+        const { data: urlData } = supabase.storage.from('media').getPublicUrl(thumbnailData.path);
+        thumbnailUrl = urlData.publicUrl;
       }
-
-      console.log('✅ [CREATE PODCAST] Thumbnail uploadé avec succès:', thumbnailData.path);
-      const { data: urlData } = supabase.storage.from('media').getPublicUrl(thumbnailData.path);
-      thumbnailUrl = urlData.publicUrl;
-      console.log('🔗 [CREATE PODCAST] URL thumbnail:', thumbnailUrl);
     }
 
     // Créer le podcast dans la base de données
-    console.log('💾 [CREATE PODCAST] Création en base de données...');
     const podcast = await prisma.podcast.create({
       data: {
         title,
         description,
-        audioUrl,
+        audioUrl: mediaUrl,  // ← Utiliser l'URL fournie
         thumbnailUrl,
         category: category || null,
         isActive: isActive === 'true',
         listens: 0,
         duration: duration || "00:00:00",
-        fileSize,
-        mimeType,
-        storagePath
+        // On peut mettre des valeurs par défaut ou null
+        fileSize: null,
+        mimeType: null,
+        storagePath: null
       },
       select: {
         id: true,
@@ -372,19 +334,14 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
         duration: true,
         listens: true,
         isActive: true,
-        fileSize: true,
-        mimeType: true,
-        storagePath: true,
         category: true,
         createdAt: true,
         updatedAt: true
       }
     });
 
-    // Nettoyer les fichiers temporaires
+    // Nettoyer les fichiers temporaires (uniquement la thumbnail)
     manualCleanup(req.files);
-
-    console.log('✅ [CREATE PODCAST] Podcast créé avec succès:', podcast.id);
 
     res.json({
       success: true,
@@ -393,7 +350,7 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ [CREATE PODCAST] Erreur lors de la création du podcast:", error);
+    console.error("❌ [CREATE PODCAST] Erreur:", error);
     manualCleanup(req.files);
     res.status(500).json({
       success: false,
@@ -402,22 +359,21 @@ router.post("/podcasts", uploadAudio, async (req, res) => {
   }
 });
 
-// POST /api/admin/media/videos - Créer une vidéo
-router.post("/videos", uploadVideo, async (req, res) => {
-  let videoUrl = null;
-  let thumbnailUrl = null;
-  let uploadedFiles = [];
-  let fileSize = null;
-  let mimeType = null;
-  let storagePath = null;
-
+// POST /api/admin/media/videos - Créer une vidéo (sans fichier vidéo, seulement thumbnail)
+router.post("/videos", uploadImage, async (req, res) => {  // ← Utiliser uploadImage au lieu de uploadVideo
   try {
-    const { title, description, category, isActive = true, duration } = req.body;
+    const { title, description, category, isActive = true, videoUrl } = req.body;
     
-    console.log('🎬 [CREATE VIDEO] Données reçues:', { title, description, category, isActive, duration });
+    console.log('🎬 [CREATE VIDEO] Données reçues:', { 
+      title, 
+      description, 
+      category, 
+      isActive, 
+      videoUrl,
+      hasThumbnail: !!req.files?.thumbnail 
+    });
 
     if (!title) {
-      console.log('❌ [CREATE VIDEO] Titre manquant');
       manualCleanup(req.files);
       return res.status(400).json({
         success: false,
@@ -425,47 +381,18 @@ router.post("/videos", uploadVideo, async (req, res) => {
       });
     }
 
-    // Upload vers Supabase
-    const videoFile = req.files.video[0];
-    const thumbnailFile = req.files.thumbnail ? req.files.thumbnail[0] : null;
-
-    console.log('📁 [CREATE VIDEO] Début upload vers Supabase...');
-
-    // Upload vidéo avec BUFFER
-    if (videoFile) {
-      console.log('📤 [CREATE VIDEO] Upload vidéo:', videoFile.originalname, `(${(videoFile.size / (1024 * 1024)).toFixed(2)} MB)`);
-      
-      const videoBuffer = fs.readFileSync(videoFile.path);
-      const fileName = `videos/${Date.now()}-${videoFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      
-      const { data: videoData, error: videoError } = await supabase.storage
-        .from('media')
-        .upload(fileName, videoBuffer, {
-          contentType: videoFile.mimetype,
-          cacheControl: '3600'
-        });
-
-      if (videoError) {
-        console.error('❌ [CREATE VIDEO] Erreur upload vidéo:', videoError);
-        manualCleanup(req.files);
-        return res.status(500).json({
-          success: false,
-          message: "Erreur lors de l'upload de la vidéo: " + videoError.message
-        });
-      }
-
-      console.log('✅ [CREATE VIDEO] Vidéo uploadée avec succès:', videoData.path);
-      const { data: urlData } = supabase.storage.from('media').getPublicUrl(videoData.path);
-      videoUrl = urlData.publicUrl;
-      fileSize = videoFile.size;
-      mimeType = videoFile.mimetype;
-      storagePath = videoData.path;
-      uploadedFiles.push({ type: 'video', path: videoData.path, url: videoUrl });
-      console.log('🔗 [CREATE VIDEO] URL vidéo:', videoUrl);
+    if (!videoUrl) {
+      manualCleanup(req.files);
+      return res.status(400).json({
+        success: false,
+        message: "L'URL de la vidéo est requise"
+      });
     }
 
-    // Upload thumbnail avec BUFFER
-    if (thumbnailFile) {
+    // Upload de la thumbnail si présente
+    let thumbnailUrl = null;
+    if (req.files?.thumbnail) {
+      const thumbnailFile = req.files.thumbnail[0];
       console.log('📤 [CREATE VIDEO] Upload thumbnail:', thumbnailFile.originalname);
       
       try {
@@ -482,11 +409,9 @@ router.post("/videos", uploadVideo, async (req, res) => {
         if (thumbnailError) {
           console.warn('⚠️ [CREATE VIDEO] Erreur upload thumbnail:', thumbnailError.message);
         } else {
-          console.log('✅ [CREATE VIDEO] Thumbnail uploadé avec succès:', thumbnailData.path);
           const { data: urlData } = supabase.storage.from('media').getPublicUrl(thumbnailData.path);
           thumbnailUrl = urlData.publicUrl;
-          uploadedFiles.push({ type: 'thumbnail', path: thumbnailData.path, url: thumbnailUrl });
-          console.log('🔗 [CREATE VIDEO] URL thumbnail:', thumbnailUrl);
+          console.log('✅ [CREATE VIDEO] Thumbnail uploadée:', thumbnailUrl);
         }
       } catch (thumbnailError) {
         console.warn('⚠️ [CREATE VIDEO] Erreur lors de l\'upload du thumbnail:', thumbnailError.message);
@@ -500,14 +425,12 @@ router.post("/videos", uploadVideo, async (req, res) => {
         title,
         description,
         videoUrl,
-        thumbnailUrl,
+        thumbnailUrl, // ← L'URL de l'image est stockée !
         category: category || null,
         isActive: isActive === 'true',
         views: 0,
-        duration: duration || "00:00:00",
-        fileSize,
-        mimeType,
-        storagePath
+        duration: "00:00:00",
+        // Pas besoin de fileSize, mimeType, storagePath pour la vidéo
       },
       select: {
         id: true,
@@ -519,9 +442,6 @@ router.post("/videos", uploadVideo, async (req, res) => {
         views: true,
         isActive: true,
         isPremium: true,
-        fileSize: true,
-        mimeType: true,
-        storagePath: true,
         category: true,
         createdAt: true,
         updatedAt: true
@@ -532,30 +452,17 @@ router.post("/videos", uploadVideo, async (req, res) => {
     manualCleanup(req.files);
 
     console.log('✅ [CREATE VIDEO] Vidéo créée avec succès:', video.id);
-
-    let message = "Vidéo créée avec succès";
-    if (!thumbnailUrl) {
-      message += " (sans miniature)";
-    }
+    console.log('🖼️ [CREATE VIDEO] Thumbnail URL:', video.thumbnailUrl);
 
     res.json({
       success: true,
       data: video,
-      message: message
+      message: thumbnailUrl ? "Vidéo créée avec succès" : "Vidéo créée avec succès (sans miniature)"
     });
 
   } catch (error) {
     console.error("❌ [CREATE VIDEO] Erreur lors de la création de la vidéo:", error);
-    
-    // Nettoyer les fichiers uploadés en cas d'erreur
-    if (uploadedFiles.length > 0) {
-      console.log('🧹 [CREATE VIDEO] Nettoyage des fichiers partiellement uploadés...');
-      const pathsToDelete = uploadedFiles.map(file => file.path);
-      await supabase.storage.from('media').remove(pathsToDelete);
-    }
-    
     manualCleanup(req.files);
-    
     res.status(500).json({
       success: false,
       error: "Erreur serveur: " + error.message
