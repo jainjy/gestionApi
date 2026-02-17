@@ -13,6 +13,11 @@ router.get(
       const { status, search, page = 1, limit = 10 } = req.query;
       const userId = req.user.id;
 
+      console.log("=================================");
+      console.log("🔍 RECHERCHE DE DEMANDES POUR LE PRO");
+      console.log("User ID:", userId);
+      console.log("Paramètres reçus:", { status, search, page, limit });
+
       // Récupérer les métiers et services du professionnel
       const userWithServices = await prisma.user.findUnique({
         where: { id: userId },
@@ -24,102 +29,110 @@ router.get(
           },
           services: {
             include: {
-              service: {
-                include: {
-                  metiers: {
-                    include: {
-                      metier: true,
-                    },
-                  },
-                },
-              },
+              service: true,
             },
           },
         },
       });
+
+      if (!userWithServices) {
+        return res.status(404).json({ error: "Utilisateur non trouvé" });
+      }
 
       // Extraire les IDs des métiers et services du professionnel
       const userMetierIds = userWithServices.metiers.map((m) => m.metierId);
       const userServiceIds = userWithServices.services.map((s) => s.serviceId);
 
-      // CORRECTION : Récupérer tous les métiers associés aux services du pro
-      const servicesWithMetiers = await prisma.service.findMany({
-        where: {
-          id: { in: userServiceIds },
-        },
-        include: {
-          metiers: {
-            include: {
-              metier: true,
+      console.log("Métiers du pro:", userMetierIds);
+      console.log("Services du pro:", userServiceIds);
+
+      // Vérifier si le pro est dans l'immobilier (métiers 324, 326, 327)
+      const isRealEstatePro = userMetierIds.some(id => [324, 326, 327].includes(id));
+
+      console.log("Est un pro immobilier:", isRealEstatePro);
+
+      // ============================================
+      // CONSTRUCTION DE LA CLAUSE WHERE
+      // ============================================
+      
+      // Pour les pros immobiliers : on veut VOIR TOUTES les demandes
+      // qui sont soit :
+      // 1. Des demandes de biens immobiliers (propertyId non null)
+      // 2. Des demandes de services (si le pro a aussi des services)
+      let whereClause = {};
+
+      if (isRealEstatePro) {
+        // Pour l'immobilier : on prend TOUTES les demandes avec propertyId
+        whereClause = {
+          OR: [
+            { propertyId: { not: null } }, // Toutes les demandes immobilières
+          ]
+        };
+
+        // Ajouter aussi les demandes de services si le pro a des services
+        if (userServiceIds.length > 0) {
+          whereClause.OR.push({
+            serviceId: { in: userServiceIds }
+          });
+        }
+
+        // Ajouter aussi les demandes de métiers si le pro a des métiers
+        if (userMetierIds.length > 0) {
+          whereClause.OR.push({
+            metierId: { in: userMetierIds }
+          });
+        }
+      } else {
+        // Pour les autres métiers : filtrage strict
+        whereClause = {
+          AND: [
+            {
+              OR: [
+                ...(userServiceIds.length > 0 ? [{ serviceId: { in: userServiceIds } }] : []),
+                ...(userMetierIds.length > 0 ? [{ metierId: { in: userMetierIds } }] : [])
+              ]
             },
-          },
-        },
-      });
-
-      // Tous les métiers compatibles avec les services du pro
-      const compatibleMetierIdsFromServices = servicesWithMetiers.flatMap(
-        service => service.metiers.map(m => m.metierId)
-      );
-
-      // Tous les métiers compatibles (métiers directs + métiers via services)
-      const allCompatibleMetierIds = [
-        ...userMetierIds,
-        ...compatibleMetierIdsFromServices
-      ].filter((id, index, array) => array.indexOf(id) === index); // Déduplication
-
-      // CORRECTION : Construire la clause WHERE pour les demandes compatibles
-      let whereClause = {
-        AND: [
-          {
-            OR: [
-              // Demandes avec service que le professionnel propose
-              {
-                serviceId: {
-                  in: userServiceIds.length > 0 ? userServiceIds : undefined,
-                },
-              },
-              // Demandes avec métier que le professionnel possède (directement ou via services)
-              {
-                metierId: {
-                  in: allCompatibleMetierIds.length > 0 ? allCompatibleMetierIds : undefined,
-                },
-              },
-            ].filter(
-              (condition) => Object.values(condition)[0].in !== undefined
-            ),
-          },
-          {
-            OR: [
-              { artisanId: null },
-              { artisanId: userId }
-            ]
-          },
-          {
-            propertyId: null, // Exclure les demandes immobilières
-          },
-        ],
-      };
-
-      // Filtre par statut - Utiliser directement le statut de la base
-      if (status && status !== "Toutes") {
-        whereClause.AND.push({
-          statut: status
-        });
+            {
+              OR: [
+                { artisanId: null },
+                { artisanId: userId }
+              ]
+            },
+            { propertyId: null } // Exclure l'immobilier
+          ]
+        };
       }
 
-      // Recherche
-      if (search) {
-        whereClause.AND.push({
+      // Filtre par statut
+      if (status && status !== "Toutes" && status !== "undefined") {
+        if (whereClause.AND) {
+          whereClause.AND.push({ statut: status });
+        } else {
+          whereClause.statut = status;
+        }
+      }
+
+      // Recherche textuelle
+      if (search && search.trim() !== "") {
+        const searchCondition = {
           OR: [
             { description: { contains: search, mode: "insensitive" } },
             { contactNom: { contains: search, mode: "insensitive" } },
             { contactPrenom: { contains: search, mode: "insensitive" } },
             { lieuAdresseVille: { contains: search, mode: "insensitive" } },
-            { service: { libelle: { contains: search, mode: "insensitive" } } },
-            { metier: { libelle: { contains: search, mode: "insensitive" } } },
           ]
-        });
+        };
+
+        if (whereClause.AND) {
+          whereClause.AND.push(searchCondition);
+        } else {
+          whereClause = {
+            AND: [whereClause, searchCondition]
+          };
+        }
       }
+
+      console.log("📋 Clause WHERE:", JSON.stringify(whereClause, null, 2));
 
       const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -132,26 +145,26 @@ router.get(
                 id: true,
                 libelle: true,
                 description: true,
-                images: true,
-                price: true,
-                duration: true,
-                category: true,
-                metiers: {
-                  include: {
-                    metier: {
-                      select: {
-                        id: true,
-                        libelle: true,
-                      },
-                    },
-                  },
-                },
               },
             },
             metier: {
               select: {
                 id: true,
                 libelle: true,
+              },
+            },
+            property: {
+              select: {
+                id: true,
+                title: true,
+                type: true,
+                status: true,
+                address: true,
+                city: true,
+                zipCode: true,
+                price: true,
+                surface: true,
+                rooms: true,
               },
             },
             artisans: {
@@ -165,8 +178,6 @@ router.get(
                     firstName: true,
                     lastName: true,
                     companyName: true,
-                    email: true,
-                    phone: true,
                   },
                 },
               },
@@ -176,8 +187,6 @@ router.get(
                 id: true,
                 firstName: true,
                 lastName: true,
-                email: true,
-                phone: true,
                 companyName: true,
               },
             },
@@ -191,54 +200,55 @@ router.get(
         prisma.demande.count({ where: whereClause }),
       ]);
 
-      // CORRECTION : Filtrer les résultats pour une compatibilité précise
-      const filteredDemandes = demandes.filter(demande => {
-        // Si la demande a un service spécifique
-        if (demande.serviceId) {
-          // Vérifier que le pro propose ce service
-          const hasService = userServiceIds.includes(demande.serviceId);
-          
-          // ET vérifier que le pro a le métier correspondant à ce service
-          const serviceMetierIds = demande.service.metiers.map(m => m.metierId);
-          const hasCompatibleMetier = serviceMetierIds.some(metierId => 
-            allCompatibleMetierIds.includes(metierId)
-          );
-          
-          return hasService && hasCompatibleMetier;
-        }
-        
-        // Si la demande a un métier spécifique
-        if (demande.metierId) {
-          // Vérifier que le pro a ce métier (directement ou via services)
-          return allCompatibleMetierIds.includes(demande.metierId);
-        }
-        
-        return false;
-      });
+      console.log("📊 RÉSULTATS DE LA REQUÊTE:");
+      console.log("Nombre de demandes trouvées:", demandes.length);
+      console.log("Total (sans pagination):", total);
 
-      // Transformer les données pour le frontend pro
-      const transformedDemandes = filteredDemandes.map((demande) => {
-        const artisanAssignment = demande.artisans.find(
+      // Transformer les données pour le frontend
+      const transformedDemandes = demandes.map((demande) => {
+        const artisanAssignment = demande.artisans?.find(
           (a) => a.userId === userId
         );
 
-        // Déterminer le métier selon le type de demande
+        // Déterminer le type de demande et construire l'affichage
+        let type = "autre";
         let metierLibelle = "Non spécifié";
         let titre = "Demande de service";
+        let lieu = "Non spécifié";
+        let client = "Client";
 
-        if (demande.service) {
-          metierLibelle =
-            demande.service.metiers[0]?.metier?.libelle || "Non spécifié";
-          titre = `Demande ${demande.service.libelle}`;
+        if (demande.property) {
+          type = "property";
+          metierLibelle = "Immobilier";
+          const typeBien = demande.property.type === "RENT" ? "Location" : "Achat";
+          titre = `${typeBien} - ${demande.property.title || "Bien immobilier"}`;
+          lieu = `${demande.property.zipCode || ""} ${demande.property.city || ""}`.trim() || 
+                 demande.property.address || "Non spécifié";
+        } else if (demande.service) {
+          type = "service";
+          metierLibelle = demande.service.metiers?.[0]?.metier?.libelle || "Service";
+          titre = `Service: ${demande.service.libelle}`;
+          lieu = `${demande.lieuAdresseCp || ""} ${demande.lieuAdresseVille || ""}`.trim();
         } else if (demande.metier) {
+          type = "metier";
           metierLibelle = demande.metier.libelle;
-          titre = `Demande ${demande.metier.libelle}`;
+          titre = `Demande de ${demande.metier.libelle}`;
+          lieu = `${demande.lieuAdresseCp || ""} ${demande.lieuAdresseVille || ""}`.trim();
         }
 
-        // DÉTERMINER L'URGENCE BASÉE SUR LA DATE DE CRÉATION
+        // Nom du client
+        if (demande.contactPrenom || demande.contactNom) {
+          client = `${demande.contactPrenom || ""} ${demande.contactNom || ""}`.trim();
+        } else if (demande.createdBy) {
+          client = demande.createdBy.companyName || 
+                   `${demande.createdBy.firstName || ""} ${demande.createdBy.lastName || ""}`.trim() || 
+                   "Client";
+        }
+
+        // Calcul de l'urgence
         const now = new Date();
         const daysSinceCreation = Math.floor(
-          (now - demande.createdAt) / (1000 * 60 * 60 * 24)
+          (now - new Date(demande.createdAt)) / (1000 * 60 * 60 * 24)
         );
 
         let urgence = "Moyen";
@@ -250,67 +260,60 @@ router.get(
           urgence = "Faible";
         }
 
-        // Vérifier si c'est une nouvelle demande (moins de 24h)
-        const isNouvelle = daysSinceCreation <= 1;
-
         return {
           id: demande.id,
           titre: titre,
           metier: metierLibelle,
-          lieu: `${demande.lieuAdresseCp || ""} ${demande.lieuAdresseVille || ""}`.trim(),
-          statut: demande.statut || "En attente",
+          lieu: lieu,
+          statut: demande.statut || "en attente",
           urgence: urgence,
           description: demande.description || "Aucune description fournie",
-          date: demande.createdAt.toLocaleDateString("fr-FR", {
+          date: new Date(demande.createdAt).toLocaleDateString("fr-FR", {
             day: "numeric",
             month: "short",
             year: "numeric",
           }),
-          client:
-            `${demande.contactPrenom || ""} ${demande.contactNom || ""}`.trim() ||
-            `${demande.createdBy.firstName || ""} ${demande.createdBy.lastName || ""}`.trim(),
-          budget: "Non estimé",
-          nouvelle: isNouvelle,
+          client: client,
+          budget: demande.property?.price ? `${demande.property.price}€` : "Non estimé",
+          nouvelle: daysSinceCreation <= 1,
           urgent: urgence === "Urgent",
-          type: demande.serviceId ? "service" : "metier",
-          // Informations d'assignation
+          type: type,
           assignment: artisanAssignment,
           canAccept: !artisanAssignment || artisanAssignment.accepte === null,
-          // Données détaillées
-          contactNom: demande.contactNom,
-          contactPrenom: demande.contactPrenom,
-          contactEmail: demande.contactEmail,
-          contactTel: demande.contactTel,
-          lieuAdresse: demande.lieuAdresse,
-          lieuAdresseCp: demande.lieuAdresseCp,
-          lieuAdresseVille: demande.lieuAdresseVille,
-          optionAssurance: demande.optionAssurance,
-          nombreArtisans: demande.nombreArtisans,
-          serviceId: demande.serviceId,
-          metierId: demande.metierId,
-          createdAt: demande.createdAt,
-          createdBy: demande.createdBy,
+          property: demande.property,
           service: demande.service,
           metier: demande.metier,
+          createdAt: demande.createdAt,
         };
       });
+
+      console.log("✅ Réponse envoyée au frontend:", {
+        demandesCount: transformedDemandes.length,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: total,
+          pages: Math.ceil(total / parseInt(limit)),
+        }
+      });
+      console.log("=================================");
 
       res.json({
         demandes: transformedDemandes,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
-          total: filteredDemandes.length,
-          pages: Math.ceil(filteredDemandes.length / parseInt(limit)),
+          total: total,
+          pages: Math.ceil(total / parseInt(limit)),
         },
       });
+      
     } catch (error) {
-      console.error("Erreur lors de la récupération des demandes pro:", error);
+      console.error("❌ ERREUR lors de la récupération des demandes pro:", error);
       res.status(500).json({ error: "Erreur serveur" });
     }
   }
 );
-
 // GET /api/pro/demandes/stats - Statistiques pour le professionnel
 router.get(
   "/stats",
@@ -345,17 +348,44 @@ router.get(
         },
       });
 
+      if (!userWithServices) {
+        return res.status(404).json({ error: "Utilisateur non trouvé" });
+      }
+
       // Extraire les IDs des métiers et services du professionnel
       const userMetierIds = userWithServices.metiers.map((m) => m.metierId);
       const userServiceIds = userWithServices.services.map((s) => s.serviceId);
 
-      const whereClause = {
-        OR: [
-          { serviceId: { in: userServiceIds } },
-          { metierId: { in: userMetierIds } },
-        ].filter((condition) => Object.values(condition)[0].in !== undefined),
-        propertyId: null,
+      // Vérifier si le pro est dans l'immobilier
+      const isRealEstatePro = userMetierIds.some(id => [324, 326, 327].includes(id)) || 
+                              userServiceIds.length > 0;
+
+      // Construire les conditions OR
+      const orConditions = [];
+      
+      if (userServiceIds.length > 0) {
+        orConditions.push({
+          serviceId: { in: userServiceIds }
+        });
+      }
+      
+      if (userMetierIds.length > 0) {
+        orConditions.push({
+          metierId: { in: userMetierIds }
+        });
+      }
+
+      // Construire la clause WHERE de base
+      let baseWhereClause = {
+        OR: orConditions.length > 0 ? orConditions : [{ id: null }],
       };
+
+      // Ajouter la condition propertyId seulement si ce n'est pas un pro immobilier
+      if (!isRealEstatePro) {
+        baseWhereClause.propertyId = null;
+      }
+
+      console.log("📊 Stats WHERE clause:", JSON.stringify(baseWhereClause, null, 2));
 
       const [
         totalDemandes,
@@ -366,53 +396,74 @@ router.get(
         demandesTerminees,
         demandesUrgentes,
       ] = await Promise.all([
-        // Total des demandes compatibles
-        prisma.demande.count({ where: whereClause }),
-        // Demandes en attente
+        prisma.demande.count({ where: baseWhereClause }),
         prisma.demande.count({
           where: {
-            ...whereClause,
+            ...baseWhereClause,
             statut: "en attente",
           },
         }),
-        // Demandes en cours
         prisma.demande.count({
           where: {
-            ...whereClause,
+            ...baseWhereClause,
             statut: "en cours",
           },
         }),
-        // Demandes validées
         prisma.demande.count({
           where: {
-            ...whereClause,
+            ...baseWhereClause,
             statut: "validée",
           },
         }),
-        // Demandes refusées
         prisma.demande.count({
           where: {
-            ...whereClause,
+            ...baseWhereClause,
             statut: "refusée",
           },
         }),
-        // Demandes terminées
         prisma.demande.count({
           where: {
-            ...whereClause,
+            ...baseWhereClause,
             statut: "terminée",
           },
         }),
-        // Demandes urgentes (moins de 24h)
         prisma.demande.count({
           where: {
-            ...whereClause,
+            ...baseWhereClause,
             createdAt: {
               gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
             },
           },
         }),
       ]);
+
+      // Demandes disponibles (non assignées à ce pro)
+      const demandesDisponibles = await prisma.demande.count({
+        where: {
+          ...baseWhereClause,
+          artisans: {
+            none: {
+              userId: userId
+            }
+          },
+          OR: [
+            { artisanId: null },
+            { artisanId: userId }
+          ]
+        },
+      });
+
+      // Demandes assignées à ce pro
+      const demandesAssignees = await prisma.demande.count({
+        where: {
+          ...baseWhereClause,
+          artisans: {
+            some: {
+              userId: userId
+            }
+          }
+        },
+      });
 
       res.json({
         total: totalDemandes,
@@ -423,6 +474,8 @@ router.get(
         terminees: demandesTerminees,
         urgentes: demandesUrgentes,
         nouvelles: demandesUrgentes,
+        disponibles: demandesDisponibles,
+        assignees: demandesAssignees,
       });
     } catch (error) {
       console.error("Erreur lors de la récupération des stats pro:", error);
@@ -537,7 +590,7 @@ router.post(
         conversation = await prisma.conversation.create({
           data: {
             demandeId: parseInt(id),
-            titre: `Demande ${demande.service?.libelle || demande.metier?.libelle}`,
+            titre: `Demande ${demande.service?.libelle || demande.metier?.libelle || "immobilière"}`,
             createurId: demande.createdById,
             participants: {
               create: [
@@ -597,29 +650,18 @@ router.post(
       const { id } = req.params;
       const userId = req.user.id;
       const { raison } = req.body;
+
       const demande = await prisma.demande.findUnique({
         where: {
           id: parseInt(id),
         },
       });
+
       if (!demande) {
         return res.status(404).json({
           error: "Demande non trouvée",
         });
       }
-      // Vérifier si la demande existe et est assignée au professionnel
-      const demandeArtisan = await prisma.demandeArtisan.findUnique({
-        where: {
-          userId_demandeId: {
-            userId: userId,
-            demandeId: parseInt(id),
-          },
-        },
-        include: {
-          demande: true,
-          user: true,
-        },
-      });
 
       // Mettre à jour l'assignation
       const updatedAssignment = await prisma.demandeArtisan.upsert({
@@ -633,7 +675,7 @@ router.post(
           demandeId: parseInt(id),
           userId: userId,
           accepte: false,
-          recruited:false,
+          recruited: false,
         },
         update: {
           accepte: false,
@@ -709,13 +751,13 @@ router.post(
         },
       });
 
-      if (demande.serviceId && user.services.length === 0) {
+      if (demande.serviceId && (!user.services || user.services.length === 0)) {
         return res.status(400).json({
           error: "Vous ne proposez pas ce service",
         });
       }
 
-      if (demande.metierId && user.metiers.length === 0) {
+      if (demande.metierId && (!user.metiers || user.metiers.length === 0)) {
         return res.status(400).json({
           error: "Vous ne possédez pas ce métier",
         });
@@ -726,7 +768,7 @@ router.post(
         data: {
           userId: userId,
           demandeId: parseInt(id),
-          accepte: true,
+          accepte: null, // En attente de validation par le client
           devis: devis,
         },
         include: {
@@ -758,7 +800,7 @@ router.post(
         conversation = await prisma.conversation.create({
           data: {
             demandeId: parseInt(id),
-            titre: `Demande ${demande.service?.libelle || demande.metier?.libelle}`,
+            titre: `Demande ${demande.service?.libelle || demande.metier?.libelle || "immobilière"}`,
             createurId: demande.createdById,
             participants: {
               create: [
@@ -770,8 +812,15 @@ router.post(
         });
       } else {
         // Ajouter l'artisan comme participant
-        await prisma.conversationParticipant.create({
-          data: {
+        await prisma.conversationParticipant.upsert({
+          where: {
+            conversationId_userId: {
+              conversationId: conversation.id,
+              userId: userId,
+            },
+          },
+          update: {},
+          create: {
             conversationId: conversation.id,
             userId: userId,
           },
