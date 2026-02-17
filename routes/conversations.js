@@ -92,7 +92,6 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
   try {
     const { demandeId } = req.params;
     const userId = req.user.id;
-    const userRole = req.user.role;
 
     // Vérifier que l'utilisateur a accès à cette conversation
     const conversation = await prisma.conversation.findFirst({
@@ -108,11 +107,6 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
         participants: {
           select: {
             userId: true,
-            user: {
-              select: {
-                userType: true,
-              },
-            },
           },
         },
       },
@@ -128,7 +122,7 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
     const hasAccess =
       conversation.createurId === userId ||
       conversation.participants.some((p) => p.userId === userId) ||
-      userRole == "admin";
+      req.user.role === "admin";
 
     if (!hasAccess) {
       return res.status(403).json({
@@ -136,49 +130,12 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
       });
     }
 
-    // Récupérer les IDs des participants professionnels
-    const professionalParticipantIds = conversation.participants
-      .filter((p) => p.user.role === "professional")
-      .map((p) => p.userId);
-
-    // Déterminer la condition WHERE
-    let whereClause = {
-      conversationId: conversation.id,
-    };
-
-    // Si l'utilisateur est un professionnel
-    if (userRole === "professional") {
-      whereClause = {
-        AND: [
-          {
-            conversationId: conversation.id,
-            OR: [
-              // Ses propres messages
-              { expediteurId: userId },
-              // Messages du créateur
-              { expediteurId: conversation.createurId },
-              // Messages système
-              { type: "SYSTEM" },
-            ],
-          },
-        ],
-      };
-    }
-    // Si l'utilisateur est le créateur
-    else if (userRole === "admin") {
-      whereClause = {
-        conversationId: conversation.id,
-        type: "SYSTEM",
-      };
-    } else {
-      whereClause = {
-        conversationId: conversation.id
-      };
-    }
-
-    // Récupérer les messages avec le filtre approprié
+    // ✅ SOLUTION: Supprimer TOUS les filtres excessifs
+    // On récupère simplement TOUS les messages de la conversation
     const messages = await prisma.message.findMany({
-      where: whereClause,
+      where: {
+        conversationId: conversation.id,
+      },
       include: {
         expediteur: {
           select: {
@@ -217,6 +174,7 @@ router.get("/:demandeId/messages", authenticateToken, async (req, res) => {
     });
   }
 });
+
 // POST /api/conversations/:demandeId/messages - Envoyer un message
 router.post("/:demandeId/messages", authenticateToken, async (req, res) => {
   try {
