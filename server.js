@@ -345,6 +345,13 @@ app.use("/api/pro/alternance", (req, res, next) => {
 app.use("/api/recherche", require("./routes/rechercheIntelligentPremium"));
   
 // 🔥 CORRECTION: Route notifications
+const autoQualificationMiddleware = require("./middleware/autoQualificationMiddleware.js");
+
+app.use(autoQualificationMiddleware);
+
+// Ajouter les routes API
+app.use('/api/ai', require('./routes/aiQualification'));
+
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/bienetre", require("./routes/reservationbien_etre"));
 app.use('/api/soins-bienetre', require('./routes/soins.routes'));
@@ -579,6 +586,47 @@ app.use((error, req, res, next) => {
     message: error.message
   });
 });
+
+// (Optionnel) Lancer une qualification massive au démarrage
+const qualifierDemandesExistantes = async () => {
+  try {
+    console.log('🔄 Qualification des demandes existantes...');
+    const { prisma } = require('./lib/db');
+    
+    const demandes = await prisma.demande.findMany({
+      where: {
+        OR: [
+          { aiProcessedAt: null },
+          { aiClass: null }
+        ]
+      },
+      take: 20 // Limiter pour ne pas surcharger
+    });
+
+    console.log(`📊 ${demandes.length} demandes à qualifier trouvées`);
+
+    for (const demande of demandes) {
+      try {
+        const response = await fetch(`http://localhost:${process.env.PORT || 3001}/api/ai/qualifier/${demande.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.ADMIN_TOKEN}` // À configurer
+          }
+        });
+        
+        if (response.ok) {
+          console.log(`✅ Demande #${demande.id} qualifiée`);
+        }
+      } catch (err) {
+        console.error(`❌ Erreur pour #${demande.id}:`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Erreur qualification massive:', error);
+  }
+};
+
 
 // Démarrage du serveur - MISE À JOUR
 server.listen(PORT, async () => {

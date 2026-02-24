@@ -5,14 +5,23 @@ const getNotificationsForUser = async (req, res) => {
     try {
       const { userId } = req.params;
 
-      // VÉRIFICATION : est-ce que je demande MES notifications ?
+      console.log('===========================================');
+      console.log('👤 RÉCUPÉRATION NOTIFICATIONS - DÉBUT');
+      console.log('👤 userId demandé:', userId);
+      console.log('👤 utilisateur connecté (req.user.id):', req.user.id);
+      console.log('👤 rôle utilisateur:', req.user.role);
+
+      // VÉRIFICATION STRICTE : l'utilisateur ne peut voir que SES notifications
       if (req.user.id !== userId && req.user.role !== "admin") {
+        console.log('❌ ACCÈS NON AUTORISÉ - userId différent');
         return res.status(403).json({
           error: "Vous ne pouvez accéder qu'à vos propres notifications",
         });
       }
 
-      // Récupérer les demandes avec statut validé ou refusé
+      console.log('✅ ACCÈS AUTORISÉ');
+
+      // Récupérer les demandes créées par CET utilisateur
       const demandes = await prisma.demande.findMany({
         where: {
           createdById: userId,
@@ -37,30 +46,27 @@ const getNotificationsForUser = async (req, res) => {
         },
       });
 
+      console.log(`📊 Demandes trouvées pour user ${userId}: ${demandes.length}`);
+
       // Récupérer les notifications de la table Notification
       const notificationsFromTable = await prisma.notification.findMany({
         where: {
-          OR: [{ userProprietaireId: userId }, { userId: userId }],
-        },
-        include: {
-          userProprietaire: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-          // 🔥 SUPPRIMER: La relation property n'existe pas dans le modèle Notification
+          userId: userId,
         },
         orderBy: {
           createdAt: "desc",
         },
       });
 
-      console.log(
-        `📊 Demandes trouvées: ${demandes.length}, Notifications table: ${notificationsFromTable.length}`
-      );
+      console.log(`📊 Notifications table pour user ${userId}: ${notificationsFromTable.length}`);
+
+      // Afficher le détail des notifications trouvées
+      if (notificationsFromTable.length > 0) {
+        console.log('📋 Détail des notifications:');
+        notificationsFromTable.forEach((notif, index) => {
+          console.log(`  [${index + 1}] ID: ${notif.id}, userId: ${notif.userId}, title: ${notif.title}, read: ${notif.read}`);
+        });
+      }
 
       // Transformer les demandes en notifications
       const demandeNotifications = demandes.map((demande) => {
@@ -69,7 +75,7 @@ const getNotificationsForUser = async (req, res) => {
 
         return {
           id: `demande_${demande.id}`,
-          titre: `Demande ${statusText}`,
+          title: `Demande ${statusText}`,
           message: `Votre demande pour "${propertyTitle}" a été ${statusText}`,
           statut: demande.statut,
           propertyId: demande.propertyId,
@@ -86,17 +92,15 @@ const getNotificationsForUser = async (req, res) => {
       const tableNotifications = notificationsFromTable.map((notif) => {
         return {
           id: `notification_${notif.id}`,
-          titre: notif.titre || "Nouvelle notification",
+          title: notif.title || "Nouvelle notification",
           message: notif.message,
           statut: notif.statut,
-          propertyId: notif.propertyId, // Garder propertyId si le champ existe
+          propertyId: notif.propertyId,
           createdAt: notif.createdAt,
           updatedAt: notif.updatedAt,
-          isRead: notif.isRead,
+          isRead: notif.read,
           type: notif.type || "general",
           source: "system",
-          userProprietaire: notif.userProprietaire,
-          // 🔥 SUPPRIMER: property n'est pas disponible
         };
       });
 
@@ -108,9 +112,8 @@ const getNotificationsForUser = async (req, res) => {
 
       const unreadCount = allNotifications.filter((n) => !n.isRead).length;
 
-      console.log(
-        `✅ Notifications totales: ${allNotifications.length}, Non lues: ${unreadCount}`
-      );
+      console.log(`✅ TOTAL pour user ${userId}: ${allNotifications.length} notifications (${unreadCount} non lues)`);
+      console.log('===========================================');
 
       res.json({
         success: true,
@@ -124,7 +127,12 @@ const getNotificationsForUser = async (req, res) => {
         },
       });
     } catch (error) {
+        console.error('===========================================');
         console.error('❌ Erreur lors de la récupération des notifications:', error);
+        console.error('❌ Message:', error.message);
+        console.error('❌ Stack:', error.stack);
+        console.error('===========================================');
+        
         res.status(500).json({ 
             success: false,
             error: 'Erreur serveur lors de la récupération des notifications',
@@ -391,26 +399,29 @@ const getUnreadCount = async (userId) => {
     }
 };
 
-
-// Fonction pour créer une nouvelle notification
 const createNotification = async (req, res) => {
     try {
-        const { userId, titre, message, type, userProprietaireId, propertyId } = req.body;
+        const { userId, title, message, type, propertyId } = req.body;
 
-        console.log(`📨 Création notification: ${titre} pour user: ${userProprietaireId || userId}`);
+        console.log(`📨 Création notification: ${title} pour user: ${userId}`);
 
+        // ✅ Version simplifiée - utilise seulement userId
         const notification = await prisma.notification.create({
             data: {
-                titre,
+                title,
                 message,
                 type: type || 'general',
-                userProprietaireId: userProprietaireId || userId,
-                userId: userProprietaireId ? userId : null,
-                propertyId: propertyId || null,
-                isRead: false
+                read: false,
+                userId: userId,  // Utilisez le champ direct
+                // OU si vous préférez la syntaxe connect :
+                // user: {
+                //     connect: { id: userId }
+                // },
+                relatedEntity: propertyId ? 'property' : null,
+                relatedEntityId: propertyId
             },
             include: {
-                userProprietaire: {
+                user: {
                     select: {
                         id: true,
                         firstName: true,
@@ -418,30 +429,25 @@ const createNotification = async (req, res) => {
                         email: true
                     }
                 }
-                // 🔥 SUPPRIMER: property n'est pas disponible dans l'include
             }
         });
 
-        // Envoyer la notification en temps réel via WebSocket
+        // Envoyer la notification en temps réel
         const notificationData = {
             id: `notification_${notification.id}`,
-            titre: notification.titre,
+            title: notification.title,
             message: notification.message,
             type: notification.type,
-            propertyId: notification.propertyId,
+            propertyId: propertyId,
             createdAt: notification.createdAt,
-            isRead: false,
+            read: notification.read,
             source: 'system'
         };
 
-        // Envoyer à l'utilisateur propriétaire
-        const targetUserId = notification.userProprietaireId || userId;
-        if (targetUserId) {
-            await sendNotification(targetUserId, notificationData);
-            
-            // Mettre à jour le compteur
-            const unreadCount = await getUnreadCount(targetUserId);
-            await updateNotificationCount(targetUserId, unreadCount);
+        if (userId) {
+            await sendNotification(userId, notificationData);
+            const unreadCount = await getUnreadCount(userId);
+            await updateNotificationCount(userId, unreadCount);
         }
 
         console.log(`✅ Notification créée: ${notification.id}`);
@@ -454,7 +460,8 @@ const createNotification = async (req, res) => {
         console.error('❌ Erreur création notification:', error);
         res.status(500).json({ 
             success: false,
-            error: 'Erreur serveur lors de la création' 
+            error: 'Erreur serveur lors de la création',
+            details: error.message
         });
     }
 };
