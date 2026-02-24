@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const { prisma } = require("../lib/db");
+
 // POST /api/demandes/immobilier - Créer une nouvelle demande
 // router.post("/", authenticateToken, async (req, res) => {
 //   try {
@@ -237,9 +238,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Validation de base
     if (!createdById) {
-      return res
-        .status(400)
-        .json({ error: "createdById est requis" });
+      return res.status(400).json({ error: "createdById est requis" });
     }
 
     if (!contactNom || !contactPrenom || !contactEmail || !contactTel) {
@@ -255,10 +254,10 @@ router.post("/", authenticateToken, async (req, res) => {
     let chosenServiceId = serviceId;
     let serviceLibelle = "Demande de visite";
     let createurId = createdById;
-    
+
     // RÉCUPÉRER LE PROPRIÉTAIRE DU BIEN SI propertyId EXISTE
     let propertyOwnerId = createdById; // Par défaut, utiliser createdById
-    
+
     if (propertyId) {
       // Chercher le bien pour obtenir le propriétaire
       const property = await prisma.property.findUnique({
@@ -267,17 +266,17 @@ router.post("/", authenticateToken, async (req, res) => {
           ownerId: true,
         },
       });
-      
+
       if (property && property.ownerId) {
         propertyOwnerId = property.ownerId;
       }
     }
-    
+
     // Si c'est une demande de service OU si le serviceId n'est pas fourni
     if (isDemandeService || !serviceId) {
       // Si pas de serviceId, utiliser l'ID du créateur/propriétaire
       chosenServiceId = propertyOwnerId;
-      serviceLibelle = `Demande de ${propertyId ? 'visite' : 'service'} par ${contactPrenom} ${contactNom}`;
+      serviceLibelle = `Demande de ${propertyId ? "visite" : "service"} par ${contactPrenom} ${contactNom}`;
       createurId = propertyOwnerId;
     } else {
       // Sinon, chercher le service normalement
@@ -416,7 +415,7 @@ router.post("/", authenticateToken, async (req, res) => {
         data: {
           conversationId: conversation.id,
           expediteurId: createdById,
-          contenu: `Nouvelle demande ${propertyId ? 'de visite' : 'de service'} créée. ${description ? `Description : ${description}` : ""}`,
+          contenu: `Nouvelle demande ${propertyId ? "de visite" : "de service"} créée. ${description ? `Description : ${description}` : ""}`,
           type: "SYSTEM",
           evenementType: "DEMANDE_ENVOYEE",
         },
@@ -631,57 +630,294 @@ router.get("/owner/:userId", authenticateToken, async (req, res) => {
   }
 });
 
-// PATCH /api/demandes/immobilier/:id/statut - CORRIGÉ
+// PATCH /api/demandes/immobilier/:id/statut - Mettre à jour le statut d'une demande
 router.patch("/:id/statut", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { statut } = req.body;
 
-    console.log(`🔄 [BACKEND] Changement statut demande ${id} -> ${statut}`);
+    if (!statut) {
+      return res.status(400).json({ error: "Le champ statut est requis." });
+    }
 
-    // CORRECTION: Utiliser 'createdBy' au lieu de 'user'
+    // Récupérer la demande avec les informations du client et du bien
     const demande = await prisma.demande.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: parseInt(id, 10) },
       include: {
         property: {
-          include: {
-            owner: true,
+          select: {
+            id: true,
+            title: true,
+            address: true,
+            city: true,
+            ownerId: true,
+            owner: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
-        createdBy: true, // CORRIGÉ
+        createdBy: {
+          // ✅ Le client qui a créé la demande
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
       },
     });
 
     if (!demande) {
-      return res.status(404).json({ error: "Demande non trouvée" });
+      return res.status(404).json({ error: "Demande introuvable" });
     }
 
-    // Mettre à jour le statut
-    const updatedDemande = await prisma.demande.update({
-      where: { id: parseInt(id) },
+    // Si on annule la demande
+    const lower = String(statut || "").toLowerCase();
+    if (
+      lower === "annulée" ||
+      lower === "annulee" ||
+      lower === "annulé" ||
+      lower === "annule"
+    ) {
+      try {
+        await prisma.demandeHistory.create({
+          data: {
+            demandeId: demande.id,
+            title: "Demande annulée",
+            message: "La demande a été annulée et archivée.",
+            snapshot: demande,
+          },
+        });
+      } catch (e) {
+        console.error("Impossible de créer historique", e);
+      }
+
+      await prisma.demande.delete({ where: { id: demande.id } });
+      return res.json({ message: "Demande annulée et archivée" });
+    }
+
+    // Met à jour le champ "statut" de la demande
+    const updated = await prisma.demande.update({
+      where: { id: parseInt(id, 10) },
       data: { statut },
-      include: {
-        property: true,
-        createdBy: true, // CORRIGÉ
-      },
     });
 
-    console.log(`✅ [BACKEND] Demande ${id} mise à jour: ${statut}`);
+    // === ENVOI DE NOTIFICATION ET EMAIL ===
 
-    // NOTE: La création de réservation se fait dans ListingsPage.jsx
-    // quand le prestataire marque le bien comme "loué"
-    // Cette route gère seulement la validation/refus de la demande
+    // Déterminer le libellé du statut
+    const statusLabels = {
+      "en attente": "En attente",
+      validée: "Validée",
+      validee: "Validée",
+      valide: "Validée",
+      refusée: "Refusée",
+      refusee: "Refusée",
+      refus: "Refusée",
+      archivée: "Archivée",
+      archivee: "Archivée",
+      archive: "Archivée",
+      terminée: "Terminée",
+      terminee: "Terminée",
+    };
+
+    const statusLabel = statusLabels[lower] || statut;
+    const propertyTitle = demande.property?.title || "Bien immobilier";
+    const protocol = req.protocol;
+    const host = req.get("host");
+    const baseUrl = `${protocol}://${host}`;
+
+    // ✅ Le client est directement dans demande.createdBy
+    const clientId = demande.createdBy?.id;
+    const clientEmail = demande.contactEmail || demande.createdBy?.email;
+    const clientName =
+      `${demande.contactPrenom || demande.createdBy?.firstName || ""} ${demande.contactNom || demande.createdBy?.lastName || ""}`.trim() ||
+      "Client";
+
+    console.log(`✅ Client trouvé: ${clientEmail} (ID: ${clientId})`);
+
+    // Dans votre route PATCH /api/demandes/immobilier/:id/statut
+
+    // 1. Créer une notification POUR LE CLIENT
+    if (clientId) {
+      const notificationTitle = `Demande ${statusLabel.toLowerCase()}`;
+      const notificationMessage = `Votre demande de visite pour "${propertyTitle}" a été ${statusLabel.toLowerCase()}.`;
+
+      try {
+        const fetch = require("node-fetch");
+
+        await fetch(`${baseUrl}/api/notifications/create`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: req.headers.authorization,
+          },
+          body: JSON.stringify({
+            userId: clientId, // ← Un seul champ, simple et efficace
+            title: notificationTitle,
+            message: notificationMessage,
+            type: "demande_immobilier",
+            propertyId: demande.propertyId,
+          }),
+        });
+
+        console.log(
+          `✅ Notification créée pour le client ${clientEmail} (ID: ${clientId})`,
+        );
+      } catch (notifError) {
+        console.error(
+          "❌ Erreur lors de la création de la notification:",
+          notifError,
+        );
+      }
+    }
+
+    // 2. Envoyer un email au client
+    try {
+      const { sendEmail } = require("../services/emailService");
+
+      if (!clientEmail) {
+        console.error(
+          "❌ Aucun email client trouvé pour la demande",
+          demande.id,
+        );
+      } else {
+        const emailSubject = `Mise à jour de votre demande - ${statusLabel}`;
+
+        let emailMessage = "";
+        let statusColor = "";
+
+        switch (lower) {
+          case "validée":
+          case "validee":
+          case "valide":
+            statusColor = "#10b981";
+            emailMessage = `
+              <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981;">
+                <p style="color: #166534; margin: 0;">Bonne nouvelle ! Votre demande a été acceptée.</p>
+                <p style="color: #166534; margin-top: 10px;">Le propriétaire vous contactera prochainement pour organiser la visite.</p>
+              </div>
+            `;
+            break;
+          case "refusée":
+          case "refusee":
+          case "refus":
+            statusColor = "#ef4444";
+            emailMessage = `
+              <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                <p style="color: #991b1b; margin: 0;">Nous sommes désolés, votre demande n'a pas pu être acceptée.</p>
+                <p style="color: #991b1b; margin-top: 10px;">N'hésitez pas à consulter d'autres biens disponibles.</p>
+              </div>
+            `;
+            break;
+          case "archivée":
+          case "archivee":
+          case "archive":
+            statusColor = "#6b7280";
+            emailMessage = `
+              <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; border-left: 4px solid #6b7280;">
+                <p style="color: #374151; margin: 0;">Votre demande a été archivée.</p>
+              </div>
+            `;
+            break;
+          case "terminée":
+          case "terminee":
+            statusColor = "#3b82f6";
+            emailMessage = `
+              <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                <p style="color: #1e40af; margin: 0;">La visite est maintenant terminée.</p>
+                <p style="color: #1e40af; margin-top: 10px;">Merci d'avoir utilisé notre service !</p>
+              </div>
+            `;
+            break;
+          default:
+            statusColor = "#f59e0b";
+            emailMessage = `
+              <div style="background-color: #fffbeb; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <p style="color: #92400e; margin: 0;">Le statut de votre demande a été mis à jour.</p>
+              </div>
+            `;
+        }
+
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Mise à jour de votre demande</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #f8f9fa; border-radius: 10px; padding: 30px; border: 1px solid #e9ecef;">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #556B2F; margin: 0;">Bonjour ${clientName},</h1>
+                <p style="color: #6c757d; margin-top: 10px;">Votre demande de visite immobilière</p>
+              </div>
+              
+              <div style="text-align: center; margin-bottom: 30px;">
+                <span style="background-color: ${statusColor}20; color: ${statusColor}; padding: 10px 20px; border-radius: 50px; font-weight: bold; display: inline-block;">
+                  ${statusLabel}
+                </span>
+              </div>
+              
+              <div style="background-color: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #e9ecef;">
+                <h3 style="color: #556B2F; margin-top: 0; margin-bottom: 15px;">Bien concerné</h3>
+                <p style="margin: 5px 0;"><strong>Titre :</strong> ${propertyTitle}</p>
+                ${demande.property?.address ? `<p style="margin: 5px 0;"><strong>Adresse :</strong> ${demande.property.address}${demande.property.city ? `, ${demande.property.city}` : ""}</p>` : ""}
+              </div>
+              
+              ${emailMessage}
+              
+              <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                <h3 style="color: #556B2F; margin-top: 0; margin-bottom: 15px;">Détails de votre demande</h3>
+                <p style="margin: 5px 0;"><strong>Date de la demande :</strong> ${new Date(demande.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</p>
+                ${demande.dateSouhaitee ? `<p style="margin: 5px 0;"><strong>Date souhaitée :</strong> ${new Date(demande.dateSouhaitee).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</p>` : ""}
+                ${demande.heureSouhaitee ? `<p style="margin: 5px 0;"><strong>Heure souhaitée :</strong> ${demande.heureSouhaitee}</p>` : ""}
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${baseUrl}/mes-demandes" style="background-color: #6B8E23; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                  Voir mes demandes
+                </a>
+              </div>
+              
+              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e9ecef; text-align: center; color: #6c757d; font-size: 0.9em;">
+                <p>Cet email a été envoyé automatiquement à <strong>${clientEmail}</strong>, merci de ne pas y répondre.</p>
+                <p>© ${new Date().getFullYear()} Votre Société. Tous droits réservés.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        await sendEmail({
+          to: clientEmail,
+          subject: emailSubject,
+          html: htmlContent,
+          text: `Le statut de votre demande pour "${propertyTitle}" a été mis à jour : ${statusLabel}`,
+        });
+
+        console.log(`✅ Email envoyé à ${clientEmail}`);
+      }
+    } catch (emailError) {
+      console.error("❌ Erreur lors de l'envoi de l'email:", emailError);
+    }
 
     res.json({
-      message: "Statut mis à jour avec succès",
-      demande: updatedDemande,
+      message: "Statut mis à jour",
+      demande: updated,
+      notification: clientId
+        ? "Notification et email envoyés au client"
+        : "Email envoyé au client (notification non créée - ID client non trouvé)",
     });
   } catch (error) {
-    console.error("❌ [BACKEND] Erreur mise à jour statut:", error);
-    res.status(500).json({
-      error: "Erreur lors de la mise à jour du statut",
-      details: error.message,
-    });
+    console.error("Erreur lors de la mise à jour du statut:", error);
+    res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
@@ -691,7 +927,7 @@ router.get("/property/:propertyId", authenticateToken, async (req, res) => {
     const { propertyId } = req.params;
 
     console.log(
-      `🔍 [BACKEND] Recherche demandes pour propriété: ${propertyId}`
+      `🔍 [BACKEND] Recherche demandes pour propriété: ${propertyId}`,
     );
 
     // NE PAS utiliser parseInt() car propertyId est un UUID (string)
@@ -795,7 +1031,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error(
       "Erreur lors de la suppression/archivage de la demande:",
-      error
+      error,
     );
     res.status(500).json({ error: "Erreur serveur" });
   }
