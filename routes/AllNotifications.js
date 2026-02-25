@@ -20,8 +20,11 @@ router.get("/", authenticateToken, async (req, res) => {
 
     console.log("👤 Récupération des notifications pour :", req.user.email);
 
-    // Tous les utilisateurs voient toutes les notifications
+    // Récupère uniquement les notifications de l'utilisateur connecté
     const notifications = await prisma.notification.findMany({
+      where: {
+        userId: req.user.id // Filtre par l'ID de l'utilisateur
+      },
       orderBy: { createdAt: "desc" },
     });
 
