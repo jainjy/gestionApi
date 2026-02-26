@@ -600,4 +600,166 @@ router.get("/stats/:userId", authenticateToken, async (req, res) => {
   }
 });
 
+// ============================================
+// POST /api/demandes/devis - Créer une nouvelle demande de devis (SERVICES)
+// ============================================
+router.post("/devis", authenticateToken, async (req, res) => {
+  try {
+    const {
+      contactNom,
+      contactPrenom,
+      contactEmail,
+      contactTel,
+      lieuAdresse,
+      lieuAdresseCp,
+      lieuAdresseVille,
+      description,
+      serviceId,
+      serviceName,
+      nombreArtisans,
+      createdById,
+      devis,
+      dateSouhaitee,
+    } = req.body;
+
+    console.log("📝 Création d'une demande de devis:", {
+      contactNom,
+      contactPrenom,
+      contactEmail,
+      serviceId,
+      createdById
+    });
+
+    // Validation
+    if (!createdById) {
+      return res.status(400).json({ error: "createdById est requis" });
+    }
+
+    if (!contactNom || !contactPrenom || !contactEmail || !contactTel) {
+      return res.status(400).json({ error: "Les informations de contact sont obligatoires" });
+    }
+
+    if (!serviceId) {
+      return res.status(400).json({ error: "serviceId est requis" });
+    }
+
+    // Récupérer le service
+    const service = await prisma.service.findUnique({
+      where: { id: parseInt(serviceId) },
+      select: { 
+        id: true, 
+        libelle: true,
+        createdById: true,
+      },
+    });
+
+    if (!service) {
+      return res.status(404).json({ error: "Service non trouvé" });
+    }
+
+    // Créer la demande
+    const nouvelleDemande = await prisma.demande.create({
+      data: {
+        contactNom,
+        contactPrenom,
+        contactEmail,
+        contactTel,
+        lieuAdresse: lieuAdresse || "",
+        lieuAdresseCp: lieuAdresseCp || "",
+        lieuAdresseVille: lieuAdresseVille || "",
+        optionAssurance: false,
+        description: description || `Demande de devis pour: ${service.libelle || serviceName}`,
+        serviceId: parseInt(serviceId),
+        statut: "en attente",
+        nombreArtisans: nombreArtisans || "UNIQUE",
+        createdById: createdById,
+        propertyId: null, // Important : null pour les services
+        artisanId: service.createdById || null,
+        devis: devis || null,
+        dateSouhaitee: dateSouhaitee ? new Date(dateSouhaitee) : null,
+      },
+      include: {
+        service: {
+          select: {
+            id: true,
+            libelle: true,
+            description: true,
+            images: true,
+            price: true,
+            duration: true,
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                companyName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    console.log("✅ Demande de devis créée avec succès:", nouvelleDemande.id);
+
+    // Créer une conversation
+    const participants = [{ userId: createdById }];
+    
+    if (service.createdById && service.createdById !== createdById) {
+      participants.push({ userId: service.createdById });
+    }
+
+    const conversation = await prisma.conversation.create({
+      data: {
+        titre: `Demande de devis - ${service.libelle || serviceName}`,
+        demandeId: nouvelleDemande.id,
+        createurId: createdById,
+        participants: {
+          create: participants,
+        },
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                companyName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Message système
+    await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        expediteurId: createdById,
+        contenu: `Nouvelle demande de devis pour "${service.libelle || serviceName}". ${devis ? `Détails: ${devis}` : ""}`,
+        type: "SYSTEM",
+        evenementType: "DEMANDE_ENVOYEE",
+      },
+    });
+
+    res.status(201).json({
+      message: "Demande de devis créée avec succès",
+      demande: nouvelleDemande,
+      conversation: {
+        id: conversation.id,
+        titre: conversation.titre,
+        participants: conversation.participants,
+      },
+    });
+
+  } catch (error) {
+    console.error("❌ Erreur lors de la création de la demande de devis:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
 module.exports = router;
