@@ -46,75 +46,27 @@ router.get(
       console.log("Métiers du pro:", userMetierIds);
       console.log("Services du pro:", userServiceIds);
 
-      // Vérifier si le pro est dans l'immobilier (métiers 324, 326, 327)
-      const isRealEstatePro = userMetierIds.some(id => [324, 326, 327].includes(id));
-
-      console.log("Est un pro immobilier:", isRealEstatePro);
-
       // ============================================
-      // CONSTRUCTION DE LA CLAUSE WHERE
+      // CONSTRUCTION DE LA CLAUSE WHERE MODIFIÉE
       // ============================================
       
-      // Pour les pros immobiliers : on veut VOIR TOUTES les demandes
-      // qui sont soit :
-      // 1. Des demandes de biens immobiliers (propertyId non null)
-      // 2. Des demandes de services (si le pro a aussi des services)
-      let whereClause = {};
-
-      if (isRealEstatePro) {
-        // Pour l'immobilier : on prend TOUTES les demandes avec propertyId
-        whereClause = {
-          OR: [
-            { propertyId: { not: null } }, // Toutes les demandes immobilières
-          ]
-        };
-
-        // Ajouter aussi les demandes de services si le pro a des services
-        if (userServiceIds.length > 0) {
-          whereClause.OR.push({
-            serviceId: { in: userServiceIds }
-          });
-        }
-
-        // Ajouter aussi les demandes de métiers si le pro a des métiers
-        if (userMetierIds.length > 0) {
-          whereClause.OR.push({
-            metierId: { in: userMetierIds }
-          });
-        }
-      } else {
-        // Pour les autres métiers : filtrage strict
-        whereClause = {
-          AND: [
-            {
-              OR: [
-                ...(userServiceIds.length > 0 ? [{ serviceId: { in: userServiceIds } }] : []),
-                ...(userMetierIds.length > 0 ? [{ metierId: { in: userMetierIds } }] : [])
-              ]
-            },
-            {
-              OR: [
-                { artisanId: null },
-                { artisanId: userId }
-              ]
-            },
-            { propertyId: null } // Exclure l'immobilier
-          ]
-        };
-      }
+      // On veut uniquement les demandes :
+      // 1. propertyId = null (pas de demande immobilière)
+      // 2. ET artisanId = userId (demandes assignées à l'artisan connecté)
+      
+      let whereClause = {
+        propertyId: null, // Exclure les demandes immobilières
+        artisanId: userId // Uniquement les demandes assignées à cet artisan
+      };
 
       // Filtre par statut
       if (status && status !== "Toutes" && status !== "undefined") {
-        if (whereClause.AND) {
-          whereClause.AND.push({ statut: status });
-        } else {
-          whereClause.statut = status;
-        }
+        whereClause.statut = status;
       }
 
       // Recherche textuelle
       if (search && search.trim() !== "") {
-        const searchCondition = {
+        whereClause.AND = {
           OR: [
             { description: { contains: search, mode: "insensitive" } },
             { contactNom: { contains: search, mode: "insensitive" } },
@@ -122,14 +74,6 @@ router.get(
             { lieuAdresseVille: { contains: search, mode: "insensitive" } },
           ]
         };
-
-        if (whereClause.AND) {
-          whereClause.AND.push(searchCondition);
-        } else {
-          whereClause = {
-            AND: [whereClause, searchCondition]
-          };
-        }
       }
 
       console.log("📋 Clause WHERE:", JSON.stringify(whereClause, null, 2));
@@ -314,6 +258,7 @@ router.get(
     }
   }
 );
+
 // GET /api/pro/demandes/stats - Statistiques pour le professionnel
 router.get(
   "/stats",

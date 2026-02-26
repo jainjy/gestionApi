@@ -410,5 +410,4 @@ router.post('/:id/history', authenticateToken, async (req, res) => {
   }
 });
 
-
 module.exports = router
