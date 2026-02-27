@@ -351,6 +351,9 @@ app.use(autoQualificationMiddleware);
 
 // Ajouter les routes API
 app.use('/api/ai', require('./routes/aiQualification'));
+const { aiCommercialMiddleware } = require('./middleware/aiCommercialMiddleware');
+app.use(aiCommercialMiddleware(io));
+app.use('/api/ai-commercial', require('./routes/aiCommercialRoutes'));
 
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/bienetre", require("./routes/reservationbien_etre"));
