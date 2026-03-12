@@ -130,6 +130,7 @@ model User {
   stripeCustomerId          String?
   DevisClientToUser         String?                   @map("_DevisClientToUser")
   DevisProviderToUser       String?                   @map("_DevisProviderToUser")
+  personels                 Personel[]
   demandesFinancement       FinancementDemande[]
   websiteUrl                String?
   deletionRequestedAt       DateTime? // Date de la demande de suppression
@@ -3288,6 +3289,31 @@ model DeliveryPrice {
   updatedAt DateTime @updatedAt
 
   @@index([category])
+}
+
+enum RolePersonel {  
+  commercial
+  pro
+  support
+}
+
+
+model Personel {
+  id          String @id @default(uuid())
+
+  name        String
+  rolePersonel RolePersonel
+  description String
+  password    String
+
+  // 🔗 Relation User
+  idUser String
+  user   User   @relation(fields: [idUser], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([idUser])
 }
 
 model Parapente {
