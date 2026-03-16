@@ -16,6 +16,10 @@ const { upload } = require("./middleware/upload");
 const { authenticateToken } = require("./middleware/auth");
 require("./cron/subscriptionCron.js");
 
+
+const { autoCreateSupportMiddleware, checkAllProUsers } = require('./middleware/autoCreateSupport');
+
+const cron = require('node-cron');
 const artCreationRoutes = require('./routes/art-creation');
 
 // Initialisation des variables nécessaires
@@ -218,6 +222,8 @@ app.use((req, res, next) => {
 });
 // 🆕 APPLICATION DU MIDDLEWARE SUR TOUTES LES ROUTES /api
 app.use("/api", xssSanitizer);
+
+app.use('/api', autoCreateSupportMiddleware);
 // ======================
 // ROUTES API EXISTANTES
 // ======================
@@ -327,7 +333,7 @@ const alternancePublicRoutes = require('./routes/alternance');
 
 // Ajouter les routes publiques
 app.use('/api/alternance', alternancePublicRoutes);
-
+app.use("/api/auth", require("./routes/authPersonel"));
 // 🔥 AJOUTEZ CE MIDDLEWARE POUR LE DÉBOGAGE
 // app.use((req, res, next) => {
 //   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -354,7 +360,7 @@ app.use('/api/ai', require('./routes/aiQualification'));
 const { aiCommercialMiddleware } = require('./middleware/aiCommercialMiddleware');
 app.use(aiCommercialMiddleware(io));
 app.use('/api/ai-commercial', require('./routes/aiCommercialRoutes'));
-
+app.use('/api/personel', require('./routes/personel.routes'));
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/bienetre", require("./routes/reservationbien_etre"));
 app.use('/api/soins-bienetre', require('./routes/soins.routes'));
@@ -589,6 +595,16 @@ app.use((error, req, res, next) => {
     message: error.message
   });
 });
+
+cron.schedule('0 * * * *', async () => {
+  console.log('🔄 Exécution de la vérification automatique des supports...');
+  await checkAllProUsers();
+});
+
+setTimeout(async () => {
+  console.log('🚀 Vérification initiale des comptes support...');
+  await checkAllProUsers();
+}, 5000); // 5 secondes après le démarrage
 
 // (Optionnel) Lancer une qualification massive au démarrage
 const qualifierDemandesExistantes = async () => {

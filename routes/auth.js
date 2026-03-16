@@ -133,9 +133,12 @@ const verifyTokenLimiter = rateLimit({
 });
 
 // POST /api/auth/login - Connexion
-router.post("/login",loginLimiter, async (req, res) => {
+// routes/auth.js - VERSION UNIFIÉE
+router.post("/login", loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, loginType } = req.body; // loginType optionnel
+
+    console.log("🔍 Tentative de connexion pour:", email);
 
     if (!email || !password) {
       return res.status(400).json({
@@ -143,24 +146,82 @@ router.post("/login",loginLimiter, async (req, res) => {
       });
     }
 
-    // Trouver l'utilisateur
-    const user = await prisma.user.findUnique({
+    let user = null;
+    let personel = null;
+    let authType = 'user';
+
+    // 1. Chercher d'abord dans la table Personel
+    const personelRecord = await prisma.personel.findUnique({
       where: { email },
+      include: {
+        user: true // Inclure l'utilisateur associé
+      }
     });
 
-    if (!user || !user.passwordHash) {
-      return res.status(401).json({
-        error: "Identifiants invalides",
-      });
-    }
+    if (personelRecord) {
+      console.log("🔍 Compte personnel trouvé");
+      
+      // Vérifier le mot de passe du personnel
+      const isPasswordValid = await bcrypt.compare(password, personelRecord.password);
+      
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          error: "Identifiants invalides",
+        });
+      }
 
-    // Vérifier le mot de passe
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      // Vérifier si l'utilisateur associé existe
+      if (!personelRecord.user) {
+        return res.status(401).json({
+          error: "Utilisateur associé non trouvé",
+        });
+      }
 
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        error: "Identifiants invalides",
+      // Vérifier le statut de l'utilisateur associé
+      if (personelRecord.user.status !== "active") {
+        return res.status(403).json({
+          error: "Compte utilisateur inactif",
+        });
+      }
+
+      user = personelRecord.user;
+      personel = {
+        id: personelRecord.id,
+        name: personelRecord.name,
+        email: personelRecord.email,
+        role: personelRecord.rolePersonel,
+        description: personelRecord.description
+      };
+      authType = 'personel';
+    } else {
+      // 2. Si pas trouvé dans Personel, chercher dans User
+      console.log("🔍 Recherche dans utilisateurs normaux");
+      
+      user = await prisma.user.findUnique({
+        where: { email },
       });
+
+      if (!user || !user.passwordHash) {
+        return res.status(401).json({
+          error: "Identifiants invalides",
+        });
+      }
+
+      // Vérifier le mot de passe
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          error: "Identifiants invalides",
+        });
+      }
+
+      // Vérifier le statut
+      if (user.status !== "active") {
+        return res.status(403).json({
+          error: "Compte inactif",
+        });
+      }
     }
 
     // Vérifier l'expiration de l'abonnement pour les professionnels
@@ -170,62 +231,57 @@ router.post("/login",loginLimiter, async (req, res) => {
         where: { userId: user.id },
       });
 
-      if (
-        subscription &&
-        subscription.endDate < new Date() &&
-        subscription.status === "active"
-      ) {
-        // Mettre à jour le statut de l'abonnement et de l'utilisateur
+      if (subscription && subscription.endDate < new Date() && subscription.status === "active") {
         await prisma.subscription.update({
           where: { id: subscription.id },
           data: { status: "expired" },
         });
-
         subscriptionStatus = "expired";
       } else if (subscription) {
         subscriptionStatus = subscription.status;
       }
     }
 
-    // Recharger les données de l'utilisateur si nécessaire
-    const updatedUser =
-      user.role === "professional"
-        ? await prisma.user.findUnique({
-            where: { id: user.id },
-          })
-        : user;
-
     // Préparer la réponse utilisateur
     const userResponse = {
-      id: updatedUser.id,
-      email: updatedUser.email,
-      firstName: updatedUser.firstName,
-      lastName: updatedUser.lastName,
-      phone: updatedUser.phone,
-      role: updatedUser.role,
-      companyName: updatedUser.companyName,
-      status: updatedUser.status,
-      userType: updatedUser.userType,
-      avatar: updatedUser.avatar,
-      address: updatedUser.address,
-      siret: updatedUser.siret,
-      city: updatedUser.city,
-      subscriptionStatus: subscriptionStatus, // AJOUT: Status de l'abonnement
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      role: user.role,
+      companyName: user.companyName,
+      status: user.status,
+      userType: user.userType,
+      avatar: user.avatar,
+      address: user.address,
+      siret: user.siret,
+      city: user.city,
+      commercialName: user.commercialName,
+      subscriptionStatus: subscriptionStatus,
     };
 
-    // 1. Générer l'Access Token (Court : 24hin à 1h)
+    // 1. Générer l'Access Token
     const accessToken = jwt.sign(
-      { userId: user.id, role: user.role },
+      { 
+        userId: user.id, 
+        role: user.role,
+        ...(authType === 'personel' && {
+          personelId: personel.id,
+          personelRole: personel.role,
+          type: 'personel'
+        })
+      },
       process.env.JWT_SECRET,
       { expiresIn: "24h" }
     );
 
-    // 2. Générer le Refresh Token (Long : 7 jours)
+    // 2. Générer le Refresh Token
     const refreshToken = crypto.randomBytes(40).toString("hex");
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // 3. Stocker le Refresh Token en base (Sécurité MED-04)
+    // 3. Stocker le Refresh Token en base
     await prisma.refreshToken.create({
       data: {
         token: refreshToken,
@@ -234,14 +290,36 @@ router.post("/login",loginLimiter, async (req, res) => {
       },
     });
 
-    res.json({
+    // Déterminer la redirection
+    let redirectPath = "/";
+    if (user.role === "professional") {
+      redirectPath = "/pro";
+    } else if (user.role === "user") {
+      redirectPath = "/mon-compte";
+    } else if (user.role === "admin") {
+      redirectPath = "/admin";
+    }
+
+    const response = {
       user: userResponse,
-      token: accessToken, // Access Token pour le header Authorization
-      refreshToken: refreshToken, // À stocker côté client (localStorage ou Cookie)
+      token: accessToken,
+      refreshToken: refreshToken,
+      redirectPath: redirectPath,
+      authType: authType,
       ...(subscriptionStatus === "expired" && {
         message: "Votre abonnement a expiré",
       }),
-    });
+    };
+
+    // Ajouter les données personnel si c'est le cas
+    if (authType === 'personel') {
+      response.personel = personel;
+      response.isPersonel = true;
+      response.actingAs = `Vous gérez le compte de ${user.companyName || user.firstName + ' ' + user.lastName}`;
+    }
+
+    res.json(response);
+
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({
