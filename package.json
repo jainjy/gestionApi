@@ -9,6 +9,7 @@
     "dev": "nodemon server.js",
     "local": "nodemon app.js",
     "seed": "node prisma/seeders/seed.js",
+    "init-supports": "node scripts/initSupports.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "prisma": {

@@ -3302,6 +3302,7 @@ model Personel {
   id          String @id @default(uuid())
 
   name        String
+  email       String @unique
   rolePersonel RolePersonel
   description String
   password    String

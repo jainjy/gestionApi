@@ -1,7 +1,6 @@
 const { prisma } = require('../lib/db');
 const jwt = require("jsonwebtoken");
 
-
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
@@ -11,8 +10,7 @@ async function authenticateToken(req, res, next) {
   }
 
   try {
-    // VÉRIFICATION CRYPTOGRAPHIQUE (Corrige CRIT-01)
-    // Le secret doit être dans une variable d'environnement (.env)
+    // Vérifier le token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Vérifier si l'utilisateur existe toujours
@@ -21,17 +19,24 @@ async function authenticateToken(req, res, next) {
     });
 
     if (!user) {
-      return res
-        .status(401)
-        .json({ success: false, error: "Utilisateur introuvable" });
+      return res.status(401).json({ success: false, error: "Utilisateur introuvable" });
     }
 
+    // Ajouter les infos au req.user
     req.user = user;
+    
+    // Si c'est un personnel, ajouter aussi les infos du personnel
+    if (decoded.type === 'personel') {
+      req.user.personelId = decoded.personelId;
+      req.user.personelRole = decoded.personelRole;
+      req.user.authType = 'personel';
+    } else {
+      req.user.authType = 'user';
+    }
+
     next();
   } catch (error) {
-    return res
-      .status(403)
-      .json({ success: false, error: "Token invalide ou expiré" });
+    return res.status(403).json({ success: false, error: "Token invalide ou expiré" });
   }
 }
 
