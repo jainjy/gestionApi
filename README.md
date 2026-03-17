@@ -2903,13 +2903,6 @@ model Experience {
 }
 
 model ExperienceBooking {
-  id                 String    @id @default(uuid())
-  experienceId       String
-  userId             String
-  checkIn            DateTime
-  checkOut           DateTime
-  guests             Int
-  totalAmount        Float
   specialRequests    String?
   status             String    @default("pending") // pending, confirmed, cancelled, completed, expired
   confirmationNumber String    @unique
