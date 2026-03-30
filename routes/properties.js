@@ -129,7 +129,8 @@ router.get('/', async (req, res) => {
             id: true,
             firstName: true,
             lastName: true,
-            role: true  // Ajouté pour déterminer si c'est un admin
+            role: true,  // Ajouté pour déterminer si c'est un admin,
+            avatar: true
           }
         }, 
         favorites: true 
@@ -171,7 +172,8 @@ router.get('/', async (req, res) => {
           isProfessional: property.owner.role === 'admin' || property.owner.role === 'agent',
           
           // Indicateur de vérification (optionnel)
-          isVerified: true  // Si vous avez un système de vérification
+          isVerified: true,  // Si vous avez un système de vérification
+          avatar: property.owner.avatar || null // Inclure l'avatar si disponible, sinon null
         };
         
         // Option : n'exposer le nom complet QUE pour les agents/professionnels
@@ -1194,7 +1196,8 @@ router.get('/:id', async (req, res) => {
             firstName: true,
             lastName: true,
             email: true,
-            phone: true
+            phone: true,
+            avatar: true,
           }
         },
         favorites: true
