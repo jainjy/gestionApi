@@ -9,7 +9,7 @@ const router = express.Router();
 router.get("/stats", async (req, res) => {
   try {
     console.log('📊 [STATS] Début récupération statistiques médias');
-    
+
     const [podcasts, videos] = await Promise.all([
       prisma.podcast.findMany({
         where: { isActive: true },
@@ -29,7 +29,7 @@ router.get("/stats", async (req, res) => {
       where: { category: { not: null } },
       select: { category: true }
     });
-    
+
     const videoCategories = await prisma.video.findMany({
       where: { category: { not: null } },
       select: { category: true }
@@ -64,11 +64,11 @@ router.get("/podcasts", async (req, res) => {
     console.log('🎧 [PODCASTS] Récupération podcasts - Page:', page, 'Limit:', limit, 'Catégorie:', category, 'Recherche:', search);
 
     const where = { isActive: true };
-    
+
     if (category && category !== 'all') {
       where.category = category;
     }
-    
+
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
@@ -115,9 +115,9 @@ router.get("/podcasts", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ [PODCASTS] Erreur lors de la récupération des podcasts:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: "Erreur serveur" 
+      error: "Erreur serveur"
     });
   }
 });
@@ -141,31 +141,36 @@ router.get("/videos", async (req, res) => {
 
     const where = { isActive: true };
 
-    // Filtrer par catégorie avec Prisma
-    if (category && category !== "all") {
-      if (category == "Réunion") {
+    // Normaliser la catégorie en minuscules pour les comparaisons
+    const normalizedCategory = category?.toLowerCase().trim();
+
+    // Filtrer par catégorie avec Prisma (insensible à la casse)
+    if (normalizedCategory && normalizedCategory !== "all") {
+      if (normalizedCategory === "réunion") {
         // Pour "Réunion", on prend les vidéos de plusieurs catégories
         where.OR = [
-          { category: "Réunion" },
-          { category: "Tourisme" },
-          { category: "Alimentation" },
-          { category: "Bien-être" },
-          { category: "Culture" },
-          { category: "Nature" },
-          { category: "Gastronomie" },
+          { category: { equals: "Réunion", mode: "insensitive" } },
+          { category: { equals: "Tourisme", mode: "insensitive" } },
+          { category: { equals: "Alimentation", mode: "insensitive" } },
+          { category: { equals: "Bien-être", mode: "insensitive" } },
+          { category: { equals: "Culture", mode: "insensitive" } },
+          { category: { equals: "Nature", mode: "insensitive" } },
+          { category: { equals: "Gastronomie", mode: "insensitive" } },
         ];
-      } else if (category == "Partenaires") {
+      } else if (normalizedCategory === "partenaires") {
         // Pour "Partenaires", on cherche dans plusieurs critères
         where.OR = [
-          { category: "Partenaires" },
-          { category: "Entreprise" },
+          { category: { equals: "Partenaires", mode: "insensitive" } },
+          { category: { equals: "Entreprise", mode: "insensitive" } },
           { description: { contains: "partenaire", mode: "insensitive" } },
           { title: { contains: "partenaire", mode: "insensitive" } },
         ];
       } else {
-        where.category = category;
+        // Pour les autres catégories, utiliser une comparaison insensible à la casse
+        where.category = { equals: category, mode: "insensitive" };
       }
     }
+    console.log("🎬 [VIDEOS] Conditions de recherche:", where);
 
     if (search) {
       where.OR = [
@@ -214,9 +219,9 @@ router.get("/videos", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ [VIDEOS] Erreur lors de la récupération des vidéos:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: "Erreur serveur" 
+      error: "Erreur serveur"
     });
   }
 });
@@ -251,9 +256,9 @@ router.get("/categories", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ [CATEGORIES] Erreur lors de la récupération des catégories:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: "Erreur serveur" 
+      error: "Erreur serveur"
     });
   }
 });
@@ -262,7 +267,7 @@ router.get("/categories", async (req, res) => {
 router.post("/podcasts", async (req, res) => {  // ← Enlever uploadAudio
   try {
     const { title, description, category, isActive = true, duration, mediaUrl } = req.body;
-    
+
     console.log('🎧 [CREATE PODCAST] Données reçues:', { title, description, category, isActive, duration, mediaUrl });
 
     if (!title) {
@@ -295,7 +300,7 @@ router.post("/podcasts", async (req, res) => {  // ← Enlever uploadAudio
       const thumbnailFile = req.files.thumbnail[0];
       const thumbnailBuffer = fs.readFileSync(thumbnailFile.path);
       const thumbnailName = `podcasts/thumbnails/${Date.now()}-${thumbnailFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      
+
       const { data: thumbnailData, error: thumbnailError } = await supabase.storage
         .from('media')
         .upload(thumbnailName, thumbnailBuffer, {
@@ -363,14 +368,14 @@ router.post("/podcasts", async (req, res) => {  // ← Enlever uploadAudio
 router.post("/videos", uploadImage, async (req, res) => {  // ← Utiliser uploadImage au lieu de uploadVideo
   try {
     const { title, description, category, isActive = true, videoUrl } = req.body;
-    
-    console.log('🎬 [CREATE VIDEO] Données reçues:', { 
-      title, 
-      description, 
-      category, 
-      isActive, 
+
+    console.log('🎬 [CREATE VIDEO] Données reçues:', {
+      title,
+      description,
+      category,
+      isActive,
       videoUrl,
-      hasThumbnail: !!req.files?.thumbnail 
+      hasThumbnail: !!req.files?.thumbnail
     });
 
     if (!title) {
@@ -394,11 +399,11 @@ router.post("/videos", uploadImage, async (req, res) => {  // ← Utiliser uploa
     if (req.files?.thumbnail) {
       const thumbnailFile = req.files.thumbnail[0];
       console.log('📤 [CREATE VIDEO] Upload thumbnail:', thumbnailFile.originalname);
-      
+
       try {
         const thumbnailBuffer = fs.readFileSync(thumbnailFile.path);
         const thumbnailName = `videos/thumbnails/${Date.now()}-${thumbnailFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        
+
         const { data: thumbnailData, error: thumbnailError } = await supabase.storage
           .from('media')
           .upload(thumbnailName, thumbnailBuffer, {
@@ -625,7 +630,7 @@ router.put("/videos/:id", async (req, res) => {
     console.error("🔧 [UPDATE VIDEO] Stack:", error.stack);
     console.error("🔧 [UPDATE VIDEO] Code d'erreur:", error.code);
     console.error("🔧 [UPDATE VIDEO] Meta:", error.meta);
-    
+
     res.status(500).json({
       success: false,
       error: "Erreur serveur: " + error.message,
