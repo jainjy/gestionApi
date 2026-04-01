@@ -9,6 +9,12 @@ router.get("/", async (req, res) => {
     const plans = await prisma.subscriptionPlan.findMany({
       where: {
         isActive: true,
+        NOT: {
+          AND: [
+            { userTypes: "particuliers" },
+            { planType: "user" },
+          ],
+        },
       },
       orderBy: [{ popular: "desc" }, { price: "asc" }],
     });

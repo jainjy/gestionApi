@@ -242,6 +242,7 @@ app.use("/api/entrepreneuriat/admin", require("./routes/entrepreneuriat-admin"))
 app.use("/api/test-internal", require("./routes/test-internal"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
+app.use("/api/subscriptions", require("./routes/user-subscriptions"));
 app.use("/api/upload", require("./routes/upload"));
 app.use("/api/articles", require("./routes/articles"));
 app.use("/api/properties", require("./routes/properties"));
