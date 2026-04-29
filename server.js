@@ -292,6 +292,7 @@ app.use(
 app.use('/api/suggestions', require('./routes/Recherchesuggestions'));
 app.use('/test',require('./routes/user'))
 
+app.use("/api/estimations", require("./routes/estimation.routes.js"));
 
 // AJOUTEZ ICI les nouvelles routes ↓
 app.use("/api/pro/formations", require("./routes/formations")); // <-- AJOUTEZ CETTE LIGNE
